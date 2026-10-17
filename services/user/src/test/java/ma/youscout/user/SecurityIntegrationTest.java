@@ -20,7 +20,7 @@ class SecurityIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @LocalServerPort int port;
     WebTestClient client;
-    @BeforeEach void setup() { client = WebTestClient.bindToServer().baseUrl("http://127.0.0.1:" + port).build(); }
+    @BeforeEach void setup() { jdbc.update("DELETE FROM user_profiles"); client = WebTestClient.bindToServer().baseUrl("http://127.0.0.1:" + port).build(); }
     @AfterAll static void cleanup() { oidc.server.stop(0); }
     @DynamicPropertySource static void properties(DynamicPropertyRegistry r) {
         r.add("spring.security.oauth2.resourceserver.jwt.issuer-uri", oidc::base);
@@ -53,4 +53,133 @@ class SecurityIntegrationTest {
             .exchange().expectStatus().isOk().expectBody().jsonPath("$.subject").isEqualTo("player-123")
             .jsonPath("$.username").isEqualTo("test-player");
     }
+
+    @Test void profileEndpointsRejectAnonymousRequestsWithoutWriting() {
+        client.get().uri("/v1/users/me").exchange().expectStatus().isUnauthorized();
+        client.patch().uri("/v1/users/me").contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+            .bodyValue("{\"displayName\":\"Intrus\"}").exchange().expectStatus().isUnauthorized();
+        assertThat(jdbc.queryForObject("select count(*) from user_profiles", Integer.class)).isZero();
+    }
+
+    @Test void firstReadCreatesProfileAndRepeatedReadPreservesIt() {
+        String token = oidc.profileToken("owner-a", "Yassine Amrani", "yassine");
+        client.get().uri("/v1/users/me").headers(h -> h.setBearerAuth(token)).exchange().expectStatus().isOk()
+            .expectHeader().valueEquals("Cache-Control", "no-store").expectBody()
+            .jsonPath("$.subject").isEqualTo("owner-a").jsonPath("$.displayName").isEqualTo("Yassine Amrani")
+            .jsonPath("$.biography").isEqualTo("").jsonPath("$.createdAt").isNotEmpty().jsonPath("$.updatedAt").isNotEmpty();
+        var original = jdbc.queryForMap("select * from user_profiles where subject = 'owner-a'");
+        client.get().uri("/v1/users/me").headers(h -> h.setBearerAuth(oidc.profileToken("owner-a", "Nouveau nom Keycloak", "changed")))
+            .exchange().expectStatus().isOk().expectBody().jsonPath("$.displayName").isEqualTo("Yassine Amrani");
+        assertThat(jdbc.queryForMap("select * from user_profiles where subject = 'owner-a'")).isEqualTo(original);
+        assertThat(jdbc.queryForObject("select count(*) from user_profiles", Integer.class)).isEqualTo(1);
+    }
+
+    @Test void partialPatchPersistsAndEmptyBiographyClearsIt() {
+        String token = oidc.profileToken("editor", "Initial", "editor");
+        patch(token, "{\"displayName\":\"  Yassine  \",\"biography\":\"Ailier à Casablanca ⚽\"}")
+            .expectStatus().isOk().expectBody().jsonPath("$.displayName").isEqualTo("Yassine")
+            .jsonPath("$.biography").isEqualTo("Ailier à Casablanca ⚽");
+        var created = jdbc.queryForObject("select created_at from user_profiles where subject = 'editor'", java.sql.Timestamp.class);
+        patch(token, "{\"biography\":\"Nouvelle bio\"}").expectStatus().isOk().expectBody()
+            .jsonPath("$.displayName").isEqualTo("Yassine").jsonPath("$.biography").isEqualTo("Nouvelle bio");
+        patch(token, "{\"displayName\":\"Yassine A.\"}").expectStatus().isOk().expectBody()
+            .jsonPath("$.biography").isEqualTo("Nouvelle bio");
+        patch(token, "{\"biography\":\"\"}").expectStatus().isOk();
+        client.get().uri("/v1/users/me").headers(h -> h.setBearerAuth(token)).exchange().expectStatus().isOk()
+            .expectBody().jsonPath("$.displayName").isEqualTo("Yassine A.").jsonPath("$.biography").isEqualTo("");
+        assertThat(jdbc.queryForObject("select created_at from user_profiles where subject = 'editor'", java.sql.Timestamp.class)).isEqualTo(created);
+        assertThat(jdbc.queryForObject("select updated_at > created_at from user_profiles where subject = 'editor'", Boolean.class)).isTrue();
+    }
+
+    @Test void tokenOwnerCannotSelectOrOverwriteAnotherProfile() {
+        String alice = oidc.profileToken("alice", "Alice", "alice");
+        String bob = oidc.profileToken("bob", "Bob", "bob");
+        patch(alice, "{\"biography\":\"Bio Alice\"}").expectStatus().isOk();
+        client.patch().uri("/v1/users/me?subject=alice").header("X-User-Id", "alice")
+            .headers(h -> h.setBearerAuth(bob)).contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+            .bodyValue("{\"displayName\":\"Bob modifié\"}").exchange().expectStatus().isOk()
+            .expectBody().jsonPath("$.subject").isEqualTo("bob");
+        patch(bob, "{\"subject\":\"alice\",\"displayName\":\"Intrus\"}").expectStatus().isBadRequest();
+        client.get().uri("/v1/users/me?subject=alice").header("X-User-Id", "alice").headers(h -> h.setBearerAuth(bob))
+            .exchange().expectStatus().isOk().expectBody().jsonPath("$.subject").isEqualTo("bob");
+        assertThat(jdbc.queryForObject("select biography from user_profiles where subject = 'alice'", String.class)).isEqualTo("Bio Alice");
+        assertThat(jdbc.queryForObject("select display_name from user_profiles where subject = 'alice'", String.class)).isEqualTo("Alice");
+        assertThat(jdbc.queryForObject("select count(*) from user_profiles", Integer.class)).isEqualTo(2);
+    }
+
+    @Test void invalidPatchIsStructuredAndDoesNotModifyTheDatabase() {
+        String token = oidc.profileToken("invalid", "Initial", "invalid");
+        patch(token, "{\"biography\":\"Préservée\"}").expectStatus().isOk();
+        var before = jdbc.queryForMap("select * from user_profiles where subject = 'invalid'");
+        for (String body : new String[]{"{}", "null", "[]", "{", "{\"displayName\":null}",
+            "{\"displayName\":123}", "{\"displayName\":\"   \"}", "{\"biography\":null}",
+            "{\"biography\":false}", "{\"subject\":\"other\"}", "{\"createdAt\":\"now\"}",
+            "{\"biography\":\"\\u0000\"}", "{\"displayName\":\"" + "a".repeat(81) + "\"}",
+            "{\"biography\":\"" + "a".repeat(501) + "\"}"}) {
+            patch(token, body).expectStatus().isBadRequest()
+                .expectHeader().contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody().jsonPath("$.status").isEqualTo(400).jsonPath("$.detail").isNotEmpty();
+        }
+        assertThat(jdbc.queryForMap("select * from user_profiles where subject = 'invalid'")).isEqualTo(before);
+    }
+
+    @Test void invalidFirstPatchDoesNotCreateAProfile() {
+        patch(oidc.profileToken("not-created", "Initial", null), "{\"displayName\":\"\"}").expectStatus().isBadRequest();
+        assertThat(jdbc.queryForObject("select count(*) from user_profiles", Integer.class)).isZero();
+    }
+
+    @Test void unicodeLimitsCountCodePointsRatherThanJavaCodeUnits() {
+        String token = oidc.profileToken("unicode", "Initial", null);
+        patch(token, "{\"displayName\":\"" + "⚽".repeat(80) + "\",\"biography\":\"" + "😀".repeat(500) + "\"}")
+            .expectStatus().isOk();
+        assertThat(jdbc.queryForObject("select char_length(biography) from user_profiles where subject = 'unicode'", Integer.class)).isEqualTo(500);
+        patch(token, "{\"biography\":\"" + "😀".repeat(501) + "\"}").expectStatus().isBadRequest();
+    }
+
+    @Test void defaultNameFallsBackAndLongClaimsAreBounded() {
+        for (String[] values : new String[][]{{"fallback-user", null, "pseudo", "pseudo"},
+            {"fallback-default", "   ", null, "Joueur"}, {"long-name", "😀".repeat(81), null, "😀".repeat(80)}}) {
+            client.get().uri("/v1/users/me").headers(h -> h.setBearerAuth(oidc.profileToken(values[0], values[1], values[2])))
+                .exchange().expectStatus().isOk().expectBody().jsonPath("$.displayName").isEqualTo(values[3]);
+        }
+    }
+
+    @Test void missingOrInvalidSubjectCannotCreateOrPatchAProfile() {
+        for (String subject : new String[]{null, " ", "a".repeat(256)}) {
+            String token = oidc.profileToken(subject, "No owner", "unknown");
+            client.get().uri("/v1/users/me").headers(h -> h.setBearerAuth(token)).exchange().expectStatus().isUnauthorized();
+            patch(token, "{\"biography\":\"Invalid\"}").expectStatus().isUnauthorized();
+        }
+        assertThat(jdbc.queryForObject("select count(*) from user_profiles", Integer.class)).isZero();
+    }
+
+    @Test void simultaneousFirstReadsCreateExactlyOneProfile() throws Exception {
+        String token = oidc.profileToken("concurrent", "Concurrent", null);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(8)) {
+            var work = new java.util.ArrayList<java.util.concurrent.Callable<Integer>>();
+            for (int i = 0; i < 12; i++) work.add(() -> client.get().uri("/v1/users/me")
+                .headers(h -> h.setBearerAuth(token)).exchange().expectBody().returnResult().getStatus().value());
+            for (var result : pool.invokeAll(work)) assertThat(result.get(30, java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(200);
+        }
+        assertThat(jdbc.queryForObject("select count(*) from user_profiles where subject = 'concurrent'", Integer.class)).isEqualTo(1);
+    }
+
+    @Test void concurrentPartialPatchesPreserveBothFields() throws Exception {
+        String token = oidc.profileToken("parallel-patch", "Initial", null);
+        client.get().uri("/v1/users/me").headers(h -> h.setBearerAuth(token)).exchange().expectStatus().isOk();
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var a = pool.submit(() -> patch(token, "{\"displayName\":\"Nouveau nom\"}").expectBody().returnResult().getStatus().value());
+            var b = pool.submit(() -> patch(token, "{\"biography\":\"Nouvelle bio\"}").expectBody().returnResult().getStatus().value());
+            assertThat(a.get(30, java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(200);
+            assertThat(b.get(30, java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(200);
+        }
+        client.get().uri("/v1/users/me").headers(h -> h.setBearerAuth(token)).exchange().expectStatus().isOk()
+            .expectBody().jsonPath("$.displayName").isEqualTo("Nouveau nom").jsonPath("$.biography").isEqualTo("Nouvelle bio");
+    }
+
+    private WebTestClient.ResponseSpec patch(String token, String body) {
+        return client.patch().uri("/v1/users/me").headers(h -> h.setBearerAuth(token))
+            .contentType(org.springframework.http.MediaType.APPLICATION_JSON).bodyValue(body).exchange();
+    }
+
 }
