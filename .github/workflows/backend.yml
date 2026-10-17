@@ -23,4 +23,7 @@ jobs:
       - run: python3 scripts/smoke-backend.py
       - name: Stop containers without deleting persisted volumes
         if: always()
-        run: docker compose -f infra/compose/compose.yml down
+        run: |
+          if [ -f infra/compose/.env ]; then
+            docker compose -f infra/compose/compose.yml down
+          fi
