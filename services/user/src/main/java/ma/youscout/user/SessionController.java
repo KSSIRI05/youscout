@@ -7,6 +7,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 class SessionController {
     record SessionIdentity(String subject, String username, String service) {}
+    @GetMapping("/v1/users/admin/session")
+    SessionIdentity adminSession(@AuthenticationPrincipal Jwt jwt) {
+        return session(jwt);
+    }
     @GetMapping("/v1/users/session")
     SessionIdentity session(@AuthenticationPrincipal Jwt jwt) {
         return new SessionIdentity(jwt.getSubject(), jwt.getClaimAsString("preferred_username"), "user-service");
