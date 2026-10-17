@@ -15,6 +15,8 @@ android {
     }
 
     defaultConfig {
+        // Retour du navigateur système après le parcours OIDC/PKCE AppAuth.
+        manifestPlaceholders["appAuthRedirectScheme"] = "ma.youscout"
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "ma.youscout.youscout_mobile"
         // You can update the following values to match your application needs.

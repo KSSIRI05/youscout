@@ -13,7 +13,7 @@ Cette itération ajoute Java 21, Spring Boot 4.0.8, Spring Cloud 2025.1.3, Keycl
 - `infra/keycloak` : realm `youscout`, rôles `user`/`admin`, client public `youscout-mobile` avec Authorization Code + PKCE S256 obligatoire et audience `youscout-api`.
 - Contrat de diagnostic dans `contracts/openapi/user-foundation.yaml`.
 
-`GET /v1/users/session` reste un diagnostic sans écriture. `GET /v1/users/me` et `PATCH /v1/users/me` gèrent désormais le profil persistant du sujet authentifié. La démo Flutter reste locale et n’utilise pas encore ces API.
+`GET /v1/users/session` reste un diagnostic sans écriture. `GET /v1/users/me` et `PATCH /v1/users/me` gèrent désormais le profil persistant du sujet authentifié. Le mode connecté Flutter utilise ces API ; la démo sociale reste indépendante et locale. Voir [FRONTEND.md](FRONTEND.md).
 
 ## Profil personnel persistant
 
@@ -96,7 +96,7 @@ Sous PowerShell :
 
 Les tests démarrent de vrais serveurs HTTP, vérifient des JWT signés avec des clés RSA de test, puis contrôlent les refus pour mauvaise signature, issuer, audience et expiration. Gateway couvre le routage, la propagation du jeton et du request-id, et CORS. User utilise un PostgreSQL éphémère Testcontainers et vérifie la migration, la création unique, la persistance, le PATCH partiel, les limites, les requêtes invalides, l’isolation entre utilisateurs et les accès concurrents. Les conteneurs de test sont nettoyés automatiquement. Ils n’utilisent pas les bases persistantes Compose.
 
-Les tests Java couvrent 12 scénarios Gateway, 21 scénarios User et 16 scénarios Skill, soit 49 au total ; deux tests Python couvrent la création et la mise à jour non destructive des secrets. Le smoke test a aussi été validé avec un jeton émis par Keycloak, y compris la conservation du profil après redémarrage du service User. Aucun parcours de connexion mobile n’est encore testé.
+Les tests Java couvrent 12 scénarios Gateway, 21 scénarios User et 16 scénarios Skill, soit 49 au total ; trois tests Python couvrent la création et la mise à jour non destructive des secrets. Le smoke test a aussi été validé avec un jeton émis par Keycloak, y compris la conservation du profil après redémarrage du service User. Le frontend dispose de tests de session et d’interface ; la validation sur appareils Android/iOS reste à réaliser.
 
 La CI `backend.yml` exécute les tests, construit les images, démarre Compose et lance le smoke test Keycloak réel. Aucun déploiement cloud n’est configuré.
 

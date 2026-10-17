@@ -1,43 +1,85 @@
 # YouScout — Frontend Flutter
 
-Première itération issue de la maquette Figma, avec thème sombre, accents vert lime et police Inter embarquée. Interface en français et largeur adaptée aux petits écrans.
+Interface en français avec deux modes indépendants : compte connecté au backend et démonstration locale. Le mode connecté utilise les vraies API de profil, de compétences et de hashtags ; les vidéos, les interactions sociales et les messages restent dans la démo.
 
-## Exécuter
+## Exécuter sur le web
 
-SDK vérifié : Flutter 3.47.7 stable et Dart 3.13.5.
+Démarrer Docker puis, depuis la racine du dépôt :
+
+```sh
+python infra/compose/init-env.py --upgrade
+docker compose -f infra/compose/compose.yml up -d --build --wait --wait-timeout 300
+python scripts/apply-keycloak.py
+```
+
+Depuis `apps/mobile`, avec Flutter 3.47.7 / Dart 3.13.5 :
 
 ```sh
 flutter pub get
-flutter run -d web-server --web-port 7357
+flutter run -d web-server --web-hostname localhost --web-port 7357
 ```
 
-Ouvrir l’URL indiquée puis « Explorer la démo ». Android et iOS nécessitent les outils de plateforme ; les essais sur appareil restent à faire.
+Ouvrir **http://localhost:7357**, puis « Créer mon compte » ou « Se connecter ». L’inscription et la connexion ont lieu dans Keycloak ; Flutter ne recueille aucun mot de passe. Le retour utilise exactement `/auth/callback`. L’hôte 127.0.0.1 est aussi autorisé ; ne pas changer d’hôte entre le départ et le retour.
 
-## Parcours disponibles
+Pour servir le build release depuis la racine :
 
-- Fil pour vous / abonnements, likes, commentaires et réponses, notation locale.
-- Recherche de talents par nom et compétence, profils, abonnements et hashtags.
-- Profil personnel modifiable, blocage et liste des utilisateurs bloqués.
-- Sélection d’une vidéo depuis la galerie, caméra sur plateforme native, aperçu et métadonnées ; publication en mémoire. Une illustration permet aussi de tester sans fichier.
-- Boîte de réception et messages locaux, signalements locaux explicites.
+```sh
+cd apps/mobile
+flutter build web --release --no-web-resources-cdn
+cd ../..
+python scripts/serve-mobile.py
+```
 
-Aucune connexion serveur n’est réalisée. Les talents sont fictifs, la notation est provisoire, et les données sont réinitialisées au rechargement. Les signalements ne sont transmis à aucun modérateur. La vidéo sélectionnée reste locale : aucun stockage S3 ou transcodage. La limite de prévisualisation de 100 Mo est une protection locale, pas un quota backend validé.
+Le serveur local fournit `index.html` sur `/auth/callback`, sans journaliser le code OIDC. Un autre hébergeur web doit fournir la même réécriture SPA. Il faut servir l’application à la racine du domaine, avec les URL de redirection et les origines CORS correspondantes configurées côté Keycloak/Gateway.
 
-## Vérifications
+## Parcours connecté
+
+- Inscription et connexion Authorization Code + PKCE S256 ; contrôle de state et validité de dix minutes de la demande web.
+- Consultation de `/v1/users/me`, puis modification du nom (1–80 caractères) et de la biographie (500 maximum). Les données affichées sont confirmées par le serveur.
+- Catalogue des compétences actives, recherche et pages suivantes.
+- Recherche des hashtags, création canonique et abonnement/désabonnement par identifiant. Les abonnements personnels sont rechargés par pages.
+- Chargement, erreur réseau, refus 403 et session expirée sont visibles. Un 401 provoque un seul renouvellement et une seule nouvelle tentative ; un échec d’authentification confirmé ferme la session.
+- Déconnexion locale immédiate et déconnexion Keycloak ; si le serveur est inaccessible, l’application indique que la fermeture distante n’est pas confirmée.
+
+Les jetons restent **en mémoire**, sans localStorage, sessionStorage ni fichier. Le sessionStorage web contient seulement le verifier/state PKCE pendant la redirection, retirés avant l’échange du code. Le callback est immédiatement nettoyé de l’historique. Un rechargement de page demande de se reconnecter ; la session navigateur Keycloak peut éviter de ressaisir les identifiants. Fermer un onglet ne révoque pas à lui seul la session Keycloak : utiliser « Se déconnecter ».
+
+## Android et iOS
+
+Les adaptateurs natifs utilisent [flutter_appauth](https://pub.dev/packages/flutter_appauth), le navigateur système et le retour `ma.youscout://oauth/callback`. Les manifestes Android/iOS sont configurés pour ce schéma, déjà autorisé par le realm.
+
+Pour un émulateur Android et le backend local, rendre les deux ports accessibles au navigateur système et à Flutter :
+
+```sh
+adb reverse tcp:8080 tcp:8080
+adb reverse tcp:8180 tcp:8180
+flutter run --dart-define=ALLOW_INSECURE_OIDC=true
+```
+
+L’exception HTTP Android est limitée à la configuration debug. Pour iOS et les versions distribuées, utiliser des endpoints HTTPS accessibles depuis l’appareil, enregistrés dans Keycloak et dans la configuration CORS si nécessaire. Les builds et parcours Android/iOS sur appareil restent à valider ; la configuration native n’est pas présentée comme une validation matérielle.
+
+## Configuration
+
+```sh
+flutter run -d web-server --web-port 7357 --dart-define=API_URL=https://api.example.org --dart-define=OIDC_ISSUER=https://identity.example.org/realms/youscout
+```
+
+Le client public est `youscout-mobile` : aucun secret client n’est distribué. Les adresses HTTP autres que localhost sont refusées. `ALLOW_INSECURE_OIDC` sert seulement au debug natif local ; utiliser HTTPS hors développement.
+
+## Démonstration locale
+
+« Explorer la démo » conserve les talents fictifs, le fil, les likes, commentaires, notes, blocages, messages et prévisualisations vidéo. Ces données restent en mémoire, ne sont pas celles du compte connecté et ne sont pas envoyées aux services. Aucun upload, transcodage, chat distant ou signalement à un modérateur n’est encore réalisé.
+
+## Vérifications et organisation
 
 ```sh
 dart format --output=none --set-exit-if-changed lib test
 flutter analyze
 flutter test
-flutter build web --release
+flutter build web --release --no-web-resources-cdn
 ```
 
-11 tests couvrent le store et les parcours principaux, dont la navigation à 320 × 640. La sélection caméra et la lecture sur appareils Android/iOS nécessitent une validation matérielle. La CI répète les contrôles sur Ubuntu avec le SDK fixé.
+`lib/backend` contient les clients HTTP, l’authentification par plateforme, PKCE et l’état du compte connecté. `lib/screens/connected_screen.dart` affiche les profils et le catalogue réels. Le store et les écrans historiques restent dédiés à la démo. Les tests couvrent l’état de session, les refus d’accès, la rotation, les modifications confirmées, la pagination, PKCE et les interactions d’interface ; leurs API simulées complètent les essais avec la pile locale réelle.
 
-## Organisation
+Les illustrations Figma et la licence de police sont décrites dans [assets/README.md](assets/README.md).
 
-`lib/data` contient les modèles et l’interface `ScoutRepository`, avec une implémentation de démonstration. `lib/state` porte les mutations locales ; `lib/screens` les parcours ; `lib/widgets` les composants ; `lib/platform` adapte la source vidéo au navigateur et aux plateformes natives.
-
-La prochaine étape est un dépôt API conforme aux contrats des services derrière la Gateway, puis OIDC/PKCE. Le frontend ne communiquera pas directement avec Kafka ou les bases des services.
-
-Les illustrations Figma et la licence de police sont décrites dans [assets/README.md](assets/README.md). Aucun secret ni compte réel n’est nécessaire.
+Validation locale de cette intégration : 29 tests Flutter réussis, analyse statique sans problème et build web release réussi. Un parcours navigateur avec la pile Docker réelle a confirmé l’inscription, le retour PKCE, la modification du profil, le catalogue, la création et le suivi/désabonnement d’un hashtag, puis leur persistance après déconnexion/reconnexion. Un 401 unique injecté dans le navigateur a déclenché un véritable renouvellement Keycloak et le rejeu réussi de la requête. Un callback sans état PKCE a été refusé avant tout appel API. Le compte temporaire, son profil, ses abonnements et son hashtag de test ont été supprimés. Ces essais ne remplacent pas une validation sur appareils Android/iOS.

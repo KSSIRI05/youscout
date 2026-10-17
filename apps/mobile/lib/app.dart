@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/theme.dart';
@@ -6,25 +7,47 @@ import 'screens/social_screens.dart';
 import 'screens/upload_screen.dart';
 import 'screens/messages_screen.dart';
 import 'widgets/scout_widgets.dart';
+import 'backend/api.dart';
+import 'backend/auth_driver.dart';
+import 'backend/config.dart';
+import 'backend/connected_session.dart';
+import 'screens/connected_screen.dart';
 
 class YouScoutApp extends StatefulWidget {
-  const YouScoutApp({this.store, super.key});
+  const YouScoutApp({this.store, this.session, super.key});
   final ScoutStore? store;
+  final ConnectedSession? session;
   @override
   State<YouScoutApp> createState() => _YouScoutAppState();
 }
 
 class _YouScoutAppState extends State<YouScoutApp> {
   late final ScoutStore store = widget.store ?? ScoutStore();
+  late final ConnectedSession? session =
+      widget.session ??
+      (widget.store == null
+          ? ConnectedSession(
+              auth: createAuthDriver(const BackendConfig()),
+              api: BackendApi(const BackendConfig()),
+            )
+          : null);
+  @override
+  void initState() {
+    super.initState();
+    if (session != null) unawaited(session!.initialize());
+  }
+
   @override
   void dispose() {
     if (widget.store == null) store.dispose();
+    if (widget.session == null) session?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'YouScout',
+    initialRoute: '/',
     debugShowCheckedModeBanner: false,
     theme: scoutTheme(),
     locale: const Locale('fr'),
@@ -40,22 +63,34 @@ class _YouScoutAppState extends State<YouScoutApp> {
       ),
     ),
     home: ListenableBuilder(
-      listenable: store,
-      builder: (context, _) =>
-          store.inDemo ? ScoutShell(store: store) : WelcomeScreen(store: store),
+      listenable: Listenable.merge([store, ?session]),
+      builder: (context, _) => store.inDemo
+          ? ScoutShell(store: store)
+          : session?.signedIn == true
+          ? ConnectedScreen(session: session!)
+          : WelcomeScreen(store: store, session: session),
     ),
   );
 }
 
 class WelcomeScreen extends StatelessWidget {
-  const WelcomeScreen({required this.store, super.key});
+  const WelcomeScreen({required this.store, this.session, super.key});
   final ScoutStore store;
+  final ConnectedSession? session;
   @override
   Widget build(BuildContext context) => Scaffold(
     body: SafeArea(
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
+          if (session?.error != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                session!.error!,
+                style: const TextStyle(color: Colors.orangeAccent),
+              ),
+            ),
           const SizedBox(height: 20),
           Text(
             'YOUSCOUT',
@@ -85,10 +120,25 @@ class WelcomeScreen extends StatelessWidget {
             style: TextStyle(color: ScoutColors.muted),
           ),
           const SizedBox(height: 28),
+          if (session != null) ...[
+            if (session!.busy) const LinearProgressIndicator(),
+            FilledButton(
+              key: const Key('login'),
+              onPressed: session!.busy ? null : () => session!.login(),
+              child: const Text('Se connecter'),
+            ),
+            TextButton(
+              onPressed: session!.busy
+                  ? null
+                  : () => session!.login(register: true),
+              child: const Text('Créer mon compte'),
+            ),
+            const SizedBox(height: 12),
+          ],
           ScoutButton(
             'Explorer la démo',
             key: const Key('enter-demo'),
-            onPressed: store.enterDemo,
+            onPressed: session?.busy == true ? null : store.enterDemo,
           ),
           const SizedBox(height: 12),
           ScoutButton(
@@ -97,9 +147,9 @@ class WelcomeScreen extends StatelessWidget {
             onPressed: () => showDialog<void>(
               context: context,
               builder: (_) => AlertDialog(
-                title: const Text('Une première version à explorer'),
+                title: const Text('Choisis ton expérience'),
                 content: const Text(
-                  'Les profils et publications proposés sont fictifs. Tes interactions restent sur cet appareil pendant cette session. Aucun compte n’est créé et aucun fichier n’est envoyé.',
+                  'Le mode connecté enregistre ton profil et tes abonnements dans ton compte. La démo propose des talents fictifs et des interactions locales. Aucun fichier vidéo n’est envoyé.',
                 ),
                 actions: [
                   TextButton(
@@ -112,7 +162,7 @@ class WelcomeScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           const Text(
-            'Mode démonstration · sans connexion à un serveur',
+            'Compte connecté ou démo locale, à toi de choisir.',
             textAlign: TextAlign.center,
             style: TextStyle(color: ScoutColors.muted, fontSize: 12),
           ),
