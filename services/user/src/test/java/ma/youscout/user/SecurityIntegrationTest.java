@@ -12,16 +12,20 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+/** Tests HTTP réels ; les identités sont signées par la fixture locale. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
 class SecurityIntegrationTest {
     static final OidcFixture oidc = new OidcFixture();
+    // Base éphémère indépendante des volumes Compose et des données du développeur.
     @Container static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17.11-alpine");
     @Autowired JdbcTemplate jdbc;
     @LocalServerPort int port;
     WebTestClient client;
+    // Réinitialise le contexte du test pour rendre les scénarios indépendants.
     @BeforeEach void setup() { jdbc.update("DELETE FROM user_profiles"); client = WebTestClient.bindToServer().baseUrl("http://127.0.0.1:" + port).build(); }
     @AfterAll static void cleanup() { oidc.server.stop(0); }
+    // Remplace les adresses de production par celles des ressources temporaires du test.
     @DynamicPropertySource static void properties(DynamicPropertyRegistry r) {
         r.add("spring.security.oauth2.resourceserver.jwt.issuer-uri", oidc::base);
         r.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri", () -> oidc.base() + "/jwks");
@@ -29,12 +33,16 @@ class SecurityIntegrationTest {
         r.add("spring.datasource.username", postgres::getUsername);
         r.add("spring.datasource.password", postgres::getPassword);
     }
+    // Les sondes restent accessibles sans jeton pour permettre la supervision.
     @Test void healthIsPublic() { client.get().uri("/actuator/health").exchange().expectStatus().isOk(); }
+    // Une route protégée doit refuser un appel anonyme.
     @Test void missingTokenIsRejected() { client.get().uri("/v1/users/session").exchange().expectStatus().isUnauthorized(); }
+    // Exerce la validation cryptographique avec un JWT réellement signé par la fixture.
     @Test void validSignedTokenIsAccepted() {
         client.get().uri("/v1/users/session").headers(h -> h.setBearerAuth(oidc.validToken()))
             .exchange().expectStatus().isOk().expectBody().jsonPath("$.service").isEqualTo("user-service");
     }
+    // Une signature correcte ne suffit pas : issuer, audience et expiration sont aussi contrôlés.
     @Test void invalidClaimsAndSignatureAreRejected() {
         for (String token : new String[] {
             oidc.token("http://wrong-issuer", "youscout-api", Instant.now().plusSeconds(300), false),
@@ -44,16 +52,19 @@ class SecurityIntegrationTest {
             client.get().uri("/v1/users/session").headers(h -> h.setBearerAuth(token)).exchange().expectStatus().isUnauthorized();
         }
     }
+    // Confirme que Flyway a créé la table et enregistré la migration.
     @Test void migrationCreatesProfilesAndIsVersioned() {
         assertThat(jdbc.queryForObject("select count(*) from user_profiles", Integer.class)).isZero();
         assertThat(jdbc.queryForObject("select count(*) from flyway_schema_history where success = true and version = '1'", Integer.class)).isEqualTo(1);
     }
+    // Le diagnostic expose le sujet du JWT vérifié, sans créer un profil.
     @Test void sessionIdentityComesFromVerifiedToken() {
         client.get().uri("/v1/users/session").headers(h -> h.setBearerAuth(oidc.validToken()))
             .exchange().expectStatus().isOk().expectBody().jsonPath("$.subject").isEqualTo("player-123")
             .jsonPath("$.username").isEqualTo("test-player");
     }
 
+    // Un refus de sécurité doit survenir avant toute création de profil.
     @Test void profileEndpointsRejectAnonymousRequestsWithoutWriting() {
         client.get().uri("/v1/users/me").exchange().expectStatus().isUnauthorized();
         client.patch().uri("/v1/users/me").contentType(org.springframework.http.MediaType.APPLICATION_JSON)
@@ -61,6 +72,7 @@ class SecurityIntegrationTest {
         assertThat(jdbc.queryForObject("select count(*) from user_profiles", Integer.class)).isZero();
     }
 
+    // La première lecture crée le profil ; les suivantes ne réimportent pas son nom depuis le JWT.
     @Test void firstReadCreatesProfileAndRepeatedReadPreservesIt() {
         String token = oidc.profileToken("owner-a", "Yassine Amrani", "yassine");
         client.get().uri("/v1/users/me").headers(h -> h.setBearerAuth(token)).exchange().expectStatus().isOk()
@@ -74,6 +86,7 @@ class SecurityIntegrationTest {
         assertThat(jdbc.queryForObject("select count(*) from user_profiles", Integer.class)).isEqualTo(1);
     }
 
+    // Un PATCH préserve les champs absents ; une biographie vide efface sa valeur.
     @Test void partialPatchPersistsAndEmptyBiographyClearsIt() {
         String token = oidc.profileToken("editor", "Initial", "editor");
         patch(token, "{\"displayName\":\"  Yassine  \",\"biography\":\"Ailier à Casablanca ⚽\"}")
@@ -91,6 +104,7 @@ class SecurityIntegrationTest {
         assertThat(jdbc.queryForObject("select updated_at > created_at from user_profiles where subject = 'editor'", Boolean.class)).isTrue();
     }
 
+    // Les paramètres et en-têtes ne doivent pas remplacer le propriétaire tiré du JWT.
     @Test void tokenOwnerCannotSelectOrOverwriteAnotherProfile() {
         String alice = oidc.profileToken("alice", "Alice", "alice");
         String bob = oidc.profileToken("bob", "Bob", "bob");
@@ -107,6 +121,7 @@ class SecurityIntegrationTest {
         assertThat(jdbc.queryForObject("select count(*) from user_profiles", Integer.class)).isEqualTo(2);
     }
 
+    // Une validation échouée renvoie 400 et conserve le profil précédent.
     @Test void invalidPatchIsStructuredAndDoesNotModifyTheDatabase() {
         String token = oidc.profileToken("invalid", "Initial", "invalid");
         patch(token, "{\"biography\":\"Préservée\"}").expectStatus().isOk();
@@ -123,11 +138,13 @@ class SecurityIntegrationTest {
         assertThat(jdbc.queryForMap("select * from user_profiles where subject = 'invalid'")).isEqualTo(before);
     }
 
+    // Le corps est validé avant la création automatique du premier profil.
     @Test void invalidFirstPatchDoesNotCreateAProfile() {
         patch(oidc.profileToken("not-created", "Initial", null), "{\"displayName\":\"\"}").expectStatus().isBadRequest();
         assertThat(jdbc.queryForObject("select count(*) from user_profiles", Integer.class)).isZero();
     }
 
+    // Les limites acceptent les caractères hors BMP sans les compter deux fois.
     @Test void unicodeLimitsCountCodePointsRatherThanJavaCodeUnits() {
         String token = oidc.profileToken("unicode", "Initial", null);
         patch(token, "{\"displayName\":\"" + "⚽".repeat(80) + "\",\"biography\":\"" + "😀".repeat(500) + "\"}")
@@ -136,6 +153,7 @@ class SecurityIntegrationTest {
         patch(token, "{\"biography\":\"" + "😀".repeat(501) + "\"}").expectStatus().isBadRequest();
     }
 
+    // L’initialisation ignore les noms inutilisables et borne les claims trop longs.
     @Test void defaultNameFallsBackAndLongClaimsAreBounded() {
         for (String[] values : new String[][]{{"fallback-user", null, "pseudo", "pseudo"},
             {"fallback-default", "   ", null, "Joueur"}, {"long-name", "😀".repeat(81), null, "😀".repeat(80)}}) {
@@ -144,6 +162,7 @@ class SecurityIntegrationTest {
         }
     }
 
+    // Une identité absente ou invalide ne peut pas devenir une clé de profil.
     @Test void missingOrInvalidSubjectCannotCreateOrPatchAProfile() {
         for (String subject : new String[]{null, " ", "a".repeat(256)}) {
             String token = oidc.profileToken(subject, "No owner", "unknown");
@@ -153,6 +172,7 @@ class SecurityIntegrationTest {
         assertThat(jdbc.queryForObject("select count(*) from user_profiles", Integer.class)).isZero();
     }
 
+    // La contrainte unique garantit un seul profil malgré des premières lectures concurrentes.
     @Test void simultaneousFirstReadsCreateExactlyOneProfile() throws Exception {
         String token = oidc.profileToken("concurrent", "Concurrent", null);
         try (var pool = java.util.concurrent.Executors.newFixedThreadPool(8)) {
@@ -164,6 +184,7 @@ class SecurityIntegrationTest {
         assertThat(jdbc.queryForObject("select count(*) from user_profiles where subject = 'concurrent'", Integer.class)).isEqualTo(1);
     }
 
+    // Deux écritures sur des champs distincts ne doivent pas s’écraser mutuellement.
     @Test void concurrentPartialPatchesPreserveBothFields() throws Exception {
         String token = oidc.profileToken("parallel-patch", "Initial", null);
         client.get().uri("/v1/users/me").headers(h -> h.setBearerAuth(token)).exchange().expectStatus().isOk();
@@ -183,6 +204,7 @@ class SecurityIntegrationTest {
     }
 
 
+    // Sépare le simple jeton valide, le rôle user et le privilège admin.
     @Test void profileRequiresApplicationRoleAndAdminDiagnosticRequiresAdmin() {
         client.get().uri("/v1/users/me").headers(h -> h.setBearerAuth(oidc.roleToken()))
             .exchange().expectStatus().isForbidden().expectHeader()
@@ -196,6 +218,7 @@ class SecurityIntegrationTest {
             .exchange().expectStatus().isOk();
     }
 
+    // Des claims hors realm_access et des en-têtes falsifiés ne doivent pas donner le rôle admin.
     @Test void scopesClientRolesAndHeadersCannotPromoteUserToAdmin() {
         for (String token : new String[]{oidc.roleToken("user"),
             oidc.rolesToken(java.util.Map.of("roles", "admin"), null, "admin ROLE_admin", Instant.now().plusSeconds(300)),
@@ -206,6 +229,7 @@ class SecurityIntegrationTest {
         }
     }
 
+    // Le client reçoit une erreur structurée pour distinguer 401 et 403.
     @Test void unauthorizedAndExpiredTokensProduceProblemResponses() {
         client.get().uri("/v1/users/me").exchange().expectStatus().isUnauthorized()
             .expectHeader().valueEquals("WWW-Authenticate", "Bearer")
@@ -217,6 +241,7 @@ class SecurityIntegrationTest {
             .expectBody().jsonPath("$.status").isEqualTo(401);
     }
 
+    // Vérifie le refus par défaut des routes sans autorisation déclarée.
     @Test void newEndpointsAreDeniedUntilExplicitlyAuthorized() {
         client.get().uri("/v1/unconfigured").headers(h -> h.setBearerAuth(oidc.roleToken("admin")))
             .exchange().expectStatus().isForbidden();

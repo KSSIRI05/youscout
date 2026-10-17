@@ -1,6 +1,6 @@
 # Contrats API et événements
 
-Document de conception. Le diagnostic JWT et les endpoints de profil personnel sont décrits dans [user-foundation.yaml](../contracts/openapi/user-foundation.yaml). Les autres API métier et les contrats Kafka restent à réaliser.
+Document de conception. Le diagnostic JWT et les endpoints de profil personnel sont décrits dans [user-foundation.yaml](../contracts/openapi/user-foundation.yaml). Le catalogue et les abonnements sont décrits dans [skill-hashtag.json](../contracts/openapi/skill-hashtag.json). Les autres API métier et les contrats Kafka restent à réaliser.
 
 ## API
 

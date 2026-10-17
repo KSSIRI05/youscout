@@ -1,0 +1,38 @@
+# Configuration du service ; les variables d’environnement remplacent les valeurs locales par défaut.
+spring:
+  application:
+    name: skill-service
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # issuer doit correspondre au claim iss du JWT ; jwk-set-uri sert à télécharger les clés de signature.
+          issuer-uri: ${OIDC_ISSUER:http://localhost:8180/realms/youscout}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:http://localhost:8180/realms/youscout/protocol/openid-connect/certs}
+          # Refuse un jeton émis pour une autre API, même si sa signature est correcte.
+          audiences: youscout-api
+  # Connexion à la base propre au domaine ; aucun mot de passe de secours n’est codé en dur.
+  datasource:
+    url: ${SKILL_DB_URL:jdbc:postgresql://localhost:5434/youscout_skill}
+    username: ${SKILL_DB_USERNAME:youscout_skill}
+    password: ${SKILL_DB_PASSWORD}
+  # Applique les nouvelles migrations et vérifie les empreintes de celles déjà exécutées.
+  flyway:
+    enabled: true
+server:
+  port: ${SERVER_PORT:8082}
+# N’expose que les sondes de santé, sans détails internes dans les réponses.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      group:
+        # Le service n’est prêt à recevoir du trafic que si sa base est également disponible.
+        readiness:
+          include: readinessState,db
+      probes:
+        enabled: true

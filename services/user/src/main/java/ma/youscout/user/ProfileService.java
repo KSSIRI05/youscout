@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+/** Associe le profil au sujet du JWT et regroupe création et lecture/modification en transaction. */
 @Service
 class ProfileService {
     private final ProfileRepository profiles;
@@ -26,6 +27,7 @@ class ProfileService {
         return profiles.patch(subject, patch);
     }
 
+    // L’identité provient du jeton vérifié, jamais d’un paramètre ou d’un en-tête X-User-Id.
     private String subject(Jwt jwt) {
         String subject = jwt.getSubject();
         if (subject == null || subject.isBlank() || subject.codePointCount(0, subject.length()) > 255
@@ -35,6 +37,8 @@ class ProfileService {
         return subject;
     }
 
+    // À la création seulement : nom du JWT, puis pseudo, puis valeur de secours.
+    // Les lectures suivantes ne remplacent pas le nom que le joueur a personnalisé.
     private String initialName(Jwt jwt) {
         for (String claim : new String[]{"name", "preferred_username"}) {
             if (jwt.getClaims().get(claim) instanceof String name && !name.isBlank() && name.indexOf('\0') < 0) {

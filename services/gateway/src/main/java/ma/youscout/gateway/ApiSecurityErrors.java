@@ -9,8 +9,10 @@ import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+/** Produit des erreurs de sécurité JSON sans exposer les détails internes du jeton. */
 final class ApiSecurityErrors {
     private ApiSecurityErrors() {}
+    // 401 : authentification absente ou invalide ; WWW-Authenticate indique le schéma Bearer.
     static Mono<Void> unauthorized(ServerWebExchange exchange, AuthenticationException error) {
         exchange.getResponse().getHeaders().set(HttpHeaders.WWW_AUTHENTICATE,
             error instanceof OAuth2AuthenticationException ? "Bearer error=\"invalid_token\"" : "Bearer");

@@ -10,11 +10,13 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicReference;
+/** Fournit une clé RSA et un serveur JWKS locaux pour tester des JWT sans dépendre de Keycloak. */
 final class OidcFixture {
     final RSAKey key;
     final HttpServer server;
     final AtomicReference<String> requestId = new AtomicReference<>();
     final AtomicReference<String> authorization = new AtomicReference<>();
+    // La clé privée reste dans le test ; le serveur ne publie que sa partie publique.
     OidcFixture() {
         try {
             key = new RSAKeyGenerator(2048).keyID("test-key").generate();
@@ -31,6 +33,14 @@ final class OidcFixture {
                 e.getResponseHeaders().set("Content-Type", "application/json");
                 e.sendResponseHeaders(200, body.length); e.getResponseBody().write(body); e.close();
             });
+            for (String path : java.util.List.of("/v1/skills", "/v1/hashtags")) {
+                server.createContext(path, e -> {
+                    authorization.set(e.getRequestHeaders().getFirst("Authorization"));
+                    byte[] body="{\"service\":\"stub-catalogue\"}".getBytes(StandardCharsets.UTF_8);
+                    e.getResponseHeaders().set("Content-Type","application/json");
+                    e.sendResponseHeaders(200,body.length);e.getResponseBody().write(body);e.close();
+                });
+            }
             server.start();
         } catch (Exception e) { throw new IllegalStateException(e); }
     }
@@ -46,6 +56,7 @@ final class OidcFixture {
             return jwt.serialize();
         } catch (Exception e) { throw new IllegalStateException(e); }
     }
+    // Permet de fabriquer des claims de rôles valides ou malformés pour tester les refus.
     String rolesToken(Object realm, Object clientRoles, String scope, Instant expires) {
         try {
             var claims = new JWTClaimsSet.Builder().issuer(base()).audience("youscout-api").subject("role-test")
