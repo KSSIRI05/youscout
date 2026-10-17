@@ -8,8 +8,10 @@ import org.springframework.http.MediaType;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 
+/** Produit des erreurs de sécurité JSON sans exposer les détails internes du jeton. */
 final class ApiSecurityErrors {
     private ApiSecurityErrors() {}
+    // 401 : authentification absente ou invalide ; WWW-Authenticate indique le schéma Bearer.
     static void unauthorized(HttpServletResponse response, AuthenticationException error) throws IOException {
         response.setHeader(HttpHeaders.WWW_AUTHENTICATE,
             error instanceof OAuth2AuthenticationException ? "Bearer error=\"invalid_token\"" : "Bearer");

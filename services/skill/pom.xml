@@ -8,6 +8,7 @@
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <artifactId>skill-service</artifactId>
+  <!-- Les versions communes sont héritées du parent ; les dépendances de test ne sont pas livrées. -->
   <dependencies>
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -74,6 +75,7 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
+  <!-- Produit app.jar, attendu par le Dockerfile commun aux services. -->
   <build>
     <finalName>app</finalName>
     <plugins>

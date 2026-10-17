@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+/** Convertit les conflits d’unicité et les corps JSON invalides en erreurs HTTP structurées. */
 @RestControllerAdvice
 class CatalogErrors extends ResponseEntityExceptionHandler {
     @ExceptionHandler(DuplicateKeyException.class)

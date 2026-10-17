@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 class SessionController {
     record SessionIdentity(String subject, String username, String service) {}
+    // La restriction admin est assurée par SecurityConfig ; cette route sert au diagnostic.
     @GetMapping("/v1/users/admin/session")
     SessionIdentity adminSession(@AuthenticationPrincipal Jwt jwt) {
         return session(jwt);

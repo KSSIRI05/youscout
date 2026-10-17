@@ -16,16 +16,19 @@ import org.testcontainers.junit.jupiter.*;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** Tests HTTP réels ; les identités sont signées par la fixture locale. */
 @SpringBootTest(webEnvironment=SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
 class CatalogIntegrationTest {
     static final OidcFixture oidc=new OidcFixture();
+    // Base éphémère indépendante des volumes Compose et des données du développeur.
     @Container static final PostgreSQLContainer postgres=new PostgreSQLContainer("postgres:17.11-alpine");
     @LocalServerPort int port;
     @Autowired JdbcTemplate jdbc;
     WebTestClient client;
     String user,admin;
     static final UUID SEED=UUID.fromString("00000000-0000-4000-8000-000000000001");
+    // Remplace les adresses de production par celles des ressources temporaires du test.
     @DynamicPropertySource static void properties(DynamicPropertyRegistry r) {
         r.add("spring.security.oauth2.resourceserver.jwt.issuer-uri",oidc::base);
         r.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri",()->oidc.base()+"/jwks");
@@ -33,6 +36,7 @@ class CatalogIntegrationTest {
         r.add("spring.datasource.username",postgres::getUsername);
         r.add("spring.datasource.password",postgres::getPassword);
     }
+    // Réinitialise le contexte du test pour rendre les scénarios indépendants.
     @BeforeEach void setup() {
         client=WebTestClient.bindToServer().baseUrl("http://127.0.0.1:"+port).build();
         user=oidc.profileToken("alice","Alice",null);admin=oidc.roleToken("admin");
@@ -49,15 +53,18 @@ class CatalogIntegrationTest {
         call("POST","/v1/hashtags",user,"{\"name\":\""+name+"\"}").expectStatus().isCreated();
         return jdbc.queryForObject("SELECT id FROM hashtags",UUID.class);
     }
+    // Vérifie la disponibilité de l’application et l’historique de migration.
     @Test void migrationAndHealth() {
         call("GET","/actuator/health",null,null).expectStatus().isOk();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE version='1' AND success",Integer.class)).isEqualTo(1);
     }
+    // Teste la recherche normalisée et le décalage des résultats du catalogue utilisateur.
     @Test void readersSeeActiveSkillsAndPagination() {
         call("GET","/v1/skills?q=DRIB&limit=1&offset=0",user,null).expectStatus().isOk().expectBody()
             .jsonPath("$.items.length()").isEqualTo(1).jsonPath("$.items[0].name").isEqualTo("Dribble");
         call("GET","/v1/skills?offset=1",user,null).expectStatus().isOk().expectBody().jsonPath("$.items.length()").isEqualTo(0);
     }
+    // La désactivation masque la compétence aux joueurs mais laisse sa réactivation possible.
     @Test void adminCreatesRenamesDeactivatesAndReactivates() {
         call("POST","/v1/skills/admin",admin,"{\"name\":\"  Vision\\tdu jeu  \",\"description\":\"Lecture du jeu\"}")
             .expectStatus().isCreated().expectHeader().exists("Location").expectBody().jsonPath("$.name").isEqualTo("Vision du jeu");
@@ -71,6 +78,7 @@ class CatalogIntegrationTest {
         call("PATCH","/v1/skills/admin/"+id,admin,"{\"active\":true,\"description\":\"\"}").expectStatus().isOk();
         call("GET","/v1/skills/"+id,user,null).expectStatus().isOk().expectBody().jsonPath("$.description").isEqualTo("");
     }
+    // Un doublon canonique renvoie 409 et annule aussi les autres champs du PATCH.
     @Test void duplicateCanonicalNamesAreConflictsAndRollback() {
         call("POST","/v1/skills/admin",admin,"{\"name\":\"ＤＲＩＢＢＬＥ\"}").expectStatus().isEqualTo(409)
             .expectBody().jsonPath("$.status").isEqualTo(409);
@@ -79,6 +87,7 @@ class CatalogIntegrationTest {
         call("PATCH","/v1/skills/admin/"+id,admin,"{\"name\":\"dribble\",\"active\":false}").expectStatus().isEqualTo(409);
         assertThat(jdbc.queryForObject("SELECT active FROM skills WHERE id=?",Boolean.class,id)).isTrue();
     }
+    // Un joueur ne peut pas contourner les droits admin avec un en-tête de rôle.
     @Test void usersCannotWriteSkillsEvenWithSpoofedRoles() {
         call("POST","/v1/skills/admin",user,"{\"name\":\"Interdit\"}").expectStatus().isForbidden();
         client.patch().uri("/v1/skills/admin/"+SEED).header("X-User-Roles","admin").headers(h->h.setBearerAuth(user))
@@ -86,12 +95,14 @@ class CatalogIntegrationTest {
         call("GET","/v1/skills/admin",user,null).expectStatus().isForbidden();
         assertThat(jdbc.queryForObject("SELECT active FROM skills WHERE id=?",Boolean.class,SEED)).isTrue();
     }
+    // Vérifie séparément les refus liés au rôle et ceux liés à l’authentification.
     @Test void rolelessAnonymousExpiredAndWrongAudienceAreRejected() {
         call("GET","/v1/skills",null,null).expectStatus().isUnauthorized();
         call("GET","/v1/hashtags",oidc.roleToken(),null).expectStatus().isForbidden();
         call("GET","/v1/skills",oidc.token(oidc.base(),"wrong",Instant.now().plusSeconds(300),false),null).expectStatus().isUnauthorized();
         call("GET","/v1/skills",oidc.token(oidc.base(),"youscout-api",Instant.now().minusSeconds(120),false),null).expectStatus().isUnauthorized();
     }
+    // Les erreurs de JSON, de type ou de champ ne doivent laisser aucune compétence créée.
     @Test void invalidSkillInputsAreProblemsWithoutWrites() {
         for(String body:new String[]{"{}","null","[]","{","{\"name\":null}","{\"name\":12}","{\"name\":\" \"}",
             "{\"name\":\"Test\",\"id\":\"forged\"}","{\"name\":\""+"x".repeat(81)+"\"}","{\"name\":\"Test\",\"description\":null}"}) {
@@ -102,6 +113,7 @@ class CatalogIntegrationTest {
             call("PATCH","/v1/skills/admin/"+SEED,admin,body).expectStatus().isBadRequest();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM skills",Integer.class)).isEqualTo(1);
     }
+    // Distingue une ressource inconnue des identifiants et paramètres invalides.
     @Test void missingResourcesInvalidIdsAndPageBounds() {
         call("GET","/v1/skills/"+UUID.randomUUID(),user,null).expectStatus().isNotFound();
         call("PATCH","/v1/skills/admin/"+UUID.randomUUID(),admin,"{\"active\":false}").expectStatus().isNotFound();
@@ -109,18 +121,21 @@ class CatalogIntegrationTest {
         for(String query:new String[]{"limit=0","limit=101","offset=-1","offset=10001","limit=invalid","q="+"a".repeat(81)})
             call("GET","/v1/skills?"+query,user,null).expectStatus().isBadRequest();
     }
+    // Des écritures compatibles et des casses différentes renvoient le même hashtag.
     @Test void hashtagsNormalizeAndReuseCanonicalIds() {
         UUID id=tag("#ＦｏｏｔＢａｌｌ");
         call("POST","/v1/hashtags",user,"{\"name\":\"football\"}").expectStatus().isOk().expectBody().jsonPath("$.id").isEqualTo(id.toString());
         client.get().uri("/v1/hashtags?q={q}","#FOOT").headers(h->h.setBearerAuth(user)).exchange().expectStatus().isOk().expectBody().jsonPath("$.items[0].name").isEqualTo("football");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM hashtags",Integer.class)).isEqualTo(1);
     }
+    // Refuse les noms invalides et les champs internes ajoutés au corps JSON.
     @Test void hashtagsRejectInvalidNamesAndMassAssignment() {
         for(String body:new String[]{"{}","{\"name\":\"#\"}","{\"name\":\"two words\"}","{\"name\":\"bad-tag\"}",
             "{\"name\":null}","{\"name\":123}","{\"name\":\"\\u0000\"}","{\"name\":\""+"a".repeat(51)+"\"}","{\"name\":\"valid\",\"subject\":\"forged\"}"})
             call("POST","/v1/hashtags",user,body).expectStatus().isBadRequest();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM hashtags",Integer.class)).isZero();
     }
+    // Les abonnements répétés restent uniques et chaque compte ne gère que les siens.
     @Test void followingIsIdempotentAndOwnedByJwtSubject() {
         UUID id=tag("football");String bob=oidc.profileToken("bob","Bob",null);
         call("PUT","/v1/hashtags/"+id+"/follow",user,null).expectStatus().isNoContent();
@@ -134,6 +149,7 @@ class CatalogIntegrationTest {
         call("DELETE","/v1/hashtags/"+id+"/follow",user,null).expectStatus().isNoContent();
         call("GET","/v1/hashtags/following",user,null).expectStatus().isOk().expectBody().jsonPath("$.items.length()").isEqualTo(0);
     }
+    // Un abonnement exige une identité valide et un hashtag existant.
     @Test void followRejectsInvalidSubjectsAndUnknownTags() {
         UUID id=tag("football");String noSubject=oidc.profileToken(null,"Unknown",null);
         call("PUT","/v1/hashtags/"+id+"/follow",noSubject,null).expectStatus().isUnauthorized();
@@ -141,6 +157,7 @@ class CatalogIntegrationTest {
         call("PUT","/v1/hashtags/"+UUID.randomUUID()+"/follow",user,null).expectStatus().isNotFound();
         call("DELETE","/v1/hashtags/"+UUID.randomUUID()+"/follow",user,null).expectStatus().isNotFound();
     }
+    // Exerce les contraintes PostgreSQL avec plusieurs créations et abonnements simultanés.
     @Test void concurrentHashtagCreationAndFollowingStayUnique() throws Exception {
         try(var pool=Executors.newFixedThreadPool(6)) {
             var work=new ArrayList<Callable<Integer>>();
@@ -153,6 +170,7 @@ class CatalogIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM hashtags",Integer.class)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM hashtag_follows",Integer.class)).isEqualTo(1);
     }
+    // Deux créations concurrentes du même nom doivent produire un succès et un conflit.
     @Test void concurrentSkillCreationPreservesUniqueness() throws Exception {
         try(var pool=Executors.newFixedThreadPool(2)) {
             var a=pool.submit(()->call("POST","/v1/skills/admin",admin,"{\"name\":\"Same\"}").expectBody().returnResult().getStatus().value());
@@ -160,6 +178,7 @@ class CatalogIntegrationTest {
             assertThat(List.of(a.get(30,TimeUnit.SECONDS),b.get(30,TimeUnit.SECONDS))).containsExactlyInAnyOrder(201,409);
         }
     }
+    // Vérifie Unicode et la recherche littérale, sans interprétation des jokers SQL.
     @Test void unicodeAndLiteralSearchAvoidWildcardExpansion() {
         call("POST","/v1/skills/admin",admin,"{\"name\":\""+"😀".repeat(80)+"\"}").expectStatus().isCreated();
         client.get().uri("/v1/skills?q={q}","%").headers(h->h.setBearerAuth(user)).exchange().expectStatus().isOk().expectBody().jsonPath("$.items.length()").isEqualTo(0);
@@ -167,6 +186,7 @@ class CatalogIntegrationTest {
         call("GET","/v1/hashtags",user,null).expectStatus().isOk().expectBody().jsonPath("$.items.length()").isEqualTo(1);
     }
 
+    // Le journal conserve le véritable acteur ; un admin sans sujet ne peut pas écrire.
     @Test void adminChangesAreAuditedWithVerifiedSubject() {
         client.patch().uri("/v1/skills/admin/"+SEED).headers(h->h.setBearerAuth(admin)).header("X-User-Id","forged")
             .contentType(MediaType.APPLICATION_JSON).bodyValue("{\"active\":false}").exchange().expectStatus().isOk();

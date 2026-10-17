@@ -1,3 +1,4 @@
+# Configuration du service ; les variables d’environnement remplacent les valeurs locales par défaut.
 spring:
   application:
     name: gateway-service
@@ -5,21 +6,26 @@ spring:
     oauth2:
       resourceserver:
         jwt:
+          # issuer doit correspondre au claim iss du JWT ; jwk-set-uri sert à télécharger les clés de signature.
           issuer-uri: ${OIDC_ISSUER:http://localhost:8180/realms/youscout}
           jwk-set-uri: ${OIDC_JWK_SET_URI:http://localhost:8180/realms/youscout/protocol/openid-connect/certs}
+          # Refuse un jeton émis pour une autre API, même si sa signature est correcte.
           audiences: youscout-api
   cloud:
     gateway:
       server:
         webflux:
+          # Limite l’attente de connexion et de réponse des services pour éviter des requêtes suspendues.
           httpclient:
             connect-timeout: 3000
             response-timeout: 10s
+          # Transmet le Bearer original ; chaque service conserve son contrôle indépendant du JWT.
           routes:
             - id: user-service
               uri: ${USER_SERVICE_URL:http://localhost:8081}
               predicates:
                 - Path=/v1/users/**
+              # Supprime les identités déclarées par le client : elles ne remplacent jamais le JWT.
               filters:
                 - RemoveRequestHeader=X-User-Id
                 - RemoveRequestHeader=X-User-Roles
@@ -32,6 +38,7 @@ spring:
                 - RemoveRequestHeader=X-User-Roles
 server:
   port: 8080
+# N’expose que les sondes de santé, sans détails internes dans les réponses.
 management:
   endpoints:
     web:
