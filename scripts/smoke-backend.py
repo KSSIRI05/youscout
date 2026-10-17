@@ -14,7 +14,8 @@ def request(url, data=None, headers=None, method=None):
         with urllib.request.urlopen(urllib.request.Request(url, data=data, headers=headers or {}, method=method), timeout=15) as response:
             return response.status, json.load(response), response.headers
     except urllib.error.HTTPError as error:
-        return error.code, None, error.headers
+        body = error.read()
+        return error.code, json.loads(body) if body else None, error.headers
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -35,6 +36,8 @@ def main():
     status, identity, headers = request(BASE + "/v1/users/session", headers=bearer)
     assert status == 200 and identity["service"] == "user-service" and identity["subject"], "Authenticated routing failed"
     assert headers.get("X-Request-Id") == "smoke-backend", "Correlation header missing"
+    status, denied, _ = request(BASE + "/v1/users/admin/session", headers=bearer)
+    assert status == 403 and denied["status"] == 403, "Smoke user must not access admin endpoints"
     status, profile, profile_headers = request(BASE + "/v1/users/me", headers=bearer)
     assert status == 200 and profile["subject"] == identity["subject"], "Own profile provisioning failed"
     assert profile_headers.get("Cache-Control") == "no-store", "Profile must not be cached"
@@ -48,7 +51,7 @@ def main():
     assert status == 200 and all(saved[key] == value for key, value in expected.items()), "Profile changes were not persisted"
     status, _, _ = request(BASE + "/v1/users/me", headers={"Authorization": "Bearer malformed"})
     assert status == 401, "Invalid bearer token was not rejected"
-    print("PASS: health, OIDC discovery, anonymous rejection, real signed token, secured routing, correlation, persistent profile reads/patches and invalid-token rejection.")
+    print("PASS: health, OIDC discovery, anonymous rejection, real signed token, secured routing, correlation, persistent profile reads/patches, admin denial and invalid-token rejection.")
     print("The service account proves infrastructure authentication, not an interactive mobile user login. Only its own technical test profile is modified.")
 
 if __name__ == "__main__":
