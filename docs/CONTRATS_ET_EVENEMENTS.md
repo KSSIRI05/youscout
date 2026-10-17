@@ -1,6 +1,6 @@
 # Contrats API et événements
 
-Document de conception ; aucun contrat exécutable n'est encore fourni.
+Document de conception. Le seul endpoint actuellement implémenté est le diagnostic JWT décrit dans [user-foundation.yaml](../contracts/openapi/user-foundation.yaml). Les API métier et les contrats Kafka restent à réaliser.
 
 ## API
 
