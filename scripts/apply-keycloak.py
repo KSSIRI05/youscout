@@ -19,6 +19,7 @@ def main():
     admin.request("PUT", base, settings)
     default_name = current["defaultRole"]["name"]
     admin.request("POST", base + "/roles/" + quote(default_name, safe="") + "/composites", [roles["user"]])
+    client_scopes = {scope["name"]: scope["id"] for scope in admin.request("GET", base + "/client-scopes")}
     for configured in desired["clients"]:
         client = copy.deepcopy(configured)
         existing = admin.request("GET", base + "/clients?" + "clientId=" + quote(client["clientId"]))
@@ -26,6 +27,11 @@ def main():
         client_id = existing[0]["id"]
         client.pop("secret", None)  # Existing client credentials are preserved.
         admin.request("PUT", base + "/clients/" + client_id, client)
+        # Updating ClientRepresentation does not attach client-scope relationships.
+        # Explicitly link defaults to repair existing realms as well as new imports.
+        for name in client.get("defaultClientScopes", []):
+            assert name in client_scopes, "Required built-in client scope missing: " + name
+            admin.request("PUT", base + "/clients/" + client_id + "/default-client-scopes/" + client_scopes[name])
         allowed = [roles["user"], roles["admin"]] if client["clientId"] == "youscout-mobile" else [roles["user"]]
         scope_path = base + "/clients/" + client_id + "/scope-mappings/realm"
         existing_scopes = admin.request("GET", scope_path)

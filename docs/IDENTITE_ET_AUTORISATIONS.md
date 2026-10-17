@@ -32,7 +32,7 @@ La route admin est un diagnostic sans écriture ni liste d’utilisateurs. Elle 
 
 Gateway et User appliquent chacun cette matrice. Seuls les rôles `user` et `admin` provenant de `realm_access.roles` d’un JWT vérifié deviennent des autorités applicatives. Des en-têtes, des champs du profil, des scopes nommés `admin` ou des rôles client ne confèrent pas ce droit. Un rôle admin ne permet pas de choisir le propriétaire de `/me` : le `sub` reste l’unique sélecteur SQL.
 
-Les clients gardent `fullScopeAllowed=false`. Leur scope de rôles est explicite : `user`/`admin` pour le mobile, uniquement `user` pour le smoke technique. Les protocol mappers exportent l’audience `youscout-api` et les rôles effectifs. Le compte technique possède `user`, sans rôle admin ni permission de gestion Keycloak.
+Les clients ont les scopes par défaut `basic`, `profile` et `email`. `basic` fournit notamment le claim `sub` : il est indispensable pour rattacher le profil au joueur. L’outil de mise à jour lie explicitement ces scopes via les endpoints Keycloak dédiés, car le PUT du client seul ne crée pas ces relations. Les clients gardent `fullScopeAllowed=false`. Leur scope de rôles est explicite : `user`/`admin` pour le mobile, uniquement `user` pour le smoke technique. Les protocol mappers exportent l’audience `youscout-api` et les rôles effectifs. Le compte technique possède `user`, sans rôle admin ni permission de gestion Keycloak.
 
 Le rôle applicatif `admin` est distinct des droits d’administration du serveur Keycloak. Son attribution à une personne doit être effectuée par un opérateur autorisé dans Keycloak ; aucune API publique de promotion n’est fournie.
 
@@ -63,6 +63,12 @@ python scripts/smoke-identity.py
 `apply-keycloak.py` applique les paramètres versionnés, le rôle par défaut, les mappers et scopes des deux clients. Il conserve les utilisateurs, les mots de passe, les rôles existants et les secrets clients. Il donne `user` au compte technique et ne promeut aucun joueur administrateur. Les joueurs déjà présents ayant le rôle composite par défaut héritent de `user` ; pour un compte ancien sans ce rôle composite, l’opérateur doit attribuer explicitement `user`.
 
 L’outil utilise uniquement l’administration locale à `localhost:8180`, avec le mot de passe de bootstrap dans le `.env` ignoré. Le client intégré `admin-cli` utilise son flux opérateur pour obtenir ce jeton de gestion en mémoire ; cela n’active pas le password grant du client mobile. Ce n’est pas une procédure d’exploitation de production.
+
+## Diagnostic d’un profil refusé après inscription
+
+Une inscription et un échange de code réussis ne prouvent pas que l’access token contient son sujet. Sans scope par défaut `basic`, un realm neuf peut émettre un jeton avec le rôle user mais sans `sub` ; User refuse alors `/v1/users/me` avec HTTP 401. Un ancien realm ayant conservé ce scope peut masquer le défaut d’import.
+
+La configuration versionnée inclut `basic` pour les deux clients. `apply-keycloak.py` répare les relations sur les realms existants sans supprimer leurs données. Le smoke test vérifie la relation réelle, puis le sujet du jeton avant d’appeler le profil. Il ne substitue jamais le nom utilisateur au sujet du JWT. La CI affiche l’état et les journaux Gateway/User en cas d’échec.
 
 ## Vérifications automatisées
 
