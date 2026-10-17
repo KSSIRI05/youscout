@@ -2,7 +2,7 @@
 
 Projet ALD 2025/2026, INPT (ASEDS). YouScout permet de publier des vidéos de football, découvrir des talents et échanger avec la communauté.
 
-**État réel : documentation de conception uniquement. Aucun service, client mobile, pipeline CI ou environnement cloud n'est encore implémenté.** L'architecture cible a été retenue par le porteur du projet ; sa validation technique reste à réaliser par les prototypes et tests décrits ici.
+**État réel : première version du frontend Flutter dans `apps/mobile`, avec démonstration locale interactive et workflow CI mobile. Le backend, l’admin et l’infrastructure cloud restent à implémenter.** L'architecture cible a été retenue par le porteur du projet ; sa validation technique reste à réaliser par les prototypes et tests décrits ici.
 
 ## Architecture retenue
 
@@ -30,20 +30,27 @@ Le backend recommandé est Java / Spring Boot ; l'admin utilise React. PostgreSQ
 
 ## Lancer le projet
 
-Il n'existe pas encore de commande de lancement applicatif. L'installation de Flutter, Java ou Docker ne suffit pas à exécuter une application absente. Les versions compatibles, variables d'environnement, migrations, commandes et comptes de démonstration devront être ajoutés et vérifiés lors de l'implémentation. Voir la [roadmap](docs/ROADMAP.md).
+Le frontend utilise Flutter **3.47.7** / Dart **3.13.5** (version de validation et de CI).
 
-Arborescence future, **non encore créée** :
-
-```text
-apps/mobile/             Flutter
-apps/admin/              React
-services/gateway/        Spring Cloud Gateway
-services/user/           Spring Boot (idem pour les autres services métier)
-workers/transcoding/     FFmpeg et consommateur Kafka
-contracts/               OpenAPI et schémas d'événements
-infra/                   Compose, Helm, configuration Keycloak et IaC
-docs/                    Documentation actuelle
+```sh
+cd apps/mobile
+flutter pub get
+flutter run -d web-server --web-port 7357
 ```
+
+Ouvrir ensuite l’adresse affichée dans le navigateur. Les cibles Android et iOS sont générées mais nécessitent leurs SDK et une validation sur appareil.
+
+```sh
+flutter analyze
+flutter test
+flutter build web --release
+```
+
+La démo couvre le fil, la découverte, les profils, les interactions, la publication et les messages en mémoire. Les données disparaissent au rechargement. La sélection vidéo est locale ; aucun upload, transcodage, serveur, authentification ou envoi de message distant n’est effectué. Voir [le guide mobile](apps/mobile/README.md) et [l’état du frontend](docs/FRONTEND.md).
+
+La [maquette Figma](https://www.figma.com/design/SZIskR01SeNgOsSrAwiB9p) guide les couleurs, composants et parcours.
+
+Arborescence actuelle : `apps/mobile/`, `docs/` et `.github/workflows/mobile.yml`. Les dossiers `apps/admin/`, `services/`, `workers/`, `contracts/` et `infra/` restent à créer.
 
 ## Livraison académique
 

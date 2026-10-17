@@ -1,6 +1,6 @@
 # Roadmap de réalisation
 
-Toutes les cases sont ouvertes : ce dépôt ne contient pas encore d'application. La cible de onze services est retenue ; l'ordre de livraison réduit le travail simultané sans fusionner les domaines.
+Un frontend Flutter de démonstration locale existe désormais (voir [FRONTEND.md](FRONTEND.md)). Les cases ci-dessous portent sur les fonctions intégrées avec le backend et restent ouvertes. La cible de onze services est retenue ; l'ordre de livraison réduit le travail simultané sans fusionner les domaines.
 
 ## Phase 0 : valider le socle
 
