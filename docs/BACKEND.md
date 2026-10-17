@@ -42,7 +42,9 @@ Depuis la racine, avec Docker Engine/Docker Desktop démarré, Compose v2 et Pyt
 python infra/compose/init-env.py
 docker compose -f infra/compose/compose.yml config --quiet
 docker compose -f infra/compose/compose.yml up -d --build --wait --wait-timeout 300
+python scripts/apply-keycloak.py
 python scripts/smoke-backend.py
+python scripts/smoke-identity.py
 ```
 
 Le générateur crée `infra/compose/.env` ignoré par Git, avec des mots de passe aléatoires. Il refuse d’écraser un fichier existant. Ne pas le relancer à chaque démarrage. Compose charge ce fichier depuis le dossier du fichier Compose. Les valeurs de `.env.example` sont des indications, pas des secrets utilisables.
@@ -53,7 +55,7 @@ Le générateur crée `infra/compose/.env` ignoré par Git, avec des mots de pas
 | Keycloak, console admin | http://localhost:8180/admin/ |
 | Découverte OIDC | http://localhost:8180/realms/youscout/.well-known/openid-configuration |
 
-L’administrateur Keycloak s’appelle `admin` ; son mot de passe est dans le fichier `.env` local. Aucun compte joueur ni mot de passe de démonstration n’est committé. Les ports publiés écoutent uniquement sur `127.0.0.1`. Le service User et les bases ne publient aucun port sur l’hôte.
+L’administrateur Keycloak s’appelle `admin` ; son mot de passe est dans le fichier `.env` local. L’inscription est activée dans Keycloak et donne uniquement user. Aucun compte joueur ni mot de passe de démonstration n’est committé. Les ports publiés écoutent uniquement sur `127.0.0.1`. Le service User et les bases ne publient aucun port sur l’hôte.
 
 ```sh
 docker compose -f infra/compose/compose.yml ps
@@ -71,7 +73,7 @@ Le client mobile autorise exactement les callbacks `http://localhost:7357/auth/c
 
 Le client confidentiel `youscout-smoke` est réservé à la vérification locale : client credentials, sans connexion interactive, secret aléatoire passé à Keycloak par environnement. Le script récupère un vrai jeton et teste Gateway → User ainsi que la lecture/modification de son propre profil technique, sans afficher jeton ni secret. Cela ne prouve pas une connexion de joueur. Ce client et le mode `start-dev` ne constituent pas une configuration de production.
 
-Les routes métier exigent un jeton ; seule la santé est publique, sans détails internes. CORS permet les deux origines locales sur le port 7357, sans cookies. L’admin métier et les règles de propriété ne sont pas encore implémentés. Le RBAC métier sera ajouté avec leurs endpoints. La readiness de User inclut la disponibilité de sa base.
+Les profils exigent user ou admin ; le diagnostic admin exige admin. Seule la santé est publique, sans détails internes. CORS permet les deux origines locales sur le port 7357, sans cookies. L’admin métier et les règles de propriété des autres domaines restent à implémenter ; les profils personnels utilisent déjà le sub du jeton. Les rôles user/admin sont désormais contrôlés dans Gateway et User ; voir la [matrice des droits](IDENTITE_ET_AUTORISATIONS.md). Le diagnostic admin ne remplace pas le futur produit d’administration. La readiness de User inclut la disponibilité de sa base.
 
 ## Compiler et tester
 
@@ -89,7 +91,7 @@ Sous PowerShell :
 
 Les tests démarrent de vrais serveurs HTTP, vérifient des JWT signés avec des clés RSA de test, puis contrôlent les refus pour mauvaise signature, issuer, audience et expiration. Gateway couvre le routage, la propagation du jeton et du request-id, et CORS. User utilise un PostgreSQL éphémère Testcontainers et vérifie la migration, la création unique, la persistance, le PATCH partiel, les limites, les requêtes invalides, l’isolation entre utilisateurs et les accès concurrents. Les conteneurs de test sont nettoyés automatiquement. Ils n’utilisent pas les bases persistantes Compose.
 
-Les tests Java couvrent 6 scénarios Gateway et 17 scénarios User, soit 23 au total. Le smoke test a aussi été validé avec un jeton émis par Keycloak, y compris la conservation du profil après redémarrage du service User. Aucun parcours de connexion mobile n’est encore testé.
+Les tests Java couvrent 10 scénarios Gateway et 21 scénarios User, soit 31 au total. Le smoke test a aussi été validé avec un jeton émis par Keycloak, y compris la conservation du profil après redémarrage du service User. Aucun parcours de connexion mobile n’est encore testé.
 
 La CI `backend.yml` exécute les tests, construit les images, démarre Compose et lance le smoke test Keycloak réel. Aucun déploiement cloud n’est configuré.
 
@@ -106,6 +108,6 @@ Le mode `--verify-persisted-profile` exige de retrouver les valeurs de l’exéc
 
 ## Prochaine itération
 
-Brancher OIDC/PKCE et les API de profil dans Flutter. Les événements User nécessiteront une outbox et Kafka avant d’alimenter d’autres services. Video, Feed et les autres services restent à créer. Aucun service ne doit lire la base d’un autre.
+Brancher les parcours Keycloak OIDC/PKCE et les API de profil dans Flutter. Les parcours serveur sont décrits dans [IDENTITE_ET_AUTORISATIONS.md](IDENTITE_ET_AUTORISATIONS.md). Les événements User nécessiteront une outbox et Kafka avant d’alimenter d’autres services. Video, Feed et les autres services restent à créer. Aucun service ne doit lire la base d’un autre.
 
 Références : [compatibilité Spring Cloud/Boot](https://spring.io/projects/spring-cloud/), [JWT Spring Security](https://docs.spring.io/spring-security/reference/reactive/oauth2/resource-server/jwt.html), [Keycloak en conteneur](https://www.keycloak.org/server/containers), [hostname Keycloak](https://www.keycloak.org/server/hostname), [support PostgreSQL](https://www.postgresql.org/support/versioning/).
