@@ -18,6 +18,8 @@ class SecurityConfig {
             .cors(Customizer.withDefaults())
             .authorizeExchange(a -> a
                 .pathMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                .pathMatchers("/v1/skills/admin", "/v1/skills/admin/**").hasRole("admin")
+                .pathMatchers("/v1/skills", "/v1/skills/**", "/v1/hashtags", "/v1/hashtags/**").hasAnyRole("user", "admin")
                 .pathMatchers("/v1/users/admin/**").hasRole("admin")
                 .pathMatchers("/v1/users/me").hasAnyRole("user", "admin")
                 .pathMatchers("/v1/users/session").authenticated()

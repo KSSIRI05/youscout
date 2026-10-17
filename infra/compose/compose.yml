@@ -24,6 +24,18 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+  skill-db:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: youscout_skill
+      POSTGRES_USER: youscout_skill
+      POSTGRES_PASSWORD: ${SKILL_DB_PASSWORD:?Run init-env.py --upgrade first}
+    volumes: [skill-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U youscout_skill -d youscout_skill']
+      interval: 5s
+      timeout: 3s
+      retries: 20
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.3
     command: [start-dev, --import-realm]
@@ -65,6 +77,21 @@ services:
     depends_on:
       user-db: {condition: service_healthy}
       keycloak: {condition: service_healthy}
+  skill:
+    build:
+      context: ../..
+      dockerfile: infra/docker/service.Dockerfile
+      args: {MODULE: skill}
+    environment:
+      SERVER_PORT: '8080'
+      SKILL_DB_URL: jdbc:postgresql://skill-db:5432/youscout_skill
+      SKILL_DB_USERNAME: youscout_skill
+      SKILL_DB_PASSWORD: ${SKILL_DB_PASSWORD:?Run init-env.py --upgrade first}
+      OIDC_ISSUER: http://localhost:8180/realms/youscout
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
+    depends_on:
+      skill-db: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
   gateway:
     build:
       context: ../..
@@ -72,12 +99,15 @@ services:
       args: {MODULE: gateway}
     environment:
       USER_SERVICE_URL: http://user:8080
+      SKILL_SERVICE_URL: http://skill:8080
       OIDC_ISSUER: http://localhost:8180/realms/youscout
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
     ports: ['127.0.0.1:8080:8080']
     depends_on:
       user: {condition: service_healthy}
+      skill: {condition: service_healthy}
       keycloak: {condition: service_healthy}
 volumes:
   keycloak-data:
   user-data:
+  skill-data:

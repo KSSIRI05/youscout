@@ -23,6 +23,13 @@ spring:
               filters:
                 - RemoveRequestHeader=X-User-Id
                 - RemoveRequestHeader=X-User-Roles
+            - id: skill-service
+              uri: ${SKILL_SERVICE_URL:http://localhost:8082}
+              predicates:
+                - Path=/v1/skills,/v1/skills/**,/v1/hashtags,/v1/hashtags/**
+              filters:
+                - RemoveRequestHeader=X-User-Id
+                - RemoveRequestHeader=X-User-Roles
 server:
   port: 8080
 management:
