@@ -130,6 +130,10 @@ def claims(token):
 
 def main():
     admin = KeycloakAdmin()
+    clients = admin.request("GET", "realms/youscout/clients?clientId=youscout-mobile")
+    assert len(clients) == 1, "Mobile client missing"
+    defaults = admin.request("GET", "realms/youscout/clients/" + clients[0]["id"] + "/default-client-scopes")
+    assert "basic" in {scope["name"] for scope in defaults}, "Mobile client requires default scope basic to emit sub"
     username = "identity-test-" + secrets.token_hex(8)
     password = "Aa1!" + secrets.token_urlsafe(32)
     user_id = None
@@ -146,10 +150,13 @@ def main():
         user_id = users[0]["id"]
         status, tokens = exchange(code, verifier)
         assert status == 200, "PKCE code exchange failed"
-        roles = claims(tokens["access_token"]).get("realm_access", {}).get("roles", [])
+        identity = claims(tokens["access_token"])
+        assert identity.get("sub") == user_id, "Access token subject missing or incorrect; verify default scope basic"
+        roles = identity.get("realm_access", {}).get("roles", [])
         assert "user" in roles and "admin" not in roles, "Registration role escalation/default-role failure"
         status, profile = api("/v1/users/me", tokens["access_token"])
-        assert status == 200 and profile["subject"] == user_id, "Registered player's profile access failed"
+        assert status == 200, f"Registered player's profile access failed (HTTP {status})"
+        assert profile.get("subject") == user_id, "Registered player's profile owner mismatch"
         status, problem = api("/v1/users/admin/session", tokens["access_token"])
         assert status == 403 and problem["status"] == 403, "Player reached admin endpoint"
         assert exchange(code, verifier)[0] == 400, "Authorization code was reusable"

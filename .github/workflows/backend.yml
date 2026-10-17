@@ -29,6 +29,11 @@ jobs:
           docker compose -f infra/compose/compose.yml restart user
           docker compose -f infra/compose/compose.yml up -d --wait --wait-timeout 120
           python3 scripts/smoke-backend.py --verify-persisted-profile
+      - name: Backend diagnostics on failure
+        if: failure() && hashFiles('infra/compose/.env') != ''
+        run: |
+          docker compose -f infra/compose/compose.yml ps
+          docker compose -f infra/compose/compose.yml logs --no-color --tail 100 gateway user
       - name: Stop containers without deleting persisted volumes
         if: always()
         run: |
