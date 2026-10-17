@@ -2,7 +2,7 @@
 
 Projet ALD 2025/2026, INPT (ASEDS). YouScout permet de publier des vidéos de football, découvrir des talents et échanger avec la communauté.
 
-**État réel : première version du frontend Flutter dans `apps/mobile`, avec démonstration locale interactive et workflow CI mobile. Un socle backend local (Gateway, squelette User, Keycloak et PostgreSQL) est disponible ; les API métier, l’admin et le cloud restent à implémenter.** L'architecture cible a été retenue par le porteur du projet ; sa validation technique reste à réaliser par les prototypes et tests décrits ici.
+**État réel : première version du frontend Flutter dans `apps/mobile`, avec démonstration locale interactive et workflow CI mobile. Un socle backend local (Gateway, profils User persistants, Keycloak et PostgreSQL) est disponible ; les autres API métier, l’admin et le cloud restent à implémenter.** L'architecture cible a été retenue par le porteur du projet ; sa validation technique reste à réaliser par les prototypes et tests décrits ici.
 
 ## Lancer le socle backend
 
