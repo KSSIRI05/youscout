@@ -1,6 +1,8 @@
 # ADR-0003: Managed container deployment
 
-Status: Proposed
+> Historique de la proposition initiale. Remplacé par [ADR-010](ADR-010-conteneurisation-kubernetes.md). Les choix ci-dessous sont conservés pour traçabilité, pas pour guider la nouvelle implémentation.
+
+Statut : remplacé le 17 octobre 2026 ; ne constitue plus la cible actuelle.
 
 ## Context
 

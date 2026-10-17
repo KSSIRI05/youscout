@@ -1,6 +1,8 @@
 # ADR-0002: Asynchronous media processing and CDN delivery
 
-Status: Proposed
+> Historique de la proposition initiale. Remplacé par [ADR-004](ADR-004-event-bus-kafka.md), [ADR-006](ADR-006-stockage-et-diffusion-video.md). Les choix ci-dessous sont conservés pour traçabilité, pas pour guider la nouvelle implémentation.
+
+Statut : remplacé le 17 octobre 2026 ; ne constitue plus la cible actuelle.
 
 ## Context
 

@@ -1,6 +1,8 @@
 # ADR-0004: Cross-platform mobile and TypeScript stack
 
-Status: Proposed
+> Historique de la proposition initiale. Remplacé par [ADR-011](ADR-011-stack-de-reference.md). Les choix ci-dessous sont conservés pour traçabilité, pas pour guider la nouvelle implémentation.
+
+Statut : remplacé le 17 octobre 2026 ; ne constitue plus la cible actuelle.
 
 ## Context
 

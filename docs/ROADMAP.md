@@ -1,52 +1,60 @@
-# MVP and implementation roadmap
+# Roadmap de réalisation
 
-All stages are proposed. The complete assignment scope remains in [requirements](REQUIREMENTS.md).
+Toutes les cases sont ouvertes : ce dépôt ne contient pas encore d'application. La cible de onze services est retenue ; l'ordre de livraison réduit le travail simultané sans fusionner les domaines.
 
-## Stage 1: architecture foundation
+## Phase 0 : valider le socle
 
-- Review quality priorities and accept or revise ADRs.
-- Scaffold mobile, admin, backend services and local Docker Compose.
-- Establish authenticated API contracts, migrations, health checks and CI.
-- Define media limits, ratings, blocking semantics and account closure rules.
+- [ ] Figer versions stables compatibles du JDK, Spring Boot/Cloud, Flutter et infrastructures.
+- [ ] Créer monorepo, gabarit Spring Boot, conventions REST/événements et CI.
+- [ ] Prototyper OIDC/PKCE sur mobile, upload direct et lecture vidéo sur appareils cibles.
+- [ ] Valider transaction/outbox MongoDB avec replica set et consommateur idempotent.
+- [ ] Définir taille/durée média, notation, règles de blocage, rétention et scénarios de charge.
 
-## Stage 2: demonstration MVP
+## Phase 1 : MVP technique - six services logiques
 
-- U01-U05, U07-U11 and U14: accounts, third-party sign-in, profiles, gallery publishing, descriptions, hashtags, skills, feed, comments and likes.
-- U16-U17 and A01-A05: reporting, moderation views, disabling and skill administration.
-- Implement server-side ownership checks, reliable media jobs and retry handling.
-- Deliver one vertical flow: sign in, upload a football video, process it, view it in the feed, interact and moderate.
+Auth (Keycloak), User, Video, Feed, Interaction, Skill/Hashtag ; Gateway, Kafka, bases, stockage et workers FFmpeg constituent le socle de soutien.
 
-## Stage 3: remaining requirements
+- [ ] U01-U14 : comptes, profils, vidéo galerie/caméra, description/tags/skills, suppression, feed, commentaires/réponses et likes.
+- [ ] U19-U20 : suivre/ne plus suivre utilisateurs et hashtags.
+- [ ] A05 : interface admin minimale pour le catalogue de skills, avec rôle admin.
+- [ ] Feed chronologique avec découverte simple ; fan-out hybride non requis dans cette première livraison.
+- [ ] Démontrer connexion -> upload -> transcodage -> publication -> interaction -> suppression.
+- [ ] Arrêter un worker et rejouer un événement ; vérifier absence de doublon et état utilisateur cohérent.
 
-- In-app recording, comment replies and comment deletion rules.
-- Skill ratings and edits, user/hashtag following and unfollowing.
-- Blocking, instant chat and account closure.
-- Admin dashboard and refinements to discovery.
+Ce MVP sert à démontrer le socle ; il ne couvre pas encore la totalité du sujet. Les signalements et la modération globale sont à livrer avant le lancement public envisagé.
 
-## Stage 4: deploy and present
+## Phase 2 : complétude fonctionnelle et modération
 
-- Deploy staging, test the critical user flow on mobile and verify admin authorization.
-- Perform representative load, processing failure, duplicate-event and recovery checks.
-- Document actual launch commands, environment variables and limitations.
-- Prepare the architecture presentation and live demonstration.
-- Publish source and docs to GitHub and provide evaluator access if private.
+- [ ] Rating : U15, unicité et modification de note.
+- [ ] Moderation : U16/U17, A03/A04, état d'application et retrait média/CDN.
+- [ ] User/Chat : U18, blocage effectivement appliqué ; U21, persistance, reconnexion et déduplication.
+- [ ] U22 : fermeture de compte orchestrée avec confirmations et rétention définie.
+- [ ] Notification : push optionnel, distinct de la livraison des messages.
 
-## Proposed four-person ownership
+## Phase 3 : administration complète puis évolutions
 
-| Owner | Primary responsibility |
-| --- | --- |
-| Member 1 | Identity, profiles and security integration |
-| Member 2 | Social features and moderation |
-| Member 3 | Media processing and infrastructure |
-| Member 4 | Mobile and admin interfaces |
+- [ ] Admin/Analytics : A01/A02/A06 avec pagination, auteurs et métriques définies.
+- [ ] Vérifier tous les U01-U22 et A01-A06 pour le rendu complet.
+- [ ] OpenSearch, feed hybride et métriques d'exposition si besoin confirmé.
+- [ ] Multi-région seulement après décision sur réplication, résidence des données, écritures et conflits.
 
-Share reviews, integration, deployment and presentation work. Record AI assistance and validate generated code through review and meaningful tests.
+Le dashboard obligatoire n'est pas conditionné par les extensions OpenSearch ou multi-région : il doit être livré même si elles sont reportées.
 
-## Completion checklist
+## Déploiement et soutenance
 
-- [ ] All U01-U22 and A01-A06 requirements implemented and verified.
-- [ ] ADRs reviewed and reflect the implemented architecture.
-- [ ] Mobile client demonstrated on supported platforms.
-- [ ] Application deployed and recovery procedure checked.
-- [ ] README launch instructions verified from a clean checkout.
-- [ ] Complete code and documentation accessible to evaluators on GitHub.
+- [ ] Compose de développement reproductible puis staging Kubernetes.
+- [ ] Images versionnées, migrations, secrets externes, readiness et rollback vérifiés.
+- [ ] Tests d'autorisation, doublons, événements tardifs, Kafka/Redis indisponibles et restauration.
+- [ ] Mesurer les scénarios de qualité avec une charge déclarée.
+- [ ] README avec commandes réellement vérifiées sur un checkout propre.
+- [ ] Présentation : choix, alternatives, diagramme, ADRs, démonstration et limites constatées.
+- [ ] Partager le dépôt et les accès de démonstration appropriés avec les évaluateurs.
+
+## Équipe de quatre : responsabilités proposées
+
+| Binôme | Responsabilité initiale | Relecture croisée |
+| --- | --- | --- |
+| 1 et 2 | Identité, User, Skill, Gateway et contrats | Vidéo et données |
+| 3 et 4 | Video, worker, Feed, Interaction et intégration mobile | Sécurité et contrats |
+
+Répartir explicitement mobile/admin, tests et exploitation dans chaque itération ; faire tourner les revues. Aucun calendrier chiffré n'est promis sans connaître la disponibilité de l'équipe.

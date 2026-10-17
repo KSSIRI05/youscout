@@ -1,6 +1,8 @@
 # ADR-0001: Small domain-oriented service architecture
 
-Status: Proposed
+> Historique de la proposition initiale. Remplacé par [ADR-002](ADR-002-style-microservices-evenementiel.md), [ADR-005](ADR-005-database-per-service.md). Les choix ci-dessous sont conservés pour traçabilité, pas pour guider la nouvelle implémentation.
+
+Statut : remplacé le 17 octobre 2026 ; ne constitue plus la cible actuelle.
 
 ## Context
 

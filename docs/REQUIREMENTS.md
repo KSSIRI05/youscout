@@ -1,52 +1,50 @@
-# Functional requirements
+# Exigences et traçabilité
 
-All requirements in the following tables come from the assignment, pages 1-2. MVP membership is a proposal in the roadmap, not a reduction of final scope.
+Source : sujet ALD, pages 1-2. Les phases organisent la livraison, sans supprimer les exigences finales. « S » = socle MVP ; « F » = suite fonctionnelle obligatoire ; « A » = administration finale. Les critères ci-dessous sont une précision de conception, pas une preuve d'implémentation.
 
-## Mobile application
+| ID | Exigence mobile | Responsable | Phase |
+| --- | --- | --- | --- |
+| U01 | Créer un compte | Auth, User | S |
+| U02 | Connexion via Google, Facebook ou autre tiers | Auth | S |
+| U03 | Voir et modifier son profil | User | S |
+| U04 | Consulter les autres profils | User | S |
+| U05 | Publier une vidéo de la galerie | Video, workers | S |
+| U06 | Filmer et publier depuis l'application | Flutter, Video | S |
+| U07 | Description et hashtags | Video, Skill/Hashtag | S |
+| U08 | Sélectionner les compétences démontrées | Video, Skill/Hashtag | S |
+| U09 | Supprimer ses vidéos | Video, projections | S |
+| U10 | Consulter le feed | Feed | S |
+| U11 | Commenter | Interaction | S |
+| U12 | Répondre aux commentaires | Interaction | S |
+| U13 | Supprimer ses commentaires ou ceux inappropriés sur ses vidéos | Interaction avec contrôle du propriétaire vidéo | S |
+| U14 | Liker et annuler un like | Interaction | S |
+| U15 | Noter les compétences et modifier son évaluation | Rating | F |
+| U16 | Signaler une publication | Moderation | F |
+| U17 | Signaler un commentaire | Moderation | F |
+| U18 | Bloquer un utilisateur | User, Feed, Chat | F |
+| U19 | Suivre un utilisateur ou hashtag | User, Skill/Hashtag | S |
+| U20 | Ne plus suivre utilisateur ou hashtag | User, Skill/Hashtag | S |
+| U21 | Envoyer et recevoir des messages instantanés | Chat | F |
+| U22 | Fermer son compte | User, Auth, orchestration de fermeture | F |
 
-| ID | Requirement |
-| --- | --- |
-| U01 | Create an account. |
-| U02 | Sign in through Google, Facebook, or another third-party account. |
-| U03 | View and edit personal profile information. |
-| U04 | View other users' profiles. |
-| U05 | Publish a video from the phone gallery. |
-| U06 | Record and publish a video inside the application. |
-| U07 | Add a description and hashtags to a video. |
-| U08 | Select football skills demonstrated in a video. |
-| U09 | Delete one's own videos. |
-| U10 | Browse the publication feed. |
-| U11 | Comment on publications. |
-| U12 | Reply to comments. |
-| U13 | Delete one's own comments or inappropriate comments on one's own videos. |
-| U14 | Like publications and remove likes. |
-| U15 | Rate demonstrated skills on a publication and edit the rating. |
-| U16 | Report inappropriate publications. |
-| U17 | Report inappropriate comments. |
-| U18 | Block a user. |
-| U19 | Follow users and hashtags. |
-| U20 | Unfollow users and hashtags. |
-| U21 | Send and receive instant chat messages. |
-| U22 | Close one's account. |
+| ID | Exigence back-office | Responsable | Phase |
+| --- | --- | --- | --- |
+| A01 | Voir tous les utilisateurs | Admin/Analytics, projection User | A |
+| A02 | Voir vidéos, commentaires et auteurs | Admin/Analytics, projections Video et Interaction | A |
+| A03 | Voir les vidéos signalées et motifs | Moderation, interface admin | F |
+| A04 | Désactiver utilisateur, vidéo, commentaire ou hashtag | Moderation et chaque propriétaire | F |
+| A05 | Ajouter, désactiver et modifier les skills | Skill/Hashtag, interface admin minimale | S |
+| A06 | Dashboard d'informations générales | Admin/Analytics | A |
 
-## Back office
+## Critères d'acceptation de conception
 
-| ID | Requirement |
-| --- | --- |
-| A01 | List all registered users. |
-| A02 | View all videos and comments with their authors. |
-| A03 | View reported videos with report reasons. |
-| A04 | Disable a user, video, comment or hashtag. |
-| A05 | Add, disable and edit skills. |
-| A06 | View a dashboard containing general platform information. |
+- Identité vérifiée côté serveur ; un utilisateur ne modifie pas le profil d'autrui.
+- Publication uniquement après validation/transcodage réussi ; retry sans doublon.
+- Suppression vidéo et commentaire selon droits ; la règle U13 vérifie aussi le propriétaire de la vidéo.
+- Like et abonnements idempotents ; modifications de note atomiques dans Rating.
+- Signalement avec motif, auteur, cible et horodatage ; décision admin auditée.
+- Désactivation empêchant nouvelles lectures autorisées, interactions et diffusion dans les projections ; délai maximal des accès média déjà signés explicite.
+- Blocage vérifié côté serveur pour chat et visibilité retenue ; fermeture révoquant les nouveaux accès et suivant les traitements de chaque service.
+- A01/A02 couvrent tous les enregistrements par pagination et filtrage, pas seulement les éléments signalés.
 
-## Proposed acceptance rules
-
-- Only the author can edit a profile or delete a video; an authorized administrator can disable content.
-- Repeating a like request does not create duplicate likes.
-- A video is published in the feed only after processing succeeds.
-- A report includes the reporter, target, reason and submission time.
-- A disabled video becomes unavailable through new API and media requests; cached-media invalidation must be addressed in deployment.
-- An interrupted upload can be retried without duplicate publications.
-
-These rules refine the brief and need team agreement. Rating, blocking and account closure rules remain open in the project brief.
+Notifications push, OpenSearch et diversification du classement sont des extensions de conception. Les règles de notation, de rétention et de classement restent à valider dans [le cadrage](PROJECT.md).

@@ -1,36 +1,50 @@
-# YouScout
+# YouScout - Réseau social de talents du football
 
-A mobile social network for sharing football videos and discovering talent.
+Projet ALD 2025/2026, INPT (ASEDS). YouScout permet de publier des vidéos de football, découvrir des talents et échanger avec la communauté.
 
-This repository starts with project documentation for the INPT ASEDS Distributed Software Architectures assignment (2025/2026). Application code has not yet been implemented. Architecture choices below are proposals for team review.
+**État réel : documentation de conception uniquement. Aucun service, client mobile, pipeline CI ou environnement cloud n'est encore implémenté.** L'architecture cible a été retenue par le porteur du projet ; sa validation technique reste à réaliser par les prototypes et tests décrits ici.
 
-## Documentation
+## Architecture retenue
 
-- [Project brief](docs/PROJECT.md)
-- [Functional requirements](docs/REQUIREMENTS.md)
-- [Architecture characteristics](docs/QUALITY_ATTRIBUTES.md)
-- [Architecture and topology](docs/ARCHITECTURE.md)
-- [MVP and implementation plan](docs/ROADMAP.md)
-- [Deployment plan](docs/DEPLOYMENT.md)
-- [Architecture decision records](docs/adr/README.md)
-- [Contribution guide](CONTRIBUTING.md)
+Microservices orientés événements derrière une API Gateway, avec Flutter pour le mobile, Kafka pour les événements, S3/CDN pour les médias et Kubernetes pour l'orchestration. La cible comporte 11 services logiques, dont Auth fourni par Keycloak, plus des workers FFmpeg. Le MVP commence avec Auth, User, Video, Feed, Interaction et Skill/Hashtag, sans fusionner leurs responsabilités.
 
-## Run the project
+Le backend recommandé est Java / Spring Boot ; l'admin utilise React. PostgreSQL, MongoDB et Redis répondent à des usages différents et restent sous la responsabilité exclusive de chaque service. OpenSearch et le multi-région arrivent après le socle.
 
-There is no runnable application yet. Once the implementation exists, replace this section with verified prerequisites, environment configuration, database migrations, backend and mobile launch commands, and test commands. Do not present the proposed technology stack as an installed application.
+## Lire la documentation
 
-## Proposed repository structure
+| Document | Contenu |
+| --- | --- |
+| [Projet](docs/PROJECT.md) | Sujet, livrables, périmètre et questions ouvertes |
+| [Exigences](docs/REQUIREMENTS.md) | Tous les besoins et leur service responsable |
+| [Caractéristiques](docs/QUALITY_ATTRIBUTES.md) | Exigences explicites, déductions et priorités |
+| [Architecture](docs/ARCHITECTURE.md) | Comparaison des styles et diagramme de la cible |
+| [Explication pas à pas](docs/EXPLICATION_ARCHITECTURE.md) | Comprendre chaque composant avec des exemples |
+| [Outils et alternatives](docs/OUTILS_ET_ALTERNATIVES.md) | Choix recommandés, alternatives et compromis |
+| [Services et données](docs/SERVICES.md) | Frontières et propriété des données |
+| [Contrats et événements](docs/CONTRATS_ET_EVENEMENTS.md) | API, Kafka, outbox et reprise |
+| [Sécurité et modération](docs/SECURITE_ET_MODERATION.md) | Authentification, blocage, retrait et fermeture de compte |
+| [Roadmap](docs/ROADMAP.md) | MVP, phases suivantes et critères de démonstration |
+| [Déploiement](docs/DEPLOYMENT.md) | Compose, Kubernetes et cible cloud |
+| [ADRs](docs/adr/README.md) | Dix décisions d'architecture et décisions de stack |
+| [Contribution](CONTRIBUTING.md) | Organisation et vérifications |
+
+## Lancer le projet
+
+Il n'existe pas encore de commande de lancement applicatif. L'installation de Flutter, Java ou Docker ne suffit pas à exécuter une application absente. Les versions compatibles, variables d'environnement, migrations, commandes et comptes de démonstration devront être ajoutés et vérifiés lors de l'implémentation. Voir la [roadmap](docs/ROADMAP.md).
+
+Arborescence future, **non encore créée** :
 
 ```text
-docs/                 Requirements, architecture, deployment, and ADRs
-apps/mobile/          Future cross-platform mobile application
-apps/admin/           Future moderation back office
-services/             Future backend services
-infra/                Future deployment configuration
+apps/mobile/             Flutter
+apps/admin/              React
+services/gateway/        Spring Cloud Gateway
+services/user/           Spring Boot (idem pour les autres services métier)
+workers/transcoding/     FFmpeg et consommateur Kafka
+contracts/               OpenAPI et schémas d'événements
+infra/                   Compose, Helm, configuration Keycloak et IaC
+docs/                    Documentation actuelle
 ```
 
-Only the documentation directories currently exist. See the roadmap for implementation tasks.
+## Livraison académique
 
-## Submission
-
-The assignment requires complete source code, ADRs, and a README explaining how to run the application in a public GitHub repository or a private repository shared with evaluators. This local documentation repository is a starting point; the final submission also requires an implemented and demonstrated application.
+Le rendu final doit contenir le code source complet, les ADRs, les instructions de lancement et une application déployée et démontrable. Les fonctions reportées après le MVP restent dans le périmètre final obligatoire du sujet. Le dépôt GitHub privé doit être partagé avec les évaluateurs.

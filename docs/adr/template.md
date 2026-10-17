@@ -1,23 +1,23 @@
-# ADR-NNNN: Title
+# ADR-NNN : Titre
 
-Status: Proposed
+Statut : proposé / retenu / remplacé. Date et décideur.
 
-## Context
+## Contexte
 
-Describe the problem, requirements and constraints.
+Problème, exigences concernées et contraintes.
 
-## Options
+## Alternatives
 
-Compare realistic alternatives against prioritized characteristics.
+Comparer les choix réalistes avec bénéfices et coûts.
 
-## Decision and rationale
+## Décision et justification
 
-State the selected option and the evidence supporting it.
+Choix retenu et lien vers caractéristiques prioritaires. Distinguer décision et preuve d'implémentation.
 
-## Consequences
+## Conséquences et limites
 
-Document benefits, costs, risks and mitigations.
+Compromis, risques, dépendances, migration et critères de retour en arrière.
 
-## Validation
+## Validation et réexamen
 
-Describe how the decision will be checked and when to revisit it.
+Prototype, tests ou mesures attendus ; sources officielles ; seuil de réexamen. Lien vers ADR remplacé si nécessaire.

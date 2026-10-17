@@ -1,24 +1,42 @@
-# Proposed deployment
+# Déploiement cible
 
-Status: planning only; no infrastructure has been provisioned.
+Plan uniquement : aucune ressource cloud, image ou configuration exécutable n'a été créée. Docker pour le packaging, Compose pour le développement et Kubernetes pour la cible retenue. Un cluster local sert à apprendre et tester, pas à prouver la disponibilité de production.
 
-Use Docker Compose locally. For the first deployed demonstration, propose managed container hosting, managed PostgreSQL, a managed broker, private object storage and CDN delivery in one region. Select a provider and region after comparing cost, supported identity/storage integrations and latency for initial markets. Do not infer a provider from the assignment.
+## Environnements
 
-Managed containers reduce operational work for four students while supporting separate service and worker scaling. Kubernetes is an option when orchestration requirements justify its operating overhead; it is not necessary solely because the assignment mentions it. See [ADR-0003](adr/0003-deployment.md).
+| Environnement | Périmètre |
+| --- | --- |
+| Développement Compose | Profils par chantier ; Keycloak, Kafka, PostgreSQL, MongoDB replica set, stockage objet et services nécessaires |
+| Intégration Kubernetes | Manifests/Helm, routage, secrets, probes et tests de panne |
+| Staging cloud | Kubernetes managé, stockage privé/CDN et dépendances adaptées à la démo |
+| Production envisagée | Réplicas, répartition entre zones, sauvegardes et objectifs de reprise validés |
 
-## Deployment requirements
+Référence cloud recommandée : EKS, S3/CloudFront, RDS PostgreSQL, MSK et MongoDB managé compatible avec les transactions retenues. La région, les offres et le dimensionnement restent à comparer et confirmer ; aucune commande de provisionnement ou dépense n'est autorisée par ce plan documentaire.
 
-- Build versioned container images through CI and deploy to staging before production.
-- Store secrets outside Git; document variable names in a future `.env.example`.
-- Terminate TLS, authenticate APIs and restrict databases/broker to private networking.
-- Configure readiness checks, resource limits and controlled rollouts.
-- Use presigned uploads, private media storage and expiring authorized playback URLs.
-- Restrict processing workers' privileges and validate uploaded file types and sizes.
-- Collect latency, error rate, queue depth, processing failure and database health metrics.
-- Back up databases, define object retention and test restoration.
-- Coordinate content disabling with CDN invalidation and access expiry.
-- Review personal-data, account deletion and regional requirements before public launch.
+## Ressources Kubernetes
 
-## Before this document becomes a runbook
+- Deployments pour Gateway, services métier réplicables, relais et workers ; Keycloak avec sa base externe et la configuration adaptée.
+- Bases/Kafka managés de préférence pour la cible ; si hébergés dans le cluster, operators/StatefulSets, volumes, sauvegardes et procédures propres. Ne pas les déclarer stateless.
+- Service interne par composant ; seule l'entrée HTTP/TLS, OIDC et WSS est exposée. S3/CDN suivent des autorisations séparées.
+- Requests/limits, readiness/liveness et arrêt gracieux ; migration contrôlée avant rollout compatible.
+- HPA pour services selon CPU/métriques utiles ; KEDA pour workers selon lag Kafka, borné par partitions et ressources disponibles.
+- Secrets externes, identités de workloads et droits minimaux ; NetworkPolicies avec moteur réseau qui les applique.
+- Helm pour les déploiements ; Terraform pour les ressources cloud, sans propriété concurrente des mêmes objets.
 
-Record the actual provider, region, resources, domains, identity configuration, deployment/migration commands, rollback steps, backup schedule, recovery targets and verified smoke tests. No deployment command is included until implementation exists.
+## Médias
+
+S3 privé, URL d'upload courte et clé limitée, multipart si besoin validé. Video vérifie la complétion ; notifications S3 vers SQS/EventBridge puis adaptateur possible, jamais S3 -> Kafka supposé natif. Workers FFmpeg isolés, résultats idempotents, temporaires nettoyés et objets orphelins réconciliés. CDN avec origine privée, signatures courtes et procédure de retrait testée.
+
+## Livraison et exploitation
+
+CI GitHub Actions : lint et tests, tests de contrats/intégration, build d'images, scan, publication GHCR, déploiement staging puis smoke tests. Le pipeline applicatif reste à écrire. Configurer OpenTelemetry, Prometheus, Grafana, Loki et Tempo ; distinguer le dashboard d'exploitation de celui des administrateurs produit.
+
+Alertes sur erreurs et latence API, lag Kafka, outbox bloquée, transcodage échoué, refus d'accès et espace disque. Protéger logs et endpoints de métriques. Définir RPO/RTO, rétention et tests de restauration pour chaque stockage ; ne pas annoncer de valeurs garanties non vérifiées.
+
+Pour le multi-région ultérieur, choisir autorité d'écriture, réplication, placement et comportement en partition. Un CDN mondial n'est pas un backend actif-actif mondial.
+
+## Runbook à produire avec le code
+
+Versions/digests, ressources, variables et secrets requis, migrations, lancement/arrêt, domaines et callbacks OIDC, sauvegarde/restauration, rollback, rotation des clés et tests mobiles/admin. Le README ne doit contenir que des commandes vérifiées.
+
+Références : [Kubernetes workloads](https://kubernetes.io/docs/concepts/workloads/), [HPA](https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/), [notifications S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/notification-how-to-event-types-and-destinations.html).
