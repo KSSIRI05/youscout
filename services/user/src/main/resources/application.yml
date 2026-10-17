@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: user-service
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER:http://localhost:8180/realms/youscout}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:http://localhost:8180/realms/youscout/protocol/openid-connect/certs}
+          audiences: youscout-api
+  datasource:
+    url: ${USER_DB_URL:jdbc:postgresql://localhost:5433/youscout_user}
+    username: ${USER_DB_USERNAME:youscout_user}
+    password: ${USER_DB_PASSWORD}
+  flyway:
+    enabled: true
+server:
+  port: ${SERVER_PORT:8081}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      group:
+        readiness:
+          include: readinessState,db
+      probes:
+        enabled: true

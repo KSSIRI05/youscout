@@ -2,7 +2,17 @@
 
 Projet ALD 2025/2026, INPT (ASEDS). YouScout permet de publier des vidéos de football, découvrir des talents et échanger avec la communauté.
 
-**État réel : première version du frontend Flutter dans `apps/mobile`, avec démonstration locale interactive et workflow CI mobile. Le backend, l’admin et l’infrastructure cloud restent à implémenter.** L'architecture cible a été retenue par le porteur du projet ; sa validation technique reste à réaliser par les prototypes et tests décrits ici.
+**État réel : première version du frontend Flutter dans `apps/mobile`, avec démonstration locale interactive et workflow CI mobile. Un socle backend local (Gateway, squelette User, Keycloak et PostgreSQL) est disponible ; les API métier, l’admin et le cloud restent à implémenter.** L'architecture cible a été retenue par le porteur du projet ; sa validation technique reste à réaliser par les prototypes et tests décrits ici.
+
+## Lancer le socle backend
+
+```sh
+python infra/compose/init-env.py
+docker compose -f infra/compose/compose.yml up -d --build --wait --wait-timeout 300
+python scripts/smoke-backend.py
+```
+
+Docker doit être démarré. Le générateur de secrets est exécuté une seule fois. Lire [le guide backend](docs/BACKEND.md) pour les ports, les tests, Keycloak et les limites. Flutter reste en mode démo.
 
 ## Architecture retenue
 
@@ -14,6 +24,7 @@ Le backend recommandé est Java / Spring Boot ; l'admin utilise React. PostgreSQ
 
 | Document | Contenu |
 | --- | --- |
+| [Backend local](docs/BACKEND.md) | Lancement du socle, JWT, migration et vérifications |
 | [Projet](docs/PROJECT.md) | Sujet, livrables, périmètre et questions ouvertes |
 | [Exigences](docs/REQUIREMENTS.md) | Tous les besoins et leur service responsable |
 | [Caractéristiques](docs/QUALITY_ATTRIBUTES.md) | Exigences explicites, déductions et priorités |
@@ -50,7 +61,7 @@ La démo couvre le fil, la découverte, les profils, les interactions, la public
 
 La [maquette Figma](https://www.figma.com/design/SZIskR01SeNgOsSrAwiB9p) guide les couleurs, composants et parcours.
 
-Arborescence actuelle : `apps/mobile/`, `docs/` et `.github/workflows/mobile.yml`. Les dossiers `apps/admin/`, `services/`, `workers/`, `contracts/` et `infra/` restent à créer.
+Arborescence actuelle : `apps/mobile/`, `services/gateway/`, `services/user/`, `infra/`, `contracts/openapi/`, `scripts/`, `docs/` et les workflows mobile/backend. Les autres services, `apps/admin/` et `workers/` restent à créer.
 
 ## Livraison académique
 

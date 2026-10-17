@@ -1,6 +1,6 @@
 # Services et propriété des données
 
-Ces services constituent la cible ; aucun n'est encore codé. Une infrastructure partagée ne donne jamais un droit d'écriture croisée. La Gateway ne contient pas de logique de notation ou de modération.
+Ces services constituent la cible. La Gateway et le squelette User sont implémentés dans le [socle backend](BACKEND.md), avec Keycloak local ; les fonctions métier du tableau restent à livrer. Une infrastructure partagée ne donne jamais un droit d'écriture croisée. La Gateway ne contient pas de logique de notation ou de modération.
 
 | Service | Responsabilité et exemples d'API | Données propriétaires | Événements représentatifs |
 | --- | --- | --- | --- |

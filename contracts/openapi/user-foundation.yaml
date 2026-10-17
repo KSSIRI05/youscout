@@ -1,0 +1,41 @@
+openapi: 3.0.3
+info:
+  title: YouScout User foundation
+  version: 0.1.0
+  description: Authentication diagnostic only. Profile CRUD is not implemented.
+servers:
+  - url: http://localhost:8080
+paths:
+  /v1/users/session:
+    get:
+      operationId: getVerifiedSession
+      summary: Read identity from a validated access token
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Verified JWT identity, no profile write
+          headers:
+            X-Request-Id:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [subject, service]
+                properties:
+                  subject: {type: string}
+                  username: {type: string, nullable: true}
+                  service: {type: string, enum: [user-service]}
+        '401':
+          description: Missing, expired or invalid bearer token
+        '502':
+          description: Upstream connection failed
+        '504':
+          description: Upstream response timed out
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

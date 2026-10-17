@@ -1,0 +1,83 @@
+name: youscout-dev
+services:
+  keycloak-db:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Run init-env.py first}
+    volumes: [keycloak-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U keycloak -d keycloak']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  user-db:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: youscout_user
+      POSTGRES_USER: youscout_user
+      POSTGRES_PASSWORD: ${USER_DB_PASSWORD:?Run init-env.py first}
+    volumes: [user-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U youscout_user -d youscout_user']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.3
+    command: [start-dev, --import-realm]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Run init-env.py first}
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Run init-env.py first}
+      KC_HOSTNAME: http://localhost:8180
+      KC_HEALTH_ENABLED: 'true'
+      SMOKE_CLIENT_SECRET: ${SMOKE_CLIENT_SECRET:?Run init-env.py first}
+    ports: ['127.0.0.1:8180:8080']
+    volumes: ['../keycloak/youscout-realm.json:/opt/keycloak/data/import/youscout-realm.json:ro']
+    depends_on:
+      keycloak-db: {condition: service_healthy}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          bash -c 'exec 3<>/dev/tcp/localhost/9000; printf "GET /health/ready HTTP/1.0\r\n\r\n" >&3; head -1 <&3 | grep -q 200'
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 30
+  user:
+    build:
+      context: ../..
+      dockerfile: infra/docker/service.Dockerfile
+      args: {MODULE: user}
+    environment:
+      SERVER_PORT: '8080'
+      USER_DB_URL: jdbc:postgresql://user-db:5432/youscout_user
+      USER_DB_USERNAME: youscout_user
+      USER_DB_PASSWORD: ${USER_DB_PASSWORD:?Run init-env.py first}
+      OIDC_ISSUER: http://localhost:8180/realms/youscout
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
+    depends_on:
+      user-db: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
+  gateway:
+    build:
+      context: ../..
+      dockerfile: infra/docker/service.Dockerfile
+      args: {MODULE: gateway}
+    environment:
+      USER_SERVICE_URL: http://user:8080
+      OIDC_ISSUER: http://localhost:8180/realms/youscout
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
+    ports: ['127.0.0.1:8080:8080']
+    depends_on:
+      user: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
+volumes:
+  keycloak-data:
+  user-data:
