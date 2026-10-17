@@ -2,7 +2,7 @@
   "realm": "youscout",
   "enabled": true,
   "displayName": "YouScout local",
-  "registrationAllowed": false,
+  "registrationAllowed": true,
   "resetPasswordAllowed": false,
   "sslRequired": "external",
   "accessTokenLifespan": 300,
@@ -13,6 +13,15 @@
       },
       {
         "name": "admin"
+      },
+      {
+        "name": "default-roles-youscout",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "user"
+          ]
+        }
       }
     ]
   },
@@ -34,6 +43,20 @@
             "id.token.claim": "false",
             "access.token.claim": "true"
           }
+        },
+        {
+          "name": "application-realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
         }
       ],
       "clientId": "youscout-mobile",
@@ -50,8 +73,14 @@
         "http://127.0.0.1:7357"
       ],
       "attributes": {
-        "pkce.code.challenge.method": "S256"
-      }
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:7357/##http://127.0.0.1:7357/"
+      },
+      "defaultClientScopes": [
+        "profile",
+        "email"
+      ],
+      "optionalClientScopes": []
     },
     {
       "protocol": "openid-connect",
@@ -70,13 +99,64 @@
             "id.token.claim": "false",
             "access.token.claim": "true"
           }
+        },
+        {
+          "name": "application-realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
         }
       ],
       "clientId": "youscout-smoke",
       "publicClient": false,
       "secret": "${SMOKE_CLIENT_SECRET}",
       "standardFlowEnabled": false,
-      "serviceAccountsEnabled": true
+      "serviceAccountsEnabled": true,
+      "defaultClientScopes": [
+        "profile",
+        "email"
+      ],
+      "optionalClientScopes": []
+    }
+  ],
+  "verifyEmail": false,
+  "duplicateEmailsAllowed": false,
+  "loginWithEmailAllowed": true,
+  "editUsernameAllowed": false,
+  "rememberMe": false,
+  "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1)",
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 30,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "defaultRole": {
+    "name": "default-roles-youscout"
+  },
+  "scopeMappings": [
+    {
+      "client": "youscout-mobile",
+      "roles": [
+        "user",
+        "admin"
+      ]
+    },
+    {
+      "client": "youscout-smoke",
+      "roles": [
+        "user"
+      ]
     }
   ]
 }

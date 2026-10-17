@@ -22,3 +22,7 @@ target/
 !*.tfvars.example
 .DS_Store
 Thumbs.db
+
+# Python provisioning and integration helpers
+__pycache__/
+*.py[cod]
