@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: skill-service
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER:http://localhost:8180/realms/youscout}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:http://localhost:8180/realms/youscout/protocol/openid-connect/certs}
+          audiences: youscout-api
+  datasource:
+    url: ${SKILL_DB_URL:jdbc:postgresql://localhost:5434/youscout_skill}
+    username: ${SKILL_DB_USERNAME:youscout_skill}
+    password: ${SKILL_DB_PASSWORD}
+  flyway:
+    enabled: true
+server:
+  port: ${SERVER_PORT:8082}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      group:
+        readiness:
+          include: readinessState,db
+      probes:
+        enabled: true
