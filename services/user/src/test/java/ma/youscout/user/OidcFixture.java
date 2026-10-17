@@ -36,9 +36,16 @@ final class OidcFixture {
     }
     String base() { return "http://127.0.0.1:" + server.getAddress().getPort(); }
     String token(String issuer, String audience, Instant expiry, boolean wrongKey) {
+        return token(issuer, audience, expiry, wrongKey, "player-123", null, "test-player");
+    }
+    String profileToken(String subject, String name, String username) {
+        return token(base(), "youscout-api", Instant.now().plusSeconds(300), false, subject, name, username);
+    }
+    private String token(String issuer, String audience, Instant expiry, boolean wrongKey,
+                         String subject, String name, String username) {
         try {
-            var claims = new JWTClaimsSet.Builder().issuer(issuer).audience(audience).subject("player-123")
-                .claim("preferred_username", "test-player").issueTime(Date.from(Instant.now().minusSeconds(600)))
+            var claims = new JWTClaimsSet.Builder().issuer(issuer).audience(audience).subject(subject)
+                .claim("name", name).claim("preferred_username", username).issueTime(Date.from(Instant.now().minusSeconds(600)))
                 .expirationTime(Date.from(expiry)).build();
             var jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID("test-key").build(), claims);
             jwt.sign(new RSASSASigner(wrongKey ? new RSAKeyGenerator(2048).generate() : key));

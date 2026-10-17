@@ -1,4 +1,5 @@
 """Exercise real Keycloak -> Gateway -> User without printing tokens or secrets."""
+import argparse
 import json
 import urllib.error
 import urllib.parse
@@ -8,14 +9,17 @@ from pathlib import Path
 BASE = "http://localhost:8080"
 ISSUER = "http://localhost:8180/realms/youscout"
 
-def request(url, data=None, headers=None):
+def request(url, data=None, headers=None, method=None):
     try:
-        with urllib.request.urlopen(urllib.request.Request(url, data=data, headers=headers or {}), timeout=15) as response:
+        with urllib.request.urlopen(urllib.request.Request(url, data=data, headers=headers or {}, method=method), timeout=15) as response:
             return response.status, json.load(response), response.headers
     except urllib.error.HTTPError as error:
         return error.code, None, error.headers
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--verify-persisted-profile", action="store_true", help="Require the previous smoke profile before writing; use after restarting User.")
+    options = parser.parse_args()
     env_path = Path(__file__).resolve().parents[1] / "infra/compose/.env"
     values = dict(line.split("=", 1) for line in env_path.read_text().splitlines() if line and not line.startswith("#"))
     status, health, _ = request(BASE + "/actuator/health")
@@ -31,10 +35,21 @@ def main():
     status, identity, headers = request(BASE + "/v1/users/session", headers=bearer)
     assert status == 200 and identity["service"] == "user-service" and identity["subject"], "Authenticated routing failed"
     assert headers.get("X-Request-Id") == "smoke-backend", "Correlation header missing"
-    status, _, _ = request(BASE + "/v1/users/session", headers={"Authorization": "Bearer malformed"})
+    status, profile, profile_headers = request(BASE + "/v1/users/me", headers=bearer)
+    assert status == 200 and profile["subject"] == identity["subject"], "Own profile provisioning failed"
+    assert profile_headers.get("Cache-Control") == "no-store", "Profile must not be cached"
+    expected = {"displayName": "YouScout Smoke", "biography": "Profil technique de test."}
+    if options.verify_persisted_profile:
+        assert all(profile[key] == value for key, value in expected.items()), "Previous profile did not survive restart"
+    payload = json.dumps(expected).encode()
+    status, profile, _ = request(BASE + "/v1/users/me", payload, {**bearer, "Content-Type": "application/json"}, "PATCH")
+    assert status == 200 and profile["subject"] == identity["subject"], "Own profile patch failed"
+    status, saved, _ = request(BASE + "/v1/users/me", headers=bearer)
+    assert status == 200 and all(saved[key] == value for key, value in expected.items()), "Profile changes were not persisted"
+    status, _, _ = request(BASE + "/v1/users/me", headers={"Authorization": "Bearer malformed"})
     assert status == 401, "Invalid bearer token was not rejected"
-    print("PASS: health, OIDC discovery, anonymous rejection, real signed token, secured routing, correlation and invalid-token rejection.")
-    print("The service account proves infrastructure authentication, not a mobile user login or a saved profile.")
+    print("PASS: health, OIDC discovery, anonymous rejection, real signed token, secured routing, correlation, persistent profile reads/patches and invalid-token rejection.")
+    print("The service account proves infrastructure authentication, not an interactive mobile user login. Only its own technical test profile is modified.")
 
 if __name__ == "__main__":
     main()

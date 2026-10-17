@@ -21,6 +21,11 @@ jobs:
       - run: docker compose -f infra/compose/compose.yml config --quiet
       - run: docker compose -f infra/compose/compose.yml up -d --build --wait --wait-timeout 300
       - run: python3 scripts/smoke-backend.py
+      - name: Verify profile survives User restart
+        run: |
+          docker compose -f infra/compose/compose.yml restart user
+          docker compose -f infra/compose/compose.yml up -d --wait --wait-timeout 120
+          python3 scripts/smoke-backend.py --verify-persisted-profile
       - name: Stop containers without deleting persisted volumes
         if: always()
         run: |
