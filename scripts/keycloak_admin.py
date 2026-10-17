@@ -9,10 +9,12 @@ import urllib.request
 ORIGIN = "http://localhost:8180"
 ROOT = Path(__file__).resolve().parents[1]
 
+# Lit la configuration locale générée ; ne jamais journaliser le dictionnaire contenant les secrets.
 def local_values():
     return dict(line.split("=", 1) for line in (ROOT / "infra/compose/.env").read_text(encoding="utf-8").splitlines()
                 if line and not line.startswith("#"))
 
+# Client réservé à la préparation et aux tests locaux, jamais embarqué dans le frontend.
 class KeycloakAdmin:
     def __init__(self):
         form = urllib.parse.urlencode({"grant_type": "password", "client_id": "admin-cli", "username": "admin",
@@ -28,6 +30,7 @@ class KeycloakAdmin:
         except urllib.error.HTTPError as error:
             raise RuntimeError(f"Local Keycloak administrator authentication failed (HTTP {error.code}).") from None
 
+    # Renouvelle le jeton admin avant expiration et masque les corps d’erreur potentiellement sensibles.
     def request(self, method, path, value=None):
         if time.monotonic() >= self._expires:
             form = urllib.parse.urlencode({"grant_type": "refresh_token", "client_id": "admin-cli", "refresh_token": self._refresh}).encode()

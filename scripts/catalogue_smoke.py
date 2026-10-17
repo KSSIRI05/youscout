@@ -9,6 +9,7 @@ from keycloak_admin import ROOT
 
 API = "http://localhost:8080"
 
+# Utilise uniquement la Gateway locale pour exercer aussi ses règles de sécurité.
 def request(method, path, token, value=None):
     headers = {"Authorization": "Bearer " + token}
     data = None
@@ -25,6 +26,7 @@ def request(method, path, token, value=None):
 
 def exercise(player_token, admin_token):
     skill_id = tag_id = None
+    # Les noms aléatoires isolent ces données des compétences et hashtags du projet.
     suffix = secrets.token_hex(8)
     try:
         status, page = request("GET", "/v1/skills", player_token)
@@ -45,6 +47,7 @@ def exercise(player_token, admin_token):
         tag_id = str(uuid.UUID(tag["id"]))
         status, repeated = request("POST", "/v1/hashtags", player_token, {"name": tag["name"].upper()})
         assert status == 200 and repeated["id"] == tag_id, "Canonical hashtag duplicated"
+        # Les requêtes répétées doivent conserver une seule ligne puis supprimer cet abonnement.
         follow = "/v1/hashtags/" + tag_id + "/follow"
         assert request("PUT", follow, player_token)[0] == 204 and request("PUT", follow, player_token)[0] == 204, "Idempotent follow failed"
         status, page = request("GET", "/v1/hashtags/following?limit=100", player_token)
@@ -53,6 +56,7 @@ def exercise(player_token, admin_token):
         status, page = request("GET", "/v1/hashtags/following?limit=100", player_token)
         assert status == 200 and all(item["id"] != tag_id for item in page["items"]), "Unfollow did not persist"
         print("PASS: catalogue reads, admin skill lifecycle, hashtag normalization and own follow/unfollow.", flush=True)
+    # Nettoie uniquement les UUID créés pendant ce parcours, même si une assertion échoue.
     finally:
         statements = []
         arguments = []
@@ -63,6 +67,7 @@ def exercise(player_token, admin_token):
             arguments += ["-v", "skill_id=" + skill_id]
             statements += ["DELETE FROM skill_audit WHERE skill_id=:'skill_id'::uuid;", "DELETE FROM skills WHERE id=:'skill_id'::uuid;"]
         if statements:
+            # Passe les UUID à psql comme variables ; aucun identifiant utilisateur n’est concaténé au SQL.
             subprocess.run(["docker", "compose", "-f", str(ROOT / "infra/compose/compose.yml"), "exec", "-T", "skill-db",
                 "psql", "-U", "youscout_skill", "-d", "youscout_skill", "-v", "ON_ERROR_STOP=1", *arguments],
                 input="BEGIN;\n" + "\n".join(statements) + "\nCOMMIT;\n", text=True, check=True, stdout=subprocess.DEVNULL)

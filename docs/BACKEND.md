@@ -1,5 +1,7 @@
 # Socle backend — développement local
 
+Pour comprendre le code commenté et les migrations, consulter [Lire le backend](LECTURE_BACKEND.md).
+
 Cette itération ajoute Java 21, Spring Boot 4.0.8, Spring Cloud 2025.1.3, Keycloak 26.7.3 et PostgreSQL 17.11. Les versions Maven sont fixées, ainsi que les tags des images. Les tags Docker ne sont pas verrouillés par digest.
 
 ## Composants réellement implémentés

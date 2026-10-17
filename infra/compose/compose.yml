@@ -1,5 +1,7 @@
+# Pile de développement locale : bases distinctes, identité Keycloak et trois applications Java.
 name: youscout-dev
 services:
+  # Stockage privé de Keycloak ; les comptes applicatifs n’utilisent pas cette base.
   keycloak-db:
     image: postgres:17.11-alpine
     environment:
@@ -12,6 +14,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+  # Le domaine User possède ses propres identifiants et son volume persistant.
   user-db:
     image: postgres:17.11-alpine
     environment:
@@ -24,6 +27,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+  # Le catalogue et les abonnements sont isolés dans une troisième base.
   skill-db:
     image: postgres:17.11-alpine
     environment:
@@ -36,6 +40,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+  # start-dev et HTTP conviennent à cette pile locale ; l’import initialise un nouveau realm.
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.3
     command: [start-dev, --import-realm]
@@ -62,6 +67,7 @@ services:
       timeout: 5s
       start_period: 60s
       retries: 30
+  # Aucun port hôte : la Gateway accède à User par le réseau interne Compose.
   user:
     build:
       context: ../..
@@ -77,6 +83,7 @@ services:
     depends_on:
       user-db: {condition: service_healthy}
       keycloak: {condition: service_healthy}
+  # Construit le même Dockerfile que User, en sélectionnant le module Maven skill.
   skill:
     build:
       context: ../..
@@ -92,6 +99,7 @@ services:
     depends_on:
       skill-db: {condition: service_healthy}
       keycloak: {condition: service_healthy}
+  # Point d’entrée des API sur localhost ; attend que les services dépendants soient sains.
   gateway:
     build:
       context: ../..
@@ -107,6 +115,7 @@ services:
       user: {condition: service_healthy}
       skill: {condition: service_healthy}
       keycloak: {condition: service_healthy}
+# Les volumes survivent aux redémarrages et à docker compose down sans option -v.
 volumes:
   keycloak-data:
   user-data:

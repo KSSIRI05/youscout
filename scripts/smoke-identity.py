@@ -17,6 +17,7 @@ ISSUER = "http://localhost:8180/realms/youscout"
 CALLBACK = "http://localhost:7357/auth/callback"
 API = "http://localhost:8080"
 
+# Extrait les formulaires et champs cachés réellement servis par Keycloak.
 class Page(HTMLParser):
     def __init__(self, html):
         super().__init__()
@@ -38,6 +39,7 @@ class Page(HTMLParser):
         assert len(found) == 1, "Expected Keycloak form was not rendered"
         return found[0]
 
+# Intercepte le callback local pour récupérer le code sans démarrer de serveur frontend.
 class LocalRedirects(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, request, fp, code, message, headers, newurl):
         if newurl.startswith(CALLBACK + "?"):
@@ -45,11 +47,13 @@ class LocalRedirects(urllib.request.HTTPRedirectHandler):
         assert urllib.parse.urlsplit(newurl).netloc == "localhost:8180", "Unexpected non-local redirect"
         return super().redirect_request(request, fp, code, message, headers, newurl)
 
+# Reproduit le traitement des cookies Secure sur localhost pour ce test local uniquement.
 class LocalhostCookies(http.cookiejar.DefaultCookiePolicy):
     def return_ok_secure(self, cookie, request):
         # Browsers allow Secure cookies on localhost. Emulate only our fixed local origin.
         return request.host == "localhost:8180" or super().return_ok_secure(cookie, request)
 
+# Conserve les cookies et la navigation nécessaires au parcours Authorization Code.
 class BrowserSession:
     def __init__(self):
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar(policy=LocalhostCookies())), LocalRedirects())
@@ -63,11 +67,13 @@ class BrowserSession:
         except urllib.error.HTTPError as error:
             return error.code, error.read().decode(), error.headers
 
+# PKCE S256 : seul le challenge part à l’autorisation ; le verifier est exigé à l’échange du code.
 def challenge():
     verifier = secrets.token_urlsafe(48)
     proof = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
     return verifier, proof
 
+# Exerce les formulaires publics et vérifie le state du callback pour relier réponse et requête.
 def authorization(browser, registration=False, credentials=None, override=None):
     verifier, proof = challenge()
     state = secrets.token_urlsafe(24)
@@ -102,6 +108,7 @@ def authorization(browser, registration=False, credentials=None, override=None):
     assert params.get("state") == [state] and "code" in params, "OIDC callback state/code invalid"
     return params["code"][0], verifier
 
+# Appelle token ou logout sans afficher les jetons et les secrets de session.
 def token_request(values, endpoint="token"):
     data = urllib.parse.urlencode(values).encode()
     request = urllib.request.Request(ISSUER + "/protocol/openid-connect/" + endpoint, data=data)
@@ -124,6 +131,7 @@ def api(path, token):
     except urllib.error.HTTPError as error:
         return error.code, json.loads(error.read())
 
+# Lecture des claims pour assertions : cette fonction ne remplace pas la validation de signature des API.
 def claims(token):
     # Inspection only. API authorization still verifies the signature and claims.
     part = token.split(".")[1]
@@ -135,6 +143,7 @@ def main():
     assert len(clients) == 1, "Mobile client missing"
     defaults = admin.request("GET", "realms/youscout/clients/" + clients[0]["id"] + "/default-client-scopes")
     assert "basic" in {scope["name"] for scope in defaults}, "Mobile client requires default scope basic to emit sub"
+    # Compte éphémère distinct des joueurs réels ; son identifiant est conservé pour le nettoyage.
     username = "identity-test-" + secrets.token_hex(8)
     password = "Aa1!" + secrets.token_urlsafe(32)
     user_id = None
@@ -180,6 +189,7 @@ def main():
         status, refreshed = token_request({"grant_type": "refresh_token", "client_id": "youscout-mobile", "refresh_token": old_refresh})
         assert status == 200 and refreshed["refresh_token"] != old_refresh, "Refresh rotation failed"
         assert token_request({"grant_type": "refresh_token", "client_id": "youscout-mobile", "refresh_token": old_refresh})[0] == 400, "Used refresh token was accepted"
+        # Garde le jeton user pour tester les refus admin même après la promotion contrôlée du compte.
         player_access = tokens["access_token"]
         print("Checking controlled admin assignment and logout...", flush=True)
         role = admin.request("GET", "realms/youscout/roles/admin")
@@ -192,6 +202,7 @@ def main():
         assert token_request({"client_id": "youscout-mobile", "refresh_token": tokens["refresh_token"]}, "logout")[0] == 204, "Logout failed"
         assert token_request({"grant_type": "refresh_token", "client_id": "youscout-mobile", "refresh_token": tokens["refresh_token"]})[0] == 400, "Logged-out session could refresh"
         print("PASS: public registration, user default role, login, PKCE, redirect restrictions, refresh rotation, user/admin RBAC and logout.", flush=True)
+    # Retire le compte de test et son profil même si un contrôle intermédiaire échoue.
     finally:
         if user_id is None:
             # Registration may have succeeded before a later assertion failed.
