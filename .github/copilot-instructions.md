@@ -7,6 +7,7 @@ This repository is a mixed backend + mobile workspace, not a single app. The imp
 - `apps/mobile`: Flutter frontend demo for the social talent app. It is currently a local, in-memory prototype with Flutter web as the primary validation target.
 - `services/gateway`: Spring Cloud Gateway (WebFlux) that validates JWTs, applies CORS and local routing rules, and forwards traffic to downstream services.
 - `services/user`: Spring MVC service with JDBC + Flyway that owns the persistent user profile data in PostgreSQL.
+- `services/skill`: Spring MVC catalogue owning skills, hashtags, personal hashtag follows and admin skill audit in its own PostgreSQL database.
 - `infra/compose`: local Docker Compose stack for PostgreSQL, Keycloak, and the backend services.
 - `scripts`: automation for local environment setup, Keycloak configuration, and smoke checks.
 - `contracts/openapi`: versioned API contract(s), especially the user-foundation API.
@@ -50,6 +51,8 @@ python scripts/apply-keycloak.py
 python scripts/smoke-backend.py
 python scripts/smoke-identity.py
 ```
+
+For an existing environment, run `python infra/compose/init-env.py --upgrade` before Compose to add missing credentials without rotating old values.
 
 If you need to reset or inspect the local stack:
 

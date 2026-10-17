@@ -30,7 +30,7 @@ L’environnement local n’a pas de serveur SMTP configuré : vérification d�
 
 La route admin est un diagnostic sans écriture ni liste d’utilisateurs. Elle prouve le contrôle du rôle ; le produit d’administration reste à développer. Toute autre route non déclarée dans les règles de sécurité est refusée par défaut.
 
-Gateway et User appliquent chacun cette matrice. Seuls les rôles `user` et `admin` provenant de `realm_access.roles` d’un JWT vérifié deviennent des autorités applicatives. Des en-têtes, des champs du profil, des scopes nommés `admin` ou des rôles client ne confèrent pas ce droit. Un rôle admin ne permet pas de choisir le propriétaire de `/me` : le `sub` reste l’unique sélecteur SQL.
+Gateway et User appliquent chacun cette matrice. Le service Skill/Hashtag vérifie aussi les rôles ; ses lectures/abonnements exigent user ou admin, et `/v1/skills/admin` exige admin. Voir [SKILL_HASHTAG.md](SKILL_HASHTAG.md). Seuls les rôles `user` et `admin` provenant de `realm_access.roles` d’un JWT vérifié deviennent des autorités applicatives. Des en-têtes, des champs du profil, des scopes nommés `admin` ou des rôles client ne confèrent pas ce droit. Un rôle admin ne permet pas de choisir le propriétaire de `/me` : le `sub` reste l’unique sélecteur SQL.
 
 Les clients ont les scopes par défaut `basic`, `profile` et `email`. `basic` fournit notamment le claim `sub` : il est indispensable pour rattacher le profil au joueur. L’outil de mise à jour lie explicitement ces scopes via les endpoints Keycloak dédiés, car le PUT du client seul ne crée pas ces relations. Les clients gardent `fullScopeAllowed=false`. Leur scope de rôles est explicite : `user`/`admin` pour le mobile, uniquement `user` pour le smoke technique. Les protocol mappers exportent l’audience `youscout-api` et les rôles effectifs. Le compte technique possède `user`, sans rôle admin ni permission de gestion Keycloak.
 
@@ -81,7 +81,7 @@ Les tests Java vérifient notamment user/admin, absence de rôle, claims mal for
 
 Le test réel Keycloak utilise uniquement la pile locale. Son client HTTP émule les cookies Secure autorisés sur localhost par les navigateurs, sans diminuer les protections du serveur. Il inscrit un compte temporaire via les formulaires publics, vérifie le rôle user, les erreurs de connexion, les contraintes de redirect et PKCE, le code à usage unique, la connexion d’un joueur existant, la rotation des refresh tokens, le refus de leur réutilisation et la déconnexion. Il attribue ensuite admin uniquement à ce compte de test pour vérifier la route réservée. Le compte et son profil de test sont supprimés à la fin. Aucun mot de passe ni jeton n’est écrit dans le dépôt ou affiché.
 
-Validation locale : 31 tests Java réussis, smoke backend réussi, parcours réels Keycloak réussis et nettoyage du compte temporaire effectué. Un import du realm dans un environnement temporaire a aussi confirmé les rôles par défaut, sans promotion admin.
+Validation locale de la suite backend étendue : 49 tests Java réussis, smoke backend réussi, parcours réels Keycloak réussis et nettoyage du compte temporaire effectué. Un import du realm dans un environnement temporaire a aussi confirmé les rôles par défaut, sans promotion admin.
 
 La CI applique la configuration puis exécute ces parcours avec Keycloak réel. Les tests ne prouvent pas encore le fonctionnement du navigateur système sur Android/iOS, de la connexion sociale, du mail ou d’une suspension immédiatement effective.
 

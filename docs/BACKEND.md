@@ -6,7 +6,8 @@ Cette itération ajoute Java 21, Spring Boot 4.0.8, Spring Cloud 2025.1.3, Keycl
 
 - `services/gateway` : Spring Cloud Gateway WebFlux, route `/v1/users/**`, contrôles JWT, CORS local et identifiant `X-Request-Id` borné et propagé. Aucun appel aux bases.
 - `services/user` : Spring MVC, validation indépendante des JWT, profils personnels persistants via JDBC et migration Flyway `user_profiles`.
-- `infra/compose` : deux processus PostgreSQL avec utilisateurs et volumes distincts, Keycloak et les deux applications Java.
+- `services/skill` : [catalogue Skill/Hashtag](SKILL_HASHTAG.md), administration des compétences et abonnements personnels.
+- `infra/compose` : trois processus PostgreSQL avec utilisateurs et volumes distincts, Keycloak et les trois applications Java.
 - `infra/keycloak` : realm `youscout`, rôles `user`/`admin`, client public `youscout-mobile` avec Authorization Code + PKCE S256 obligatoire et audience `youscout-api`.
 - Contrat de diagnostic dans `contracts/openapi/user-foundation.yaml`.
 
@@ -46,6 +47,8 @@ python scripts/apply-keycloak.py
 python scripts/smoke-backend.py
 python scripts/smoke-identity.py
 ```
+
+Pour un environnement déjà initialisé, exécuter `python infra/compose/init-env.py --upgrade` avant Compose ; cela ajoute le secret Skill sans changer les anciens.
 
 Le générateur crée `infra/compose/.env` ignoré par Git, avec des mots de passe aléatoires. Il refuse d’écraser un fichier existant. Ne pas le relancer à chaque démarrage. Compose charge ce fichier depuis le dossier du fichier Compose. Les valeurs de `.env.example` sont des indications, pas des secrets utilisables.
 
@@ -91,7 +94,7 @@ Sous PowerShell :
 
 Les tests démarrent de vrais serveurs HTTP, vérifient des JWT signés avec des clés RSA de test, puis contrôlent les refus pour mauvaise signature, issuer, audience et expiration. Gateway couvre le routage, la propagation du jeton et du request-id, et CORS. User utilise un PostgreSQL éphémère Testcontainers et vérifie la migration, la création unique, la persistance, le PATCH partiel, les limites, les requêtes invalides, l’isolation entre utilisateurs et les accès concurrents. Les conteneurs de test sont nettoyés automatiquement. Ils n’utilisent pas les bases persistantes Compose.
 
-Les tests Java couvrent 10 scénarios Gateway et 21 scénarios User, soit 31 au total. Le smoke test a aussi été validé avec un jeton émis par Keycloak, y compris la conservation du profil après redémarrage du service User. Aucun parcours de connexion mobile n’est encore testé.
+Les tests Java couvrent 12 scénarios Gateway, 21 scénarios User et 16 scénarios Skill, soit 49 au total ; deux tests Python couvrent la création et la mise à jour non destructive des secrets. Le smoke test a aussi été validé avec un jeton émis par Keycloak, y compris la conservation du profil après redémarrage du service User. Aucun parcours de connexion mobile n’est encore testé.
 
 La CI `backend.yml` exécute les tests, construit les images, démarre Compose et lance le smoke test Keycloak réel. Aucun déploiement cloud n’est configuré.
 
@@ -99,12 +102,12 @@ Pour vérifier la conservation du profil technique après redémarrage de User :
 
 ```sh
 python scripts/smoke-backend.py
-docker compose -f infra/compose/compose.yml restart user
+docker compose -f infra/compose/compose.yml restart user skill
 docker compose -f infra/compose/compose.yml up -d --wait --wait-timeout 120
 python scripts/smoke-backend.py --verify-persisted-profile
 ```
 
-Le mode `--verify-persisted-profile` exige de retrouver les valeurs de l’exécution précédente avant toute nouvelle modification. Les données sont dans PostgreSQL, pas dans la mémoire du processus Java.
+Le mode `--verify-persisted-profile` exige aussi de retrouver l’abonnement hashtag du compte technique après redémarrage, puis de retrouver les valeurs de l’exécution précédente avant toute nouvelle modification. Les données sont dans PostgreSQL, pas dans la mémoire du processus Java.
 
 ## Prochaine itération
 
