@@ -74,7 +74,7 @@
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:7357/##http://127.0.0.1:7357/"
+          "post.logout.redirect.uris": "http://localhost:7357/##http://127.0.0.1:7357/##ma.youscout://oauth/callback"
       },
       "defaultClientScopes": [
         "basic",
