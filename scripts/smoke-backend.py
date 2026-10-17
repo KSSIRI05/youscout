@@ -12,7 +12,8 @@ ISSUER = "http://localhost:8180/realms/youscout"
 def request(url, data=None, headers=None, method=None):
     try:
         with urllib.request.urlopen(urllib.request.Request(url, data=data, headers=headers or {}, method=method), timeout=15) as response:
-            return response.status, json.load(response), response.headers
+            body = response.read()
+            return response.status, json.loads(body) if body else None, response.headers
     except urllib.error.HTTPError as error:
         body = error.read()
         return error.code, json.loads(body) if body else None, error.headers
@@ -49,6 +50,16 @@ def main():
     assert status == 200 and profile["subject"] == identity["subject"], "Own profile patch failed"
     status, saved, _ = request(BASE + "/v1/users/me", headers=bearer)
     assert status == 200 and all(saved[key] == value for key, value in expected.items()), "Profile changes were not persisted"
+    status, skills, _ = request(BASE + "/v1/skills", headers=bearer)
+    assert status == 200 and isinstance(skills["items"], list), "Skill catalogue unavailable"
+    status, followed, _ = request(BASE + "/v1/hashtags/following?limit=100", headers=bearer)
+    assert status == 200, "Followed hashtags unavailable"
+    if options.verify_persisted_profile:
+        assert any(tag["name"] == "youscout_smoke" for tag in followed["items"]), "Followed hashtag did not survive restart"
+    status, tag, _ = request(BASE + "/v1/hashtags", json.dumps({"name": "#YouScout_Smoke"}).encode(), {**bearer, "Content-Type": "application/json"}, "POST")
+    assert status in (200, 201), "Technical hashtag provisioning failed"
+    status, _, _ = request(BASE + "/v1/hashtags/" + tag["id"] + "/follow", headers=bearer, method="PUT")
+    assert status == 204, "Technical hashtag follow failed"
     status, _, _ = request(BASE + "/v1/users/me", headers={"Authorization": "Bearer malformed"})
     assert status == 401, "Invalid bearer token was not rejected"
     print("PASS: health, OIDC discovery, anonymous rejection, real signed token, secured routing, correlation, persistent profile reads/patches, admin denial and invalid-token rejection.")

@@ -11,6 +11,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from keycloak_admin import KeycloakAdmin, ROOT
+from catalogue_smoke import exercise as exercise_catalogue
 
 ISSUER = "http://localhost:8180/realms/youscout"
 CALLBACK = "http://localhost:7357/auth/callback"
@@ -179,6 +180,7 @@ def main():
         status, refreshed = token_request({"grant_type": "refresh_token", "client_id": "youscout-mobile", "refresh_token": old_refresh})
         assert status == 200 and refreshed["refresh_token"] != old_refresh, "Refresh rotation failed"
         assert token_request({"grant_type": "refresh_token", "client_id": "youscout-mobile", "refresh_token": old_refresh})[0] == 400, "Used refresh token was accepted"
+        player_access = tokens["access_token"]
         print("Checking controlled admin assignment and logout...", flush=True)
         role = admin.request("GET", "realms/youscout/roles/admin")
         admin.request("POST", "realms/youscout/users/" + user_id + "/role-mappings/realm", [role])
@@ -186,6 +188,7 @@ def main():
         status, tokens = exchange(code, verifier)
         assert status == 200 and "admin" in claims(tokens["access_token"])["realm_access"]["roles"], "Admin role not mapped to token"
         assert api("/v1/users/admin/session", tokens["access_token"])[0] == 200, "Authorized admin denied"
+        exercise_catalogue(player_access, tokens["access_token"])
         assert token_request({"client_id": "youscout-mobile", "refresh_token": tokens["refresh_token"]}, "logout")[0] == 204, "Logout failed"
         assert token_request({"grant_type": "refresh_token", "client_id": "youscout-mobile", "refresh_token": tokens["refresh_token"]})[0] == 400, "Logged-out session could refresh"
         print("PASS: public registration, user default role, login, PKCE, redirect restrictions, refresh rotation, user/admin RBAC and logout.", flush=True)

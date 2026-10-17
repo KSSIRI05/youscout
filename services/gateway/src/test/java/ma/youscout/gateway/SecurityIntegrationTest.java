@@ -21,6 +21,7 @@ class SecurityIntegrationTest {
         r.add("spring.security.oauth2.resourceserver.jwt.issuer-uri", oidc::base);
         r.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri", () -> oidc.base() + "/jwks");
         r.add("USER_SERVICE_URL", oidc::base);
+        r.add("SKILL_SERVICE_URL", oidc::base);
     }
     @Test void healthIsPublic() { client.get().uri("/actuator/health").exchange().expectStatus().isOk(); }
     @Test void missingTokenIsRejected() { client.get().uri("/v1/users/session").exchange().expectStatus().isUnauthorized(); }
@@ -92,4 +93,21 @@ class SecurityIntegrationTest {
             .exchange().expectStatus().isForbidden();
     }
 
+
+    @Test void catalogueRoutesReachTheirServiceWithUserBearer() {
+        String token=oidc.roleToken("user");
+        for(String path:java.util.List.of("/v1/skills","/v1/hashtags","/v1/hashtags/following")) {
+            client.get().uri(path).headers(h->h.setBearerAuth(token)).exchange().expectStatus().isOk()
+                .expectBody().jsonPath("$.service").isEqualTo("stub-catalogue");
+            assertThat(oidc.authorization.get()).isEqualTo("Bearer "+token);
+        }
+    }
+    @Test void catalogueAdminRoutesRequireRealmAdmin() {
+        client.get().uri("/v1/skills/admin").headers(h->h.setBearerAuth(oidc.roleToken("user")))
+            .exchange().expectStatus().isForbidden();
+        client.get().uri("/v1/skills/admin").headers(h->h.setBearerAuth(oidc.roleToken("admin")))
+            .exchange().expectStatus().isOk();
+        client.get().uri("/v1/hashtags").headers(h->h.setBearerAuth(oidc.roleToken()))
+            .exchange().expectStatus().isForbidden();
+    }
 }

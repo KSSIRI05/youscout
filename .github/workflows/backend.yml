@@ -17,6 +17,7 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      - run: python3 -m unittest discover -s scripts/tests
       - run: ./mvnw -B -ntp verify
       - run: python3 infra/compose/init-env.py
       - run: docker compose -f infra/compose/compose.yml config --quiet
@@ -24,16 +25,16 @@ jobs:
       - run: python3 scripts/apply-keycloak.py
       - run: python3 scripts/smoke-backend.py
       - run: python3 scripts/smoke-identity.py
-      - name: Verify profile survives User restart
+      - name: Verify profiles and hashtag follows survive restart
         run: |
-          docker compose -f infra/compose/compose.yml restart user
+          docker compose -f infra/compose/compose.yml restart user skill
           docker compose -f infra/compose/compose.yml up -d --wait --wait-timeout 120
           python3 scripts/smoke-backend.py --verify-persisted-profile
       - name: Backend diagnostics on failure
         if: failure() && hashFiles('infra/compose/.env') != ''
         run: |
           docker compose -f infra/compose/compose.yml ps
-          docker compose -f infra/compose/compose.yml logs --no-color --tail 100 gateway user
+          docker compose -f infra/compose/compose.yml logs --no-color --tail 100 gateway user skill
       - name: Stop containers without deleting persisted volumes
         if: always()
         run: |
