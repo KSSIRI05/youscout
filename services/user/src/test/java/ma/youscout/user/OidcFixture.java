@@ -46,11 +46,25 @@ final class OidcFixture {
         try {
             var claims = new JWTClaimsSet.Builder().issuer(issuer).audience(audience).subject(subject)
                 .claim("name", name).claim("preferred_username", username).issueTime(Date.from(Instant.now().minusSeconds(600)))
+                .claim("realm_access", java.util.Map.of("roles", java.util.List.of("user")))
                 .expirationTime(Date.from(expiry)).build();
             var jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID("test-key").build(), claims);
             jwt.sign(new RSASSASigner(wrongKey ? new RSAKeyGenerator(2048).generate() : key));
             return jwt.serialize();
         } catch (Exception e) { throw new IllegalStateException(e); }
+    }
+    String rolesToken(Object realm, Object clientRoles, String scope, Instant expires) {
+        try {
+            var claims = new JWTClaimsSet.Builder().issuer(base()).audience("youscout-api").subject("role-test")
+                .claim("realm_access", realm).claim("resource_access", clientRoles).claim("scope", scope)
+                .issueTime(Date.from(Instant.now().minusSeconds(600))).expirationTime(Date.from(expires)).build();
+            var jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID("test-key").build(), claims);
+            jwt.sign(new RSASSASigner(key));
+            return jwt.serialize();
+        } catch (Exception e) { throw new IllegalStateException(e); }
+    }
+    String roleToken(String... roles) {
+        return rolesToken(java.util.Map.of("roles", java.util.List.of(roles)), null, null, Instant.now().plusSeconds(300));
     }
     String validToken() { return token(base(), "youscout-api", Instant.now().plusSeconds(300), false); }
 }

@@ -1,14 +1,15 @@
 name: Backend foundation
 on:
   push:
-    paths: ['pom.xml', 'mvnw*', '.mvn/**', 'services/**', 'infra/**', 'scripts/smoke-backend.py', '.github/workflows/backend.yml']
+    paths: ['pom.xml', 'mvnw*', '.mvn/**', 'services/**', 'infra/**', 'scripts/**', '.github/workflows/backend.yml']
   pull_request:
-    paths: ['pom.xml', 'mvnw*', '.mvn/**', 'services/**', 'infra/**', 'scripts/smoke-backend.py', '.github/workflows/backend.yml']
+    paths: ['pom.xml', 'mvnw*', '.mvn/**', 'services/**', 'infra/**', 'scripts/**', '.github/workflows/backend.yml']
 permissions:
   contents: read
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -20,12 +21,19 @@ jobs:
       - run: python3 infra/compose/init-env.py
       - run: docker compose -f infra/compose/compose.yml config --quiet
       - run: docker compose -f infra/compose/compose.yml up -d --build --wait --wait-timeout 300
+      - run: python3 scripts/apply-keycloak.py
       - run: python3 scripts/smoke-backend.py
+      - run: python3 scripts/smoke-identity.py
       - name: Verify profile survives User restart
         run: |
           docker compose -f infra/compose/compose.yml restart user
           docker compose -f infra/compose/compose.yml up -d --wait --wait-timeout 120
           python3 scripts/smoke-backend.py --verify-persisted-profile
+      - name: Backend diagnostics on failure
+        if: failure() && hashFiles('infra/compose/.env') != ''
+        run: |
+          docker compose -f infra/compose/compose.yml ps
+          docker compose -f infra/compose/compose.yml logs --no-color --tail 100 gateway user
       - name: Stop containers without deleting persisted volumes
         if: always()
         run: |

@@ -52,4 +52,44 @@ class SecurityIntegrationTest {
         client.options().uri("/v1/users/session").header("Origin", "https://untrusted.example")
             .header("Access-Control-Request-Method", "GET").exchange().expectStatus().isForbidden();
     }
+
+    @Test void profileRequiresApplicationRoleAndAdminDiagnosticRequiresAdmin() {
+        client.get().uri("/v1/users/me").headers(h -> h.setBearerAuth(oidc.roleToken()))
+            .exchange().expectStatus().isForbidden().expectHeader()
+            .contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON)
+            .expectBody().jsonPath("$.status").isEqualTo(403).jsonPath("$.detail").isNotEmpty();
+        client.get().uri("/v1/users/admin/session").headers(h -> h.setBearerAuth(oidc.roleToken("user")))
+            .exchange().expectStatus().isForbidden();
+        client.get().uri("/v1/users/admin/session").headers(h -> h.setBearerAuth(oidc.roleToken("admin")))
+            .exchange().expectStatus().isOk();
+        client.get().uri("/v1/users/me").headers(h -> h.setBearerAuth(oidc.roleToken("admin")))
+            .exchange().expectStatus().isOk();
+    }
+
+    @Test void scopesClientRolesAndHeadersCannotPromoteUserToAdmin() {
+        for (String token : new String[]{oidc.roleToken("user"),
+            oidc.rolesToken(java.util.Map.of("roles", "admin"), null, "admin ROLE_admin", Instant.now().plusSeconds(300)),
+            oidc.rolesToken(null, java.util.Map.of("youscout-mobile", java.util.Map.of("roles", java.util.List.of("admin"))), "admin", Instant.now().plusSeconds(300)),
+            oidc.rolesToken(java.util.Map.of("roles", java.util.List.of(42, "ADMIN", "super-admin")), null, null, Instant.now().plusSeconds(300))}) {
+            client.get().uri("/v1/users/admin/session").header("X-User-Roles", "admin").header("X-User-Id", "administrator")
+                .headers(h -> h.setBearerAuth(token)).exchange().expectStatus().isForbidden();
+        }
+    }
+
+    @Test void unauthorizedAndExpiredTokensProduceProblemResponses() {
+        client.get().uri("/v1/users/me").exchange().expectStatus().isUnauthorized()
+            .expectHeader().valueEquals("WWW-Authenticate", "Bearer")
+            .expectHeader().contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON)
+            .expectBody().jsonPath("$.status").isEqualTo(401).jsonPath("$.detail").isNotEmpty();
+        String expiredAdmin = oidc.rolesToken(java.util.Map.of("roles", java.util.List.of("admin")), null, null, Instant.now().minusSeconds(120));
+        client.get().uri("/v1/users/admin/session").headers(h -> h.setBearerAuth(expiredAdmin))
+            .exchange().expectStatus().isUnauthorized().expectHeader().valueEquals("WWW-Authenticate", "Bearer error=\"invalid_token\"")
+            .expectBody().jsonPath("$.status").isEqualTo(401);
+    }
+
+    @Test void newEndpointsAreDeniedUntilExplicitlyAuthorized() {
+        client.get().uri("/v1/unconfigured").headers(h -> h.setBearerAuth(oidc.roleToken("admin")))
+            .exchange().expectStatus().isForbidden();
+    }
+
 }

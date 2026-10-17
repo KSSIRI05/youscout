@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
   title: YouScout User API
-  version: 0.2.0
-  description: Verified session identity and persistent profiles owned by the authenticated subject.
+  version: 0.3.0
+  description: Persistent personal profiles and user/admin role diagnostics using verified Keycloak access tokens.
 servers:
   - url: http://localhost:8080
 paths:
@@ -14,14 +14,16 @@ paths:
         Creates the profile on first authenticated use. Repeated reads never overwrite
         user edits or timestamps. Initial displayName uses name, then preferred_username,
         then Joueur (trimmed and bounded to 80 Unicode code points).
-        No profile identifier is accepted from the client.
+        No profile identifier is accepted from the client. Requires realm role user or admin.
       security:
         - bearerAuth: []
       responses:
         '200':
           $ref: '#/components/responses/ProfileResponse'
         '401':
-          description: Missing or invalid bearer token or subject
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
     patch:
       operationId: patchOwnProfile
       summary: Partially update or provision the authenticated subject's profile
@@ -31,6 +33,7 @@ paths:
         clears it. displayName is stripped before validation. Subject and timestamps
         are server-controlled. Concurrent changes to different fields are preserved;
         the last database update wins for the same field. No events are emitted yet.
+        Requires realm role user or admin.
       security:
         - bearerAuth: []
       requestBody:
@@ -62,9 +65,34 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProfileProblem'
         '401':
-          description: Missing or invalid bearer token or subject
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '415':
           description: Content-Type must be application/json
+  /v1/users/admin/session:
+    get:
+      operationId: getAdminSessionDiagnostic
+      summary: Verify access to an admin-only diagnostic
+      description: Requires realm role admin. Does not list users or change data.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Verified admin identity, same representation as the session diagnostic
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [subject, service]
+                properties:
+                  subject: {type: string}
+                  username: {type: string, nullable: true}
+                  service: {type: string, enum: [user-service]}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /v1/users/session:
     get:
       operationId: getVerifiedSession
@@ -87,7 +115,7 @@ paths:
                   username: {type: string, nullable: true}
                   service: {type: string, enum: [user-service]}
         '401':
-          description: Missing, expired or invalid bearer token
+          $ref: '#/components/responses/Unauthorized'
         '502':
           description: Upstream connection failed
         '504':
@@ -113,6 +141,22 @@ components:
         detail: {type: string}
         instance: {type: string}
   responses:
+    Unauthorized:
+      description: Bearer token absent, invalid or expired (or subject invalid for profile access)
+      headers:
+        WWW-Authenticate:
+          description: Bearer challenge for missing/invalid token
+          schema: {type: string}
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProfileProblem'
+    Forbidden:
+      description: Valid access token without the required application realm role
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProfileProblem'
     ProfileResponse:
       description: Persistent profile of the verified token subject
       headers:

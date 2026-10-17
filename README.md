@@ -9,6 +9,7 @@ Projet ALD 2025/2026, INPT (ASEDS). YouScout permet de publier des vidéos de fo
 ```sh
 python infra/compose/init-env.py
 docker compose -f infra/compose/compose.yml up -d --build --wait --wait-timeout 300
+python scripts/apply-keycloak.py
 python scripts/smoke-backend.py
 ```
 
@@ -24,6 +25,7 @@ Le backend recommandé est Java / Spring Boot ; l'admin utilise React. PostgreSQ
 
 | Document | Contenu |
 | --- | --- |
+| [Identité et droits](docs/IDENTITE_ET_AUTORISATIONS.md) | Inscription Keycloak, PKCE, rôles user/admin et sessions |
 | [Backend local](docs/BACKEND.md) | Lancement du socle, JWT, migration et vérifications |
 | [Projet](docs/PROJECT.md) | Sujet, livrables, périmètre et questions ouvertes |
 | [Exigences](docs/REQUIREMENTS.md) | Tous les besoins et leur service responsable |
