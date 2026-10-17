@@ -35,7 +35,8 @@ def main():
     assert status == 200 and "access_token" in tokens, "Service-account authentication failed"
     bearer = {"Authorization": "Bearer " + tokens["access_token"], "X-Request-Id": "smoke-backend"}
     status, identity, headers = request(BASE + "/v1/users/session", headers=bearer)
-    assert status == 200 and identity["service"] == "user-service" and identity["subject"], "Authenticated routing failed"
+    assert status == 200, f"Authenticated routing failed (HTTP {status})"
+    assert identity.get("service") == "user-service" and identity.get("subject"), "Unexpected authenticated service identity"
     assert headers.get("X-Request-Id") == "smoke-backend", "Correlation header missing"
     status, denied, _ = request(BASE + "/v1/users/admin/session", headers=bearer)
     assert status == 403 and denied["status"] == 403, "Smoke user must not access admin endpoints"

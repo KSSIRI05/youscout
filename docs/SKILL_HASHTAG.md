@@ -76,4 +76,6 @@ Les tests couvrent migrations, droits, validation, Unicode, désactivation/réac
 
 ## Limites et suite
 
+Le contrôle de persistance suit la procédure de [BACKEND.md](BACKEND.md) : redémarrer User et Skill, attendre leur disponibilité, puis redémarrer la Gateway pour renouveler ses connexions vers les services Docker.
+
 Cette étape livre les API backend. Le raccordement de Flutter au catalogue et l’interface React d’administration restent à faire ; A05 n’est donc pas considéré comme livré de bout en bout. La désactivation/modération des hashtags, les événements Kafka et l’outbox transactionnelle sont des étapes ultérieures. Le journal admin n’est pas un relais outbox. Video devra référencer les identifiants du catalogue via ses contrats, sans accéder à cette base.

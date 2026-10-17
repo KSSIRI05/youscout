@@ -98,16 +98,20 @@ Les tests Java couvrent 12 scénarios Gateway, 21 scénarios User et 16 scénari
 
 La CI `backend.yml` exécute les tests, construit les images, démarre Compose et lance le smoke test Keycloak réel. Aucun déploiement cloud n’est configuré.
 
-Pour vérifier la conservation du profil technique après redémarrage de User :
+Pour vérifier la conservation du profil technique et des abonnements après redémarrage de User et Skill :
 
 ```sh
 python scripts/smoke-backend.py
 docker compose -f infra/compose/compose.yml restart user skill
 docker compose -f infra/compose/compose.yml up -d --wait --wait-timeout 120
+docker compose -f infra/compose/compose.yml restart gateway
+docker compose -f infra/compose/compose.yml up -d --wait --wait-timeout 120
 python scripts/smoke-backend.py --verify-persisted-profile
 ```
 
 Le mode `--verify-persisted-profile` exige aussi de retrouver l’abonnement hashtag du compte technique après redémarrage, puis de retrouver les valeurs de l’exécution précédente avant toute nouvelle modification. Les données sont dans PostgreSQL, pas dans la mémoire du processus Java.
+
+La procédure redémarre ensuite la Gateway pour renouveler ses connexions et sa résolution des services Docker. En local, des adresses de conteneurs peuvent changer lors d’un redémarrage ; des connexions conservées peuvent alors viser un ancien emplacement. Cette procédure de développement implique une interruption et ne garantit pas une reprise sans coupure.
 
 ## Prochaine itération
 

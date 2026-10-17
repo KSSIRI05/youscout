@@ -29,6 +29,8 @@ jobs:
         run: |
           docker compose -f infra/compose/compose.yml restart user skill
           docker compose -f infra/compose/compose.yml up -d --wait --wait-timeout 120
+          docker compose -f infra/compose/compose.yml restart gateway
+          docker compose -f infra/compose/compose.yml up -d --wait --wait-timeout 120
           python3 scripts/smoke-backend.py --verify-persisted-profile
       - name: Backend diagnostics on failure
         if: failure() && hashFiles('infra/compose/.env') != ''
