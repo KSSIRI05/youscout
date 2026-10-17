@@ -1,6 +1,6 @@
 # Identité et autorisations — état implémenté
 
-Keycloak gère les identifiants et ses propres pages d’inscription/connexion. Les services YouScout ne reçoivent pas le mot de passe des joueurs. Flutter conserve pour le moment son mode démo ; son intégration OIDC et ses callbacks restent à réaliser.
+Keycloak gère les identifiants et ses propres pages d’inscription/connexion. Les services YouScout ne reçoivent pas le mot de passe des joueurs. Flutter propose un mode connecté OIDC/PKCE, distinct de sa démo sociale locale. Voir [le guide mobile](../apps/mobile/README.md).
 
 ## Parcours joueur
 
@@ -14,7 +14,7 @@ Le client public `youscout-mobile` utilise Authorization Code avec PKCE S256 obl
 4. Le client vérifie `state` et échange le code à usage unique avec son `code_verifier`.
 5. Le Bearer reçu permet d’appeler les API. L’application doit gérer le renouvellement et fermer sa session locale lors de la déconnexion.
 
-Callbacks autorisés : `http://localhost:7357/auth/callback`, `http://127.0.0.1:7357/auth/callback` et `ma.youscout://oauth/callback`. Aucun secret client, flux implicite ou password grant n’est activé pour le mobile. Les callbacks ne sont pas encore implémentés dans Flutter : leur configuration dans Keycloak ne crée pas un écran de connexion fonctionnel dans l’application.
+Callbacks autorisés : `http://localhost:7357/auth/callback`, `http://127.0.0.1:7357/auth/callback` et `ma.youscout://oauth/callback`. Aucun secret client, flux implicite ou password grant n’est activé pour le mobile. Le callback web et les adaptateurs AppAuth Android/iOS sont implémentés dans Flutter. Le parcours web et les tests applicatifs doivent être distingués de la validation native sur appareil, qui reste à faire.
 
 L’environnement local n’a pas de serveur SMTP configuré : vérification d’email et récupération de mot de passe par email sont désactivées. Ce sont des limites de la configuration de développement.
 

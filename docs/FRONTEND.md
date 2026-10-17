@@ -1,16 +1,18 @@
 # État du frontend
 
-Le code mobile se trouve dans [apps/mobile](../apps/mobile/README.md). Il s’agit d’une démonstration Flutter interactive locale, première étape de l’architecture retenue, et non du MVP distribué complet.
+Le frontend Flutter propose désormais deux parcours indépendants : une connexion au backend et une démo sociale locale. Voir [les instructions détaillées](../apps/mobile/README.md).
 
-| Livré | À intégrer |
+| Disponible avec le compte réel | Encore local ou à développer |
 | --- | --- |
-| Thème, navigation et composants inspirés de Figma | Auth Keycloak avec OIDC/PKCE |
-| Feed, recherche, profils et abonnements locaux | API Gateway, pagination et persistance |
-| Likes, commentaires, notes et signalements en mémoire | Autorisations serveur, modération et règles métier définitives |
-| Sélection et prévisualisation vidéo | Upload S3, statut de traitement et CDN |
-| Messages locaux | Chat persistant, reconnexion et livraison |
-| Tests unitaires/widget et workflow CI web | Tests sur appareils, intégration et administration React |
+| Inscription et connexion Keycloak, Authorization Code + PKCE | Connexion sociale, SMTP et validation sur appareils |
+| Profil personnel persistant : lecture, nom et biographie | Autres profils publics et fonctionnalités sociales |
+| Catalogue des compétences avec recherche et pagination | Attribution des compétences aux vidéos |
+| Hashtags, création et abonnements personnels persistants | Fil personnalisé alimenté par les abonnements |
+| Renouvellement, erreurs réseau/403/401 et déconnexion | Stockage de session durable entre relancements |
+| Adaptateurs web et AppAuth natif | Builds et parcours Android/iOS sur appareil |
 
-Validation locale : analyse statique sans problème, 11 tests réussis et build web release réussi sur Flutter 3.47.7 / Dart 3.13.5. Les plateformes Android/iOS sont générées mais non compilées ni validées sur appareil. Le résultat du workflow GitHub reste à consulter après publication.
+Les vidéos, likes, commentaires, évaluations, blocages, messages et signalements de la démo restent en mémoire. Ils ne sont pas mélangés avec l’identité réelle. Le backend Video, le stockage S3 et les autres services métier restent à développer.
 
-La frontière `ScoutRepository` permet de remplacer les données de démonstration. Les interactions sont gérées dans `ScoutStore` ; leur raccordement aux API exigera des états de chargement, d’erreur, d’expiration de session et des validations côté serveur. Aucune exigence de cohérence distribuée, sécurité ou performance n’est prouvée par cette démo.
+Les jetons du compte sont conservés en mémoire seulement. Le navigateur garde temporairement l’état PKCE dans sessionStorage jusqu’au retour de Keycloak, puis le supprime. Un rechargement web exige une nouvelle connexion, éventuellement facilitée par la session SSO Keycloak.
+
+Validation locale de cette intégration : 29 tests Flutter réussis, analyse statique sans problème et build web release réussi. Un parcours navigateur avec la pile Docker réelle a confirmé l’inscription, le retour PKCE, la modification du profil, le catalogue, la création et le suivi/désabonnement d’un hashtag, puis leur persistance après déconnexion/reconnexion. Un 401 unique injecté dans le navigateur a déclenché un véritable renouvellement Keycloak et le rejeu réussi de la requête. Un callback sans état PKCE a été refusé avant tout appel API. Le compte temporaire, son profil, ses abonnements et son hashtag de test ont été supprimés. Ces essais ne remplacent pas une validation sur appareils Android/iOS.
