@@ -26,6 +26,9 @@ class SecurityConfig {
                 .pathMatchers("/v1/users/admin/**").hasRole("admin")
                 .pathMatchers("/v1/users/me").hasAnyRole("user", "admin")
                 .pathMatchers("/v1/users/session").authenticated()
+                .pathMatchers(org.springframework.http.HttpMethod.GET, "/v1/videos/session").hasAnyRole("user", "admin")
+                .pathMatchers(org.springframework.http.HttpMethod.POST, "/v1/videos/uploads").hasAnyRole("user", "admin")
+                .pathMatchers(org.springframework.http.HttpMethod.POST, "/v1/videos/*/complete").hasAnyRole("user", "admin")
                 .anyExchange().denyAll())
             .exceptionHandling(e -> e.authenticationEntryPoint(ApiSecurityErrors::unauthorized)
                 .accessDeniedHandler((exchange, error) -> ApiSecurityErrors.forbidden(exchange)))
@@ -38,7 +41,7 @@ class SecurityConfig {
         var cors = new CorsConfiguration();
         cors.setAllowedOrigins(List.of("http://localhost:7357", "http://127.0.0.1:7357"));
         cors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        cors.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-Id"));
+        cors.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-Id", "Idempotency-Key"));
         cors.setExposedHeaders(List.of("X-Request-Id"));
         cors.setMaxAge(600L);
         var source = new UrlBasedCorsConfigurationSource();

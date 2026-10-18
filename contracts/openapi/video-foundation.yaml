@@ -1,0 +1,177 @@
+openapi: 3.0.3
+info:
+  title: YouScout Video identity API
+  version: 0.3.0
+  description: Identité Keycloak, préparation et confirmation d'uploads S3 avec métadonnées persistantes.
+servers:
+  - url: http://localhost:8080
+paths:
+  /v1/videos/{id}/complete:
+    post:
+      operationId: completeVideoUpload
+      summary: Confirmer le fichier S3 du joueur connecté
+      description: |
+        Exige user ou admin et le sub propriétaire de la vidéo, sans exception pour admin.
+        Un HEAD S3 vérifie taille et type déclarés avant la transition PENDING_UPLOAD vers UPLOADED.
+        Capture la date de confirmation et l'ETag opaque en base, sans valider le format réel du média.
+        Une reprise après confirmation retourne le même résultat sans nouvel appel S3.
+        Sans ListBucket, S3 peut masquer un objet absent par 403 : l'API renvoie alors 409,
+        comme pour un fichier inaccessible. Aucun champ de propriétaire ou de stockage n'est accepté.
+      security: [{bearerAuth: []}]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {type: object, additionalProperties: false, maxProperties: 0}
+      responses:
+        '200':
+          description: Upload confirmé ou résultat déjà confirmé
+          headers:
+            Cache-Control:
+              schema: {type: string, example: no-store}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CompletedVideo'}
+        '400': {description: UUID ou corps invalide}
+        '401': {description: Jeton absent ou invalide}
+        '403': {description: Rôle insuffisant}
+        '404': {description: Vidéo inconnue ou appartenant à un autre joueur}
+        '409': {description: Fichier absent/inaccessible ou taille/type incorrect ou état incompatible}
+        '503': {description: Vérification S3 ou base temporairement indisponible}
+  /v1/videos/uploads:
+    post:
+      operationId: prepareVideoUpload
+      summary: Préparer l'envoi d'une vidéo dans S3
+      description: |
+        Exige le rôle de realm user ou admin. Le propriétaire est le sub du JWT.
+        Crée des métadonnées PENDING_UPLOAD et une clé S3 unique ; ne téléverse aucun fichier.
+        La même clé d'idempotence, pour le même propriétaire et le même corps normalisé,
+        retourne la vidéo existante avec une nouvelle URL ; un corps différent produit 409.
+        Les valeurs par défaut limitent la taille à 100 Mio et la signature à 300 secondes.
+        Les identifiants AWS temporaires peuvent expirer avant l'URL annoncée.
+      security: [{bearerAuth: []}]
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, pattern: '^[A-Za-z0-9_-]{16,128}$'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [title, contentType, sizeBytes]
+              properties:
+                title: {type: string, minLength: 1, maxLength: 150}
+                contentType: {type: string, enum: [video/mp4, video/webm, video/quicktime]}
+                sizeBytes: {type: integer, format: int64, minimum: 1, description: 'Taille maximale configurable, par défaut 104857600 octets'}
+      responses:
+        '201':
+          description: Métadonnées créées, URL PUT temporaire prête
+          headers:
+            Cache-Control:
+              schema: {type: string, example: no-store}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UploadTicket'}
+        '200':
+          description: Reprise idempotente de la vidéo existante
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UploadTicket'}
+        '400': {description: Corps ou clé d'idempotence invalide}
+        '401': {description: Jeton absent ou invalide}
+        '403': {description: Rôle insuffisant}
+        '409': {description: Clé réutilisée avec un autre corps ou état incompatible}
+        '503': {description: 'Base ou signature S3 indisponible, sans création partielle'}
+  /v1/videos/session:
+    get:
+      operationId: getVideoSession
+      summary: Consulter son identité vérifiée par Video
+      description: |
+        Exige un JWT RS256 avec issuer configuré, audience youscout-api, expiration
+        et sub non vide, ainsi que le rôle de realm user ou admin. Les en-têtes
+        X-User-Id et X-User-Roles ne déterminent jamais l'identité ou les droits.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Identité du demandeur, sans création de données
+          headers:
+            Cache-Control:
+              schema: {type: string, example: no-store}
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [subject, service]
+                properties:
+                  subject: {type: string, minLength: 1}
+                  service: {type: string, enum: [video-service]}
+        '401':
+          description: Jeton absent, invalide, expiré ou sans identité utilisable
+          headers:
+            WWW-Authenticate:
+              schema: {type: string, example: Bearer}
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '403':
+          description: Jeton valide sans rôle de realm autorisé
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    CompletedVideo:
+      type: object
+      required: [id, status, title, sizeBytes, createdAt, updatedAt, completedAt]
+      properties:
+        id: {type: string, format: uuid}
+        status: {type: string, enum: [UPLOADED]}
+        title: {type: string}
+        sizeBytes: {type: integer, format: int64}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        completedAt: {type: string, format: date-time}
+    UploadTicket:
+      type: object
+      required: [id, status, title, sizeBytes, createdAt, upload]
+      properties:
+        id: {type: string, format: uuid}
+        status: {type: string, enum: [PENDING_UPLOAD]}
+        title: {type: string}
+        sizeBytes: {type: integer, format: int64}
+        createdAt: {type: string, format: date-time}
+        upload:
+          type: object
+          required: [method, url, headers, expiresAt]
+          properties:
+            method: {type: string, enum: [PUT]}
+            url: {type: string, format: uri, description: Secret temporaire à ne jamais journaliser ni persister}
+            headers:
+              type: object
+              properties:
+                Content-Type: {type: string}
+                Content-Length: {type: string, description: Envoyé automatiquement par le navigateur à partir du fichier}
+            expiresAt: {type: string, format: date-time}
+    Problem:
+      type: object
+      required: [type, status, title, detail]
+      properties:
+        type: {type: string}
+        status: {type: integer}
+        title: {type: string}
+        detail: {type: string}

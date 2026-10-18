@@ -1,0 +1,5 @@
+# Lancer avec le profil Spring local pour utiliser le rôle YouScoutVideo du poste.
+youscout:
+  storage:
+    s3:
+      profile: ${VIDEO_AWS_PROFILE:youscout-video-sdk}

@@ -25,6 +25,44 @@ class SecurityIntegrationTest {
         r.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri", () -> oidc.base() + "/jwks");
         r.add("USER_SERVICE_URL", oidc::base);
         r.add("SKILL_SERVICE_URL", oidc::base);
+        r.add("VIDEO_SERVICE_URL", oidc::base);
+    }
+    @Test void uploadPostRequiresRoleAndAllowsIdempotencyCorsHeader() {
+        client.post().uri("/v1/videos/uploads").exchange().expectStatus().isUnauthorized();
+        client.post().uri("/v1/videos/uploads").headers(h -> h.setBearerAuth(oidc.roleToken()))
+            .exchange().expectStatus().isForbidden();
+        String token = oidc.roleToken("user");
+        client.post().uri("/v1/videos/uploads").headers(h -> h.setBearerAuth(token))
+            .exchange().expectStatus().isCreated();
+        assertThat(oidc.authorization.get()).isEqualTo("Bearer " + token);
+        client.options().uri("/v1/videos/uploads").header("Origin", "http://localhost:7357")
+            .header("Access-Control-Request-Method", "POST")
+            .header("Access-Control-Request-Headers", "authorization,content-type,idempotency-key")
+            .exchange().expectStatus().isOk();
+    }
+    @Test void completionRoutesRequireRoleAndForwardBearer() {
+        String path = "/v1/videos/00000000-0000-0000-0000-000000000001/complete";
+        client.post().uri(path).exchange().expectStatus().isUnauthorized();
+        client.post().uri(path).headers(h -> h.setBearerAuth(oidc.roleToken())).exchange().expectStatus().isForbidden();
+        for (String role : new String[]{"user", "admin"}) {
+            String token = oidc.roleToken(role);
+            client.post().uri(path).headers(h -> h.setBearerAuth(token)).exchange().expectStatus().isOk();
+            assertThat(oidc.authorization.get()).isEqualTo("Bearer " + token);
+        }
+        client.get().uri(path).headers(h -> h.setBearerAuth(oidc.roleToken("user"))).exchange().expectStatus().isForbidden();
+    }
+    @Test void videoSessionRequiresRoleAndForwardsBearer() {
+        client.get().uri("/v1/videos/session").exchange().expectStatus().isUnauthorized();
+        client.get().uri("/v1/videos/session").headers(h -> h.setBearerAuth(oidc.roleToken()))
+            .exchange().expectStatus().isForbidden();
+        for (String role : new String[]{"user", "admin"}) {
+            String token = oidc.roleToken(role);
+            client.get().uri("/v1/videos/session").headers(h -> h.setBearerAuth(token))
+                .exchange().expectStatus().isOk().expectBody().jsonPath("$.service").isEqualTo("stub-video");
+            assertThat(oidc.authorization.get()).isEqualTo("Bearer " + token);
+        }
+        client.get().uri("/v1/videos/uploads").headers(h -> h.setBearerAuth(oidc.roleToken("admin")))
+            .exchange().expectStatus().isForbidden();
     }
     // Les sondes restent accessibles sans jeton pour permettre la supervision.
     @Test void healthIsPublic() { client.get().uri("/actuator/health").exchange().expectStatus().isOk(); }

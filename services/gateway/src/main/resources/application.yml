@@ -36,6 +36,13 @@ spring:
               filters:
                 - RemoveRequestHeader=X-User-Id
                 - RemoveRequestHeader=X-User-Roles
+            - id: video-service
+              uri: ${VIDEO_SERVICE_URL:http://localhost:8083}
+              predicates:
+                - Path=/v1/videos/**
+              filters:
+                - RemoveRequestHeader=X-User-Id
+                - RemoveRequestHeader=X-User-Roles
 server:
   port: 8080
 # N’expose que les sondes de santé, sans détails internes dans les réponses.
