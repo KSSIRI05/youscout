@@ -36,7 +36,7 @@ Le frontend admin peut utiliser TypeScript sans remettre en cause le choix Java 
 
 **Recommandation : Spring Boot pour le backend de référence de YouScout.** Le projet multiplie OIDC/JWT, transactions, Kafka, métriques et bases ; un écosystème cohérent réduit les conventions à inventer. Cette préférence est un jugement d'architecture, pas une preuve de débit supérieur. Spring consomme aussi des ressources et demande une maîtrise Java.
 
-**Préférer FastAPI** si les quatre membres sont nettement plus productifs en Python : excellent choix d'API, OpenAPI et validation, mais préciser les bibliothèques et patterns pour Kafka, outbox, migrations et sécurité. Ne pas conserver deux stacks « au cas où ».
+**Préférer FastAPI** si l'équipe est nettement plus productive en Python : excellent choix d'API, OpenAPI et validation, mais préciser les bibliothèques et patterns pour Kafka, outbox, migrations et sécurité. Ne pas conserver deux stacks « au cas où ».
 
 ## Kafka ou RabbitMQ : lequel choisir ?
 
@@ -46,7 +46,7 @@ Le frontend admin peut utiliser TypeScript sans remettre en cause le choix Java 
 
 Référence proposée : AWS EKS pour Kubernetes, S3/CloudFront pour médias, RDS PostgreSQL, MSK pour Kafka et une offre MongoDB managée compatible avec les transactions requises (par exemple Atlas après vérification des conditions). Redis peut être managé. Garder les dépendances en réseau privé et valider région, latence, disponibilité des services et coûts avant provisionnement. Ne pas supposer qu'un service « compatible MongoDB » garantit toutes les fonctionnalités MongoDB.
 
-Pour un prototype académique, Compose puis un cluster Kubernetes de démonstration plus petit sont plus abordables à exploiter. Ils ne démontrent pas une capacité mondiale ni une haute disponibilité de production. Aucun prix ni dimensionnement n'est promis ici.
+Pour le développement et la validation du MVP, Compose puis un petit cluster Kubernetes de staging sont plus abordables à exploiter. Ils ne démontrent pas une capacité mondiale ni une haute disponibilité de production. Aucun prix ni dimensionnement n'est promis ici.
 
 ## Ordre d'apprentissage et d'installation
 

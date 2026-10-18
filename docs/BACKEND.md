@@ -6,6 +6,8 @@ Cette itération ajoute Java 21, Spring Boot 4.0.8, Spring Cloud 2025.1.3, Keycl
 
 ## Composants réellement implémentés
 
+- `services/video` : Keycloak, préparation idempotente d'uploads S3 et confirmation (`POST /v1/videos/{id}/complete`), avec métadonnées PostgreSQL et propriétaire issu du `sub`. La confirmation vérifie présence/accessibilité, taille et type déclarés dans S3 avant l'état `UPLOADED`. Voir [configuration, limites et lancement](../services/video/README.md). Compose le démarre avec sa base via le profil `video`. Validation du média et événements restent à développer.
+
 - `services/gateway` : Spring Cloud Gateway WebFlux, route `/v1/users/**`, contrôles JWT, CORS local et identifiant `X-Request-Id` borné et propagé. Aucun appel aux bases.
 - `services/user` : Spring MVC, validation indépendante des JWT, profils personnels persistants via JDBC et migration Flyway `user_profiles`.
 - `services/skill` : [catalogue Skill/Hashtag](SKILL_HASHTAG.md), administration des compétences et abonnements personnels.

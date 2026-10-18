@@ -1,6 +1,6 @@
 # Exigences et traçabilité
 
-Source : sujet ALD, pages 1-2. Les phases organisent la livraison, sans supprimer les exigences finales. « S » = socle MVP ; « F » = suite fonctionnelle obligatoire ; « A » = administration finale. Les critères ci-dessous sont une précision de conception, pas une preuve d'implémentation.
+Les exigences ci-dessous définissent le périmètre produit. Les phases organisent sa livraison progressive. « S » = socle MVP ; « F » = fonctionnalités suivantes ; « A » = administration. Les critères précisent le comportement attendu, sans constituer une preuve d'implémentation.
 
 | ID | Exigence mobile | Responsable | Phase |
 | --- | --- | --- | --- |

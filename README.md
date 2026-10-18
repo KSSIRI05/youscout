@@ -1,8 +1,8 @@
 # YouScout - Réseau social de talents du football
 
-Projet ALD 2025/2026, INPT (ASEDS). YouScout permet de publier des vidéos de football, découvrir des talents et échanger avec la communauté.
+YouScout est une plateforme de découverte des talents du football. Elle permet de partager des vidéos, de mettre en valeur ses compétences et d'échanger avec la communauté.
 
-**État réel : première version du frontend Flutter dans `apps/mobile`, avec démonstration locale, connexion Keycloak, profils et catalogue connectés, et workflow CI mobile. Un socle backend local (Gateway, profils User persistants, catalogue Skill/Hashtag, Keycloak et PostgreSQL) est disponible ; les autres API métier, l’admin et le cloud restent à implémenter.** L'architecture cible a été retenue par le porteur du projet ; sa validation technique reste à réaliser par les prototypes et tests décrits ici.
+**État réel : frontend Flutter dans `apps/mobile`, avec démonstration locale, connexion Keycloak, profils et catalogue connectés. Le backend comprend la Gateway, les profils User persistants, le catalogue Skill/Hashtag et le service Video avec préparation et confirmation d'uploads S3, Keycloak et PostgreSQL. Le bucket S3 privé et les rôles IAM dédiés sont provisionnés. L'upload Flutter, le traitement vidéo, les autres API métier et le back-office restent à développer.** Les workflows CI vérifient le mobile et le backend ; l'architecture cible reste à valider progressivement avec les tests de chaque service.
 
 ## Lancer le socle backend
 
@@ -13,7 +13,7 @@ python scripts/apply-keycloak.py
 python scripts/smoke-backend.py
 ```
 
-Docker doit être démarré. Le générateur de secrets est exécuté une seule fois. Sur un environnement existant, utiliser `python infra/compose/init-env.py --upgrade` pour ajouter le secret de la base Skill sans changer les anciens. Lire [le guide backend](docs/BACKEND.md) pour les ports, les tests, Keycloak et les limites. Flutter propose aussi un mode connecté pour le profil et le catalogue ; voir [le guide mobile](apps/mobile/README.md).
+Docker doit être démarré. Le générateur de secrets est exécuté une seule fois. Sur un environnement existant, utiliser `python infra/compose/init-env.py --upgrade` pour ajouter les secrets manquants sans changer les anciens. Lire [le guide backend](docs/BACKEND.md) pour les ports, les tests, Keycloak et les limites, et [le guide Video](services/video/README.md) pour activer le profil Compose Video et l'accès S3 temporaire. Flutter propose aussi un mode connecté pour le profil et le catalogue ; voir [le guide mobile](apps/mobile/README.md).
 
 ## Architecture retenue
 
@@ -28,7 +28,8 @@ Le backend recommandé est Java / Spring Boot ; l'admin utilise React. PostgreSQ
 | [Compétences et hashtags](docs/SKILL_HASHTAG.md) | Catalogue, administration des compétences et abonnements personnels |
 | [Identité et droits](docs/IDENTITE_ET_AUTORISATIONS.md) | Inscription Keycloak, PKCE, rôles user/admin et sessions |
 | [Backend local](docs/BACKEND.md) | Lancement du socle, JWT, migration et vérifications |
-| [Projet](docs/PROJECT.md) | Sujet, livrables, périmètre et questions ouvertes |
+| [Projet](docs/PROJECT.md) | Vision produit, périmètre et questions ouvertes |
+| [Vidéo et S3](services/video/README.md) | Uploads signés, confirmation, persistance et configuration AWS locale |
 | [Exigences](docs/REQUIREMENTS.md) | Tous les besoins et leur service responsable |
 | [Caractéristiques](docs/QUALITY_ATTRIBUTES.md) | Exigences explicites, déductions et priorités |
 | [Architecture](docs/ARCHITECTURE.md) | Comparaison des styles et diagramme de la cible |
@@ -64,8 +65,8 @@ La démo couvre le fil, la découverte, les profils, les interactions, la public
 
 La [maquette Figma](https://www.figma.com/design/SZIskR01SeNgOsSrAwiB9p) guide les couleurs, composants et parcours.
 
-Arborescence actuelle : `apps/mobile/`, `services/gateway/`, `services/user/`, `services/skill/`, `infra/`, `contracts/openapi/`, `scripts/`, `docs/` et les workflows mobile/backend. Les autres services, `apps/admin/` et `workers/` restent à créer.
+Arborescence actuelle : `apps/mobile/`, `services/gateway/`, `services/user/`, `services/skill/`, `services/video/`, `infra/`, `contracts/openapi/`, `scripts/`, `docs/` et les workflows mobile/backend. Les autres services, `apps/admin/` et `workers/` restent à créer.
 
-## Livraison académique
+## Livraison du produit
 
-Le rendu final doit contenir le code source complet, les ADRs, les instructions de lancement et une application déployée et démontrable. Les fonctions reportées après le MVP restent dans le périmètre final obligatoire du sujet. Le dépôt GitHub privé doit être partagé avec les évaluateurs.
+Chaque livraison doit fournir le code source, les décisions d'architecture, des instructions de lancement vérifiées et les résultats des tests. La roadmap distingue le MVP, les fonctionnalités suivantes et la préparation du lancement public.

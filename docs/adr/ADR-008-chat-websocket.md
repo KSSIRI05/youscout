@@ -4,7 +4,7 @@ Statut : Retenu pour la conception, décision du porteur le 17 octobre 2026. Val
 
 ## Contexte
 
-Le sujet exige messages instantanés ; les connexions longues ont un profil distinct des lectures du feed.
+Le produit prévoit des messages instantanés ; les connexions longues ont un profil distinct des lectures du feed.
 
 ## Alternatives
 

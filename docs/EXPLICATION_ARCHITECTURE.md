@@ -56,6 +56,6 @@ Le mobile ouvre une connexion WebSocket authentifiée. Chat enregistre le messag
 
 Docker emballe chaque composant. Kubernetes exécute les conteneurs, remplace les instances défaillantes et organise leurs déploiements. HPA ajuste les réplicas selon les métriques configurées ; KEDA peut utiliser le retard Kafka pour les workers. Les bases et Kafka restent des systèmes avec état : leur durabilité vient aussi du stockage, de la réplication et des sauvegardes.
 
-## Ce qu'il faut retenir pour la soutenance
+## Points à retenir pour la revue d'architecture
 
-Le choix répond à la croissance et aux charges différentes des domaines. Son coût principal est la coordination de plusieurs services. Le MVP livre une chaîne vidéo complète avant d'ajouter chat, notes, modération puis dashboard. Les fonctions du sujet reportées restent obligatoires pour le rendu complet. Comparer les choix concrets dans [Outils et alternatives](OUTILS_ET_ALTERNATIVES.md).
+Le choix répond à la croissance et aux charges différentes des domaines. Son coût principal est la coordination de plusieurs services. Le MVP livre une chaîne vidéo complète avant d'ajouter chat, notes, modération puis dashboard. Les fonctionnalités suivantes sont organisées dans la roadmap produit. Comparer les choix concrets dans [Outils et alternatives](OUTILS_ET_ALTERNATIVES.md).
