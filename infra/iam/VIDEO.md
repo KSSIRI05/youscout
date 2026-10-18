@@ -29,7 +29,7 @@ aws configure set credential_process 'aws configure export-credentials --profile
 aws configure set region us-east-1 --profile youscout-video-sdk
 ```
 
-Ne pas afficher les résultats de `export-credentials`. Le futur service Java pourra sélectionner `youscout-video-sdk` ; le backend Video et son raccordement aux profils ne sont pas encore implémentés. Ne jamais copier ces profils ou des identifiants AWS dans Flutter.
+Ne pas afficher les résultats de `export-credentials`. Le [service Java Video](../../services/video/README.md) sélectionne `youscout-video-sdk` avec le profil Spring `local`. Il crée les métadonnées PostgreSQL et les URL PUT temporaires via `POST /v1/videos/uploads`, avec propriétaire issu du JWT. `POST /v1/videos/{id}/complete` utilise `HeadObject` pour confirmer taille et type déclarés, avec les droits `GetObject` existants. La lecture métier reste à implémenter. Le préparateur `scripts/prepare-video-aws.py` et l'override Compose local transmettent uniquement ce rôle temporaire à Docker, via un dossier privé exclu de Git et des images. Ne jamais copier ces profils ou des identifiants AWS dans Flutter.
 
 ## Gestion et déploiement futur
 
