@@ -1,0 +1,13 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "LocalVideoDevelopment",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::014663857971:user/youscout/youscout-developer"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
