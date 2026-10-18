@@ -1,0 +1,176 @@
+openapi: 3.0.3
+info:
+  title: YouScout User API
+  version: 0.3.0
+  description: Persistent personal profiles and user/admin role diagnostics using verified Keycloak access tokens.
+servers:
+  - url: http://localhost:8080
+paths:
+  /v1/users/me:
+    get:
+      operationId: getOwnProfile
+      summary: Read or provision the authenticated subject's profile
+      description: |
+        Creates the profile on first authenticated use. Repeated reads never overwrite
+        user edits or timestamps. Initial displayName uses name, then preferred_username,
+        then Joueur (trimmed and bounded to 80 Unicode code points).
+        No profile identifier is accepted from the client. Requires realm role user or admin.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          $ref: '#/components/responses/ProfileResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    patch:
+      operationId: patchOwnProfile
+      summary: Partially update or provision the authenticated subject's profile
+      description: |
+        Only displayName and biography may be provided. Omitted fields stay unchanged.
+        Null values, unknown fields and empty objects are rejected. An empty biography
+        clears it. displayName is stripped before validation. Subject and timestamps
+        are server-controlled. Concurrent changes to different fields are preserved;
+        the last database update wins for the same field. No events are emitted yet.
+        Requires realm role user or admin.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              additionalProperties: false
+              properties:
+                displayName:
+                  type: string
+                  minLength: 1
+                  description: Non-blank and at most 80 Unicode code points after stripping; no U+0000.
+                  example: Yassine Amrani
+                biography:
+                  type: string
+                  maxLength: 500
+                  description: Unicode code points; no U+0000. Empty string clears the biography.
+                  example: Ailier à Casablanca
+      responses:
+        '200':
+          $ref: '#/components/responses/ProfileResponse'
+        '400':
+          description: Invalid JSON object, unknown field or invalid field value; no profile write
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProfileProblem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '415':
+          description: Content-Type must be application/json
+  /v1/users/admin/session:
+    get:
+      operationId: getAdminSessionDiagnostic
+      summary: Verify access to an admin-only diagnostic
+      description: Requires realm role admin. Does not list users or change data.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Verified admin identity, same representation as the session diagnostic
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [subject, service]
+                properties:
+                  subject: {type: string}
+                  username: {type: string, nullable: true}
+                  service: {type: string, enum: [user-service]}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /v1/users/session:
+    get:
+      operationId: getVerifiedSession
+      summary: Read identity from a validated access token
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Verified JWT identity, no profile write
+          headers:
+            X-Request-Id:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [subject, service]
+                properties:
+                  subject: {type: string}
+                  username: {type: string, nullable: true}
+                  service: {type: string, enum: [user-service]}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '502':
+          description: Upstream connection failed
+        '504':
+          description: Upstream response timed out
+components:
+  schemas:
+    UserProfile:
+      type: object
+      required: [subject, displayName, biography, createdAt, updatedAt]
+      properties:
+        subject: {type: string, readOnly: true, maxLength: 255}
+        displayName: {type: string, minLength: 1, maxLength: 80}
+        biography: {type: string, maxLength: 500}
+        createdAt: {type: string, format: date-time, readOnly: true}
+        updatedAt: {type: string, format: date-time, readOnly: true}
+    ProfileProblem:
+      type: object
+      required: [title, status, detail]
+      properties:
+        type: {type: string, format: uri}
+        title: {type: string}
+        status: {type: integer, example: 400}
+        detail: {type: string}
+        instance: {type: string}
+  responses:
+    Unauthorized:
+      description: Bearer token absent, invalid or expired (or subject invalid for profile access)
+      headers:
+        WWW-Authenticate:
+          description: Bearer challenge for missing/invalid token
+          schema: {type: string}
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProfileProblem'
+    Forbidden:
+      description: Valid access token without the required application realm role
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProfileProblem'
+    ProfileResponse:
+      description: Persistent profile of the verified token subject
+      headers:
+        Cache-Control:
+          schema: {type: string, enum: [no-store]}
+        X-Request-Id:
+          description: Present when accessed through the Gateway
+          schema: {type: string}
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UserProfile'
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

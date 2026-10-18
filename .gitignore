@@ -18,7 +18,16 @@ target/
 .terraform/
 *.tfstate
 *.tfstate.*
+*.tfplan
+*.tfplan.json
 *.tfvars
+*.tfvars.json
 !*.tfvars.example
+.aws/
+first-login.txt
 .DS_Store
 Thumbs.db
+
+# Python provisioning and integration helpers
+__pycache__/
+*.py[cod]

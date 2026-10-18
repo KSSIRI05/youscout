@@ -1,6 +1,6 @@
 # Services et propriété des données
 
-Ces services constituent la cible ; aucun n'est encore codé. Une infrastructure partagée ne donne jamais un droit d'écriture croisée. La Gateway ne contient pas de logique de notation ou de modération.
+Ces services constituent la cible. La Gateway et les profils personnels persistants du service User sont implémentés dans le [socle backend](BACKEND.md), avec Keycloak local ; le [service Skill/Hashtag](SKILL_HASHTAG.md) possède également ses API et sa base dédiée. Les autres fonctions métier du tableau restent à livrer. Une infrastructure partagée ne donne jamais un droit d'écriture croisée. La Gateway ne contient pas de logique de notation ou de modération.
 
 | Service | Responsabilité et exemples d'API | Données propriétaires | Événements représentatifs |
 | --- | --- | --- | --- |
@@ -16,7 +16,7 @@ Ces services constituent la cible ; aucun n'est encore codé. Une infrastructure
 | Notification | Envoi push et gestion des appareils | PostgreSQL `notification`, jetons chiffrés/accès restreint | Consomme événements autorisés ; conserve statut de livraison |
 | Admin/Analytics | `/v1/admin/dashboard`, vues de gestion en lecture | PostgreSQL `analytics`, projections | Consomme les événements nécessaires au dashboard |
 
-Les noms d'API et d'événements sont des contrats de conception, à formaliser avant le code. Les rôles ne suffisent pas : contrôler aussi propriétaire de la ressource, conversation et blocages.
+Le tableau décrit la cible. Les contrats des profils et du catalogue sont dans `contracts/openapi` ; les autres API et événements restent à formaliser. Les rôles ne suffisent pas : contrôler aussi propriétaire de la ressource, conversation et blocages.
 
 ## Modèles et invariants
 

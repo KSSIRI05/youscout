@@ -1,0 +1,27 @@
+name: Flutter mobile frontend
+on:
+  push:
+    paths: ['apps/mobile/**', '.github/workflows/mobile.yml']
+  pull_request:
+    paths: ['apps/mobile/**', '.github/workflows/mobile.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Flutter SDK
+        working-directory: .
+        run: |
+          git clone --depth 1 --branch 3.47.7 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - run: flutter --version
+      - run: flutter pub get --enforce-lockfile
+      - run: dart format --output=none --set-exit-if-changed lib test
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build web --release

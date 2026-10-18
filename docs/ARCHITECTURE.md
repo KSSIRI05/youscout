@@ -20,7 +20,7 @@ Notes de 1 à 5, appréciations pour la cible envisagée, pas résultats de benc
 | Space-based | 5 | 4 | 5 | 2 | 2 | 1 | 77 |
 | Microservices et événements | 5 | 5 | 4 | 5 | 4 | 1 | 95 |
 
-Le score élevé de disponibilité suppose des réplicas et dépendances résilientes ; il n'est pas intrinsèque aux microservices. Les communications réseau peuvent réduire la performance ; l'avantage attendu vient du découplage et des projections. La sécurité reste un critère éliminatoire transversal, même hors de cette grille. L'écart de notes avec le monolithe est sensible au poids donné à l'exploitation et doit être défendu à la soutenance.
+Le score élevé de disponibilité suppose des réplicas et dépendances résilientes ; il n'est pas intrinsèque aux microservices. Les communications réseau peuvent réduire la performance ; l'avantage attendu vient du découplage et des projections. La sécurité reste un critère éliminatoire transversal, même hors de cette grille. L'écart de notes avec le monolithe est sensible au poids donné à l'exploitation et doit être justifié lors de la revue d'architecture.
 
 Un monolithe peut être répliqué et utiliser des workers externes : il n'est pas incapable de monter en charge. Le service-based reste un compromis valable et n'impose pas forcément une base partagée. Le serverless peut porter des API et des tâches adaptées, avec attention aux contraintes d'exécution. Le style purement événementiel rend les lectures interactives et le diagnostic moins directs. Le space-based ne règle pas le stockage et la diffusion vidéo. Le choix retenu privilégie ici les frontières métier, les projections rejouables et les déploiements indépendants, au prix d'une exploitation plus complexe.
 
@@ -110,7 +110,7 @@ Une notification objet peut compléter l'étape 3 via S3 -> SQS/EventBridge -> a
 
 | Risque | Réponse |
 | --- | --- |
-| Onze domaines pour quatre personnes | Livrer les six services du socle puis étendre, gabarit commun Spring Boot |
+| Onze domaines pour une petite équipe | Livrer les six services du socle puis étendre, gabarit commun Spring Boot |
 | Multiplication des bases | Mutualisation physique possible avec séparation logique et droits stricts |
 | Kafka indisponible ou doublons | Outbox persistante, retries bornés, déduplication et file d'échec |
 | Projection en retard | Versions, métrique de lag, contrôle de visibilité avant accès sensible |

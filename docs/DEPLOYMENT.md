@@ -1,6 +1,6 @@
 # Déploiement cible
 
-Plan uniquement : aucune ressource cloud, image ou configuration exécutable n'a été créée. Docker pour le packaging, Compose pour le développement et Kubernetes pour la cible retenue. Un cluster local sert à apprendre et tester, pas à prouver la disponibilité de production.
+Le [socle backend local](BACKEND.md) fournit désormais Compose et les Dockerfiles Gateway/User. La suite de ce document décrit la cible ; aucune ressource cloud n’est créée. Le frontend Flutter est exécutable localement et dispose d’un workflow de vérification GitHub Actions (voir [FRONTEND.md](FRONTEND.md)). Docker pour le packaging, Compose pour le développement et Kubernetes pour la cible retenue. Un cluster local sert à apprendre et tester, pas à prouver la disponibilité de production.
 
 ## Environnements
 
@@ -29,7 +29,7 @@ S3 privé, URL d'upload courte et clé limitée, multipart si besoin validé. Vi
 
 ## Livraison et exploitation
 
-CI GitHub Actions : lint et tests, tests de contrats/intégration, build d'images, scan, publication GHCR, déploiement staging puis smoke tests. Le pipeline applicatif reste à écrire. Configurer OpenTelemetry, Prometheus, Grafana, Loki et Tempo ; distinguer le dashboard d'exploitation de celui des administrateurs produit.
+CI GitHub Actions : lint et tests, tests de contrats/intégration, build d'images, scan, publication GHCR, déploiement staging puis smoke tests. Le workflow mobile vérifie format, analyse, tests et compilation web ; le workflow backend vérifie les tests Java et le démarrage Compose/Keycloak ; les pipelines de publication d’images et de déploiement restent à écrire. Configurer OpenTelemetry, Prometheus, Grafana, Loki et Tempo ; distinguer le dashboard d'exploitation de celui des administrateurs produit.
 
 Alertes sur erreurs et latence API, lag Kafka, outbox bloquée, transcodage échoué, refus d'accès et espace disque. Protéger logs et endpoints de métriques. Définir RPO/RTO, rétention et tests de restauration pour chaque stockage ; ne pas annoncer de valeurs garanties non vérifiées.
 

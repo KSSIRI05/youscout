@@ -1,0 +1,51 @@
+# Vérifie le backend avec des bases temporaires, puis la pile Compose et Keycloak réels.
+name: Backend foundation
+on:
+  push:
+    paths: ['pom.xml', 'mvnw*', '.mvn/**', 'services/**', 'infra/**', 'scripts/**', '.github/workflows/backend.yml']
+  pull_request:
+    paths: ['pom.xml', 'mvnw*', '.mvn/**', 'services/**', 'infra/**', 'scripts/**', '.github/workflows/backend.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - run: python3 -m unittest discover -s scripts/tests
+      # Les tests Java valident les JWT et les requêtes SQL contre PostgreSQL Testcontainers.
+      - run: ./mvnw -B -ntp verify
+      # Le runner possède son propre fichier de secrets éphémère, jamais publié comme artefact.
+      - run: python3 infra/compose/init-env.py
+      - run: docker compose -f infra/compose/compose.yml --profile video config --quiet
+      - run: docker compose -f infra/compose/compose.yml --profile video up -d --build --wait --wait-timeout 300
+      - run: python3 scripts/apply-keycloak.py
+      - run: python3 scripts/smoke-backend.py
+      - run: python3 scripts/smoke-video.py
+      - run: python3 scripts/smoke-identity.py
+      # Contrôle les données après redémarrage, puis renouvelle les connexions de la Gateway.
+      - name: Verify profiles and hashtag follows survive restart
+        run: |
+          docker compose -f infra/compose/compose.yml restart user skill
+          docker compose -f infra/compose/compose.yml up -d --wait --wait-timeout 120
+          docker compose -f infra/compose/compose.yml restart gateway
+          docker compose -f infra/compose/compose.yml up -d --wait --wait-timeout 120
+          python3 scripts/smoke-backend.py --verify-persisted-profile
+      - name: Backend diagnostics on failure
+        if: failure() && hashFiles('infra/compose/.env') != ''
+        run: |
+          docker compose -f infra/compose/compose.yml ps
+          docker compose -f infra/compose/compose.yml logs --no-color --tail 100 gateway user skill video
+      # Arrête la pile même après un échec ; les diagnostics précédents aident à en retrouver la cause.
+      - name: Stop containers without deleting persisted volumes
+        if: always()
+        run: |
+          if [ -f infra/compose/.env ]; then
+            docker compose -f infra/compose/compose.yml --profile video down
+          fi

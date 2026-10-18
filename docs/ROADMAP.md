@@ -1,6 +1,6 @@
 # Roadmap de réalisation
 
-Toutes les cases sont ouvertes : ce dépôt ne contient pas encore d'application. La cible de onze services est retenue ; l'ordre de livraison réduit le travail simultané sans fusionner les domaines.
+Un frontend Flutter de démonstration locale existe désormais (voir [FRONTEND.md](FRONTEND.md)). Un [socle backend local](BACKEND.md) existe aussi : Gateway, profils personnels persistants, inscription/connexion Keycloak, rôles user/admin, catalogue Skill/Hashtag, abonnements hashtags, bases séparées, migrations et CI. Les cases ci-dessous portent sur la livraison intégrée complète et restent ouvertes. La cible de onze services est retenue ; l'ordre de livraison réduit le travail simultané sans fusionner les domaines.
 
 ## Phase 0 : valider le socle
 
@@ -21,7 +21,7 @@ Auth (Keycloak), User, Video, Feed, Interaction, Skill/Hashtag ; Gateway, Kafka,
 - [ ] Démontrer connexion -> upload -> transcodage -> publication -> interaction -> suppression.
 - [ ] Arrêter un worker et rejouer un événement ; vérifier absence de doublon et état utilisateur cohérent.
 
-Ce MVP sert à démontrer le socle ; il ne couvre pas encore la totalité du sujet. Les signalements et la modération globale sont à livrer avant le lancement public envisagé.
+Ce MVP sert à valider le socle ; il ne couvre pas encore tout le périmètre produit. Les signalements et la modération globale sont à livrer avant le lancement public envisagé.
 
 ## Phase 2 : complétude fonctionnelle et modération
 
@@ -34,13 +34,13 @@ Ce MVP sert à démontrer le socle ; il ne couvre pas encore la totalité du suj
 ## Phase 3 : administration complète puis évolutions
 
 - [ ] Admin/Analytics : A01/A02/A06 avec pagination, auteurs et métriques définies.
-- [ ] Vérifier tous les U01-U22 et A01-A06 pour le rendu complet.
+- [ ] Vérifier tous les U01-U22 et A01-A06 lors de la validation fonctionnelle.
 - [ ] OpenSearch, feed hybride et métriques d'exposition si besoin confirmé.
 - [ ] Multi-région seulement après décision sur réplication, résidence des données, écritures et conflits.
 
 Le dashboard obligatoire n'est pas conditionné par les extensions OpenSearch ou multi-région : il doit être livré même si elles sont reportées.
 
-## Déploiement et soutenance
+## Déploiement et validation produit
 
 - [ ] Compose de développement reproductible puis staging Kubernetes.
 - [ ] Images versionnées, migrations, secrets externes, readiness et rollback vérifiés.
@@ -48,13 +48,13 @@ Le dashboard obligatoire n'est pas conditionné par les extensions OpenSearch ou
 - [ ] Mesurer les scénarios de qualité avec une charge déclarée.
 - [ ] README avec commandes réellement vérifiées sur un checkout propre.
 - [ ] Présentation : choix, alternatives, diagramme, ADRs, démonstration et limites constatées.
-- [ ] Partager le dépôt et les accès de démonstration appropriés avec les évaluateurs.
+- [ ] Fournir aux parties prenantes les accès de staging appropriés et recueillir leurs retours.
 
-## Équipe de quatre : responsabilités proposées
+## Organisation de l'équipe : responsabilités proposées
 
-| Binôme | Responsabilité initiale | Relecture croisée |
+| Pôle | Responsabilité initiale | Relecture croisée |
 | --- | --- | --- |
-| 1 et 2 | Identité, User, Skill, Gateway et contrats | Vidéo et données |
-| 3 et 4 | Video, worker, Feed, Interaction et intégration mobile | Sécurité et contrats |
+| Backend et identité | Identité, User, Skill, Gateway et contrats | Vidéo et données |
+| Médias et expérience | Video, worker, Feed, Interaction et intégration mobile | Sécurité et contrats |
 
 Répartir explicitement mobile/admin, tests et exploitation dans chaque itération ; faire tourner les revues. Aucun calendrier chiffré n'est promis sans connaître la disponibilité de l'équipe.

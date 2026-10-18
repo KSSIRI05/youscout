@@ -1,0 +1,18 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadAndUploadProjectVideos",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject"],
+      "Resource": "arn:aws:s3:::youscout-014663857971-dev-videos/*",
+      "Condition": {
+        "StringEquals": {
+          "s3:ResourceAccount": "014663857971",
+          "aws:RequestedRegion": "us-east-1"
+        },
+        "Bool": {"aws:SecureTransport": "true"}
+      }
+    }
+  ]
+}

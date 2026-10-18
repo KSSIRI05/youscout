@@ -1,5 +1,7 @@
 # Sécurité, retrait et cycle de vie
 
+Un premier contrôle des rôles est implémenté dans la Gateway et User. Voir [l’état de l’identité et des autorisations](IDENTITE_ET_AUTORISATIONS.md). Les mécanismes de modération, suspension et fermeture décrits ci-dessous restent des cibles.
+
 ## Identité et autorisation
 
 Keycloak fournit OIDC et la fédération Google/Facebook. Flutter utilise le navigateur système et Authorization Code avec PKCE, sans secret client embarqué. Les services valident signature, issuer, audience et expiration du jeton ; les rôles `user` et `admin` sont distincts. Un rôle scout éventuel nécessite une règle produit validée. Un rôle ne remplace pas le contrôle de propriété.

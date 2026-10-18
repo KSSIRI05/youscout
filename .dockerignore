@@ -1,0 +1,10 @@
+.git
+**/.aws
+**/.terraform
+**/*.tfstate*
+**/*.tfplan*
+**/target
+apps
+**/.env
+**/.env.*
+!**/.env.example

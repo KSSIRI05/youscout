@@ -4,7 +4,7 @@ Statut : Retenu pour la conception, décision du porteur le 17 octobre 2026. Val
 
 ## Contexte
 
-Le sujet impose une croissance potentielle importante, une audience internationale et des usages vidéo/temps réel. Les objectifs chiffrés ne sont pas fournis.
+Le produit vise une croissance potentielle importante, une audience internationale et des usages vidéo/temps réel. Les objectifs chiffrés restent à définir.
 
 ## Alternatives
 

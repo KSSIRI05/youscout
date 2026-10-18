@@ -1,0 +1,160 @@
+# Pile locale : identité, bases, services métier et socle Video optionnel.
+name: youscout-dev
+services:
+  # Stockage privé de Keycloak ; les comptes applicatifs n’utilisent pas cette base.
+  keycloak-db:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Run init-env.py first}
+    volumes: [keycloak-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U keycloak -d keycloak']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  # Le domaine User possède ses propres identifiants et son volume persistant.
+  user-db:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: youscout_user
+      POSTGRES_USER: youscout_user
+      POSTGRES_PASSWORD: ${USER_DB_PASSWORD:?Run init-env.py first}
+    volumes: [user-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U youscout_user -d youscout_user']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  # Le catalogue et les abonnements sont isolés dans une troisième base.
+  skill-db:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: youscout_skill
+      POSTGRES_USER: youscout_skill
+      POSTGRES_PASSWORD: ${SKILL_DB_PASSWORD:?Run init-env.py --upgrade first}
+    volumes: [skill-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U youscout_skill -d youscout_skill']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  # start-dev et HTTP conviennent à cette pile locale ; l’import initialise un nouveau realm.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.3
+    command: [start-dev, --import-realm]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Run init-env.py first}
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Run init-env.py first}
+      KC_HOSTNAME: http://localhost:8180
+      KC_HEALTH_ENABLED: 'true'
+      SMOKE_CLIENT_SECRET: ${SMOKE_CLIENT_SECRET:?Run init-env.py first}
+    ports: ['127.0.0.1:8180:8080']
+    volumes: ['../keycloak/youscout-realm.json:/opt/keycloak/data/import/youscout-realm.json:ro']
+    depends_on:
+      keycloak-db: {condition: service_healthy}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          bash -c 'exec 3<>/dev/tcp/localhost/9000; printf "GET /health/ready HTTP/1.0\r\n\r\n" >&3; head -1 <&3 | grep -q 200'
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 30
+  # Aucun port hôte : la Gateway accède à User par le réseau interne Compose.
+  user:
+    build:
+      context: ../..
+      dockerfile: infra/docker/service.Dockerfile
+      args: {MODULE: user}
+    environment:
+      SERVER_PORT: '8080'
+      USER_DB_URL: jdbc:postgresql://user-db:5432/youscout_user
+      USER_DB_USERNAME: youscout_user
+      USER_DB_PASSWORD: ${USER_DB_PASSWORD:?Run init-env.py first}
+      OIDC_ISSUER: http://localhost:8180/realms/youscout
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
+    depends_on:
+      user-db: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
+  # Construit le même Dockerfile que User, en sélectionnant le module Maven skill.
+  skill:
+    build:
+      context: ../..
+      dockerfile: infra/docker/service.Dockerfile
+      args: {MODULE: skill}
+    environment:
+      SERVER_PORT: '8080'
+      SKILL_DB_URL: jdbc:postgresql://skill-db:5432/youscout_skill
+      SKILL_DB_USERNAME: youscout_skill
+      SKILL_DB_PASSWORD: ${SKILL_DB_PASSWORD:?Run init-env.py --upgrade first}
+      OIDC_ISSUER: http://localhost:8180/realms/youscout
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
+    depends_on:
+      skill-db: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
+  # Base propriétaire du domaine Video, distincte des profils et du catalogue.
+  video-db:
+    profiles: [video]
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: youscout_video
+      POSTGRES_USER: youscout_video
+      POSTGRES_PASSWORD: ${VIDEO_DB_PASSWORD:?Run init-env.py --upgrade first}
+    volumes: [video-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U youscout_video -d youscout_video']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  # Video identifie le joueur, persiste les métadonnées et signe les demandes PUT.
+  video:
+    profiles: [video]
+    build:
+      context: ../..
+      dockerfile: infra/docker/service.Dockerfile
+      args: {MODULE: video}
+    environment:
+      SERVER_PORT: '8080'
+      VIDEO_S3_BUCKET: ${VIDEO_S3_BUCKET:-youscout-014663857971-dev-videos}
+      VIDEO_S3_REGION: ${VIDEO_S3_REGION:-us-east-1}
+      VIDEO_DB_URL: jdbc:postgresql://video-db:5432/youscout_video
+      VIDEO_DB_USERNAME: youscout_video
+      VIDEO_DB_PASSWORD: ${VIDEO_DB_PASSWORD:?Run init-env.py --upgrade first}
+      VIDEO_MAX_UPLOAD_BYTES: ${VIDEO_MAX_UPLOAD_BYTES:-104857600}
+      VIDEO_UPLOAD_URL_SECONDS: ${VIDEO_UPLOAD_URL_SECONDS:-300}
+      OIDC_ISSUER: http://localhost:8180/realms/youscout
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
+    depends_on:
+      video-db: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
+    # Aucun secret/profil Windows monté dans le conteneur ; identité cloud à raccorder ensuite.
+  # Point d’entrée des API sur localhost ; attend que les services dépendants soient sains.
+  gateway:
+    build:
+      context: ../..
+      dockerfile: infra/docker/service.Dockerfile
+      args: {MODULE: gateway}
+    environment:
+      USER_SERVICE_URL: http://user:8080
+      SKILL_SERVICE_URL: http://skill:8080
+      VIDEO_SERVICE_URL: http://video:8080
+      OIDC_ISSUER: http://localhost:8180/realms/youscout
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
+    ports: ['127.0.0.1:8080:8080']
+    depends_on:
+      user: {condition: service_healthy}
+      skill: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
+# Les volumes survivent aux redémarrages et à docker compose down sans option -v.
+volumes:
+  keycloak-data:
+  user-data:
+  skill-data:
+  video-data:

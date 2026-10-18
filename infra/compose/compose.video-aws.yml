@@ -1,0 +1,15 @@
+# Développement local uniquement : le rôle Video temporaire, sans profil admin ni AWS CLI dans l'image.
+services:
+  video:
+    environment:
+      VIDEO_AWS_PROFILE: video-container
+      AWS_CONFIG_FILE: /run/youscout-aws/config
+      AWS_SHARED_CREDENTIALS_FILE: /dev/null
+      AWS_EC2_METADATA_DISABLED: 'true'
+    volumes:
+      - type: bind
+        source: ./.aws
+        target: /run/youscout-aws
+        read_only: true
+        bind:
+          create_host_path: false

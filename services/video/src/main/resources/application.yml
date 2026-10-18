@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: video-service
+  datasource:
+    url: ${VIDEO_DB_URL:jdbc:postgresql://localhost:5434/youscout_video}
+    username: ${VIDEO_DB_USERNAME:youscout_video}
+    password: ${VIDEO_DB_PASSWORD}
+  flyway:
+    enabled: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER:http://localhost:8180/realms/youscout}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:http://localhost:8180/realms/youscout/protocol/openid-connect/certs}
+          audiences: youscout-api
+server:
+  port: ${SERVER_PORT:8083}
+youscout:
+  storage:
+    s3:
+      # Identifiants publics de l'infrastructure existante ; aucun secret AWS ici.
+      bucket: ${VIDEO_S3_BUCKET:youscout-014663857971-dev-videos}
+      region: ${VIDEO_S3_REGION:us-east-1}
+      # Vide en cloud pour utiliser l'identité du workload ; profil explicite en local.
+      profile: ${VIDEO_AWS_PROFILE:}
+  uploads:
+    max-size-bytes: ${VIDEO_MAX_UPLOAD_BYTES:104857600}
+    url-lifetime-seconds: ${VIDEO_UPLOAD_URL_SECONDS:300}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      group:
+        readiness:
+          include: readinessState,db
+      probes:
+        enabled: true

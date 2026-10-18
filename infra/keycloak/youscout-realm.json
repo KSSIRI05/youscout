@@ -1,0 +1,164 @@
+{
+  "realm": "youscout",
+  "enabled": true,
+  "displayName": "YouScout local",
+  "registrationAllowed": true,
+  "resetPasswordAllowed": false,
+  "sslRequired": "external",
+  "accessTokenLifespan": 300,
+  "roles": {
+    "realm": [
+      {
+        "name": "user"
+      },
+      {
+        "name": "admin"
+      },
+      {
+        "name": "default-roles-youscout",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "user"
+          ]
+        }
+      }
+    ]
+  },
+  "clients": [
+    {
+      "protocol": "openid-connect",
+      "enabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "youscout-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "youscout-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "application-realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ],
+      "clientId": "youscout-mobile",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:7357/auth/callback",
+        "http://127.0.0.1:7357/auth/callback",
+        "ma.youscout://oauth/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:7357",
+        "http://127.0.0.1:7357"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+          "post.logout.redirect.uris": "http://localhost:7357/##http://127.0.0.1:7357/##ma.youscout://oauth/callback"
+      },
+      "defaultClientScopes": [
+        "basic",
+        "profile",
+        "email"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "protocol": "openid-connect",
+      "enabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "youscout-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "youscout-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "application-realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ],
+      "clientId": "youscout-smoke",
+      "publicClient": false,
+      "secret": "${SMOKE_CLIENT_SECRET}",
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "defaultClientScopes": [
+        "basic",
+        "profile",
+        "email"
+      ],
+      "optionalClientScopes": []
+    }
+  ],
+  "verifyEmail": false,
+  "duplicateEmailsAllowed": false,
+  "loginWithEmailAllowed": true,
+  "editUsernameAllowed": false,
+  "rememberMe": false,
+  "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1)",
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 30,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "defaultRole": {
+    "name": "default-roles-youscout"
+  },
+  "scopeMappings": [
+    {
+      "client": "youscout-mobile",
+      "roles": [
+        "user",
+        "admin"
+      ]
+    },
+    {
+      "client": "youscout-smoke",
+      "roles": [
+        "user"
+      ]
+    }
+  ]
+}

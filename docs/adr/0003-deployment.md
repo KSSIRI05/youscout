@@ -6,7 +6,7 @@ Statut : remplacé le 17 octobre 2026 ; ne constitue plus la cible actuelle.
 
 ## Context
 
-The assignment requires deployment, but does not mandate a provider or Kubernetes. Four team members must operate a demonstrable distributed foundation.
+The product needs reproducible deployment without coupling the initial implementation to one provider. A small team must be able to operate the distributed foundation.
 
 ## Options
 

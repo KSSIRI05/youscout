@@ -2,7 +2,7 @@
 
 ## Exigences explicites et contraintes
 
-| Élément du sujet | Conséquence |
+| Objectif produit | Conséquence |
 | --- | --- |
 | Milliers puis potentiellement millions d'utilisateurs | Scalabilité |
 | Expansion géographique progressive | Portée internationale |
@@ -17,7 +17,7 @@
 
 ## Caractéristiques déduites
 
-Élasticité pour absorber des pics, faible latence pour le feed, disponibilité, isolation des pannes, sécurité, confidentialité, fiabilité, maintenabilité, testabilité, observabilité technique et internationalisation. Le sujet ne fixe ni pic chiffré, ni nombre de langues, ni SLA, ni obligation de multi-région.
+Élasticité pour absorber des pics, faible latence pour le feed, disponibilité, isolation des pannes, sécurité, confidentialité, fiabilité, maintenabilité, testabilité, observabilité technique et internationalisation. Les pics chiffrés, langues de lancement et SLA restent à définir ; le multi-région sera évalué selon les besoins mesurés.
 
 ## Top 5 retenu
 

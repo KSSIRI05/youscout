@@ -1,0 +1,26 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AssumeOnlyYouScoutTerraform",
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": "arn:aws:iam::014663857971:role/youscout/YouScoutTerraform"
+    },
+    {
+      "Sid": "ChangeOwnPassword",
+      "Effect": "Allow",
+      "Action": [
+        "iam:ChangePassword",
+        "iam:GetUser"
+      ],
+      "Resource": "arn:aws:iam::014663857971:user/youscout/youscout-developer"
+    },
+    {
+      "Sid": "ReadPasswordRequirements",
+      "Effect": "Allow",
+      "Action": "iam:GetAccountPasswordPolicy",
+      "Resource": "*"
+    }
+  ]
+}
