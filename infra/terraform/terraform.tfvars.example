@@ -1,0 +1,13 @@
+# Copier vers terraform.tfvars uniquement pour modifier les valeurs par défaut.
+# Aucun mot de passe, jeton ou clé AWS ne doit être placé dans ce fichier.
+aws_account_id = "014663857971"
+aws_profile    = "youscout-terraform"
+aws_region     = "us-east-1"
+environment    = "dev"
+
+allowed_origins = [
+  "http://localhost:7357",
+  "http://127.0.0.1:7357",
+]
+
+abort_incomplete_upload_days = 1
