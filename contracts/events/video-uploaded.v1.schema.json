@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:youscout:event:video-uploaded:v1",
+  "title": "VideoUploaded v1",
+  "description": "Topic video.uploaded.v1, clé Kafka videoId. Livraison au moins une fois : dédupliquer durablement par eventId avant tout effet métier. Aucun jeton ni URL signée.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "eventType", "eventVersion", "occurredAt", "producer", "data"],
+  "properties": {
+    "eventId": {"type": "string", "format": "uuid"},
+    "eventType": {"const": "VideoUploaded"},
+    "eventVersion": {"const": 1},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "producer": {"const": "video-service"},
+    "data": {
+      "type": "object", "additionalProperties": false,
+      "required": ["videoId", "s3Bucket", "s3Key", "sourceETag", "contentType", "sizeBytes"],
+      "properties": {
+        "videoId": {"type": "string", "format": "uuid"},
+        "s3Bucket": {"type": "string", "minLength": 3},
+        "s3Key": {"type": "string", "pattern": "^videos/[0-9a-f-]{36}/source$"},
+        "sourceETag": {"type": "string", "minLength": 1, "description": "ETag opaque à passer tel quel à S3 GetObject If-Match."},
+        "contentType": {"enum": ["video/mp4", "video/webm", "video/quicktime"]},
+        "sizeBytes": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

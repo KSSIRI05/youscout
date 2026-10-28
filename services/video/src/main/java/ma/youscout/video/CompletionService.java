@@ -19,8 +19,11 @@ class CompletionService {
                         Instant createdAt, Instant updatedAt, Instant completedAt) {}
     private final VideoRepository videos;
     private final S3Client s3;
+    private final OutboxRepository outbox;
 
-    CompletionService(VideoRepository videos, S3Client s3) { this.videos = videos; this.s3 = s3; }
+    CompletionService(VideoRepository videos, S3Client s3, OutboxRepository outbox) {
+        this.videos = videos; this.s3 = s3; this.outbox = outbox;
+    }
 
     @Transactional
     public Confirmation complete(UUID id, String owner) {
@@ -39,7 +42,10 @@ class CompletionService {
         if (object.eTag() == null || object.eTag().isBlank()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Métadonnées S3 temporairement indisponibles.");
         }
-        return response(videos.confirm(video.id(), owner, object.eTag()));
+        var confirmed = videos.confirm(video.id(), owner, object.eTag());
+        // Même transaction JDBC : une panne d'outbox annule aussi le passage à UPLOADED.
+        outbox.enqueue(confirmed.id());
+        return response(confirmed);
     }
 
     private HeadObjectResponse inspect(VideoUpload video) {
