@@ -38,10 +38,13 @@ def main():
     parser.add_argument("--put-object", action="store_true", help="Write a tiny test object to real S3, then delete it using the provisioning role.")
     parser.add_argument("--verify-restart", action="store_true", help="Restart Video and require the same persisted upload ID on retry.")
     parser.add_argument("--complete", action="store_true", help="Confirm the real S3 upload and verify idempotent completion (requires --put-object).")
+    parser.add_argument("--verify-outbox", action="store_true", help="Wait for the running relay to publish the confirmation event (requires --complete).")
     parser.add_argument("--aws", default=shutil.which("aws") or str(Path.home() / "AppData/Local/Programs/Amazon/AWSCLIV2/aws.exe"))
     options = parser.parse_args()
     if options.complete and not options.put_object:
         parser.error("--complete requires --put-object")
+    if options.verify_outbox and not options.complete:
+        parser.error("--verify-outbox requires --complete")
     form = urllib.parse.urlencode({"grant_type": "client_credentials", "client_id": "youscout-smoke",
                                   "client_secret": local_values()["SMOKE_CLIENT_SECRET"]}).encode()
     status, tokens = request("http://localhost:8180/realms/youscout/protocol/openid-connect/token", form,
@@ -94,6 +97,18 @@ def main():
         count = compose("exec", "-T", "video-db", "psql", "-U", "youscout_video", "-d", "youscout_video", "-Atc",
                         f"SELECT count(*) FROM videos WHERE id = '{upload_id}' AND idempotency_key = '{key}'")
         assert count == "1", "Expected exactly one persistent video"
+        if options.verify_outbox:
+            deadline = time.monotonic() + 45
+            while time.monotonic() < deadline:
+                published = compose("exec", "-T", "video-db", "psql", "-U", "youscout_video", "-d", "youscout_video", "-Atc",
+                    f"SELECT count(*) FROM outbox_events WHERE aggregate_id = '{upload_id}' AND event_type = 'VideoUploaded' "
+                    f"AND payload->'data'->>'videoId' = '{upload_id}' AND published_at IS NOT NULL")
+                if published == "1":
+                    break
+                time.sleep(1)
+            else:
+                raise RuntimeError("Outbox event was not published; check the enabled relay and Kafka.")
+            print("Real S3 confirmation produced exactly one acknowledged VideoUploaded outbox event.")
         print("Upload ticket, signature and idempotent persistence verified" + (" after restart." if options.verify_restart else "."))
         if options.put_object:
             print("Real signed S3 PUT succeeded; this does not validate video content.")
@@ -105,6 +120,8 @@ def main():
                                      "--profile", "youscout-terraform", "--region", "us-east-1", "--no-cli-pager"], capture_output=True)
             if result.returncode:
                 raise RuntimeError("Temporary S3 object cleanup failed; inspect the latest smoke fixture.")
+        compose("exec", "-T", "video-db", "psql", "-U", "youscout_video", "-d", "youscout_video", "-c",
+                f"DELETE FROM outbox_events WHERE aggregate_id IN (SELECT id FROM videos WHERE idempotency_key = '{key}' AND title = 'Temporary upload smoke')")
         compose("exec", "-T", "video-db", "psql", "-U", "youscout_video", "-d", "youscout_video", "-c",
                 f"DELETE FROM videos WHERE idempotency_key = '{key}' AND title = 'Temporary upload smoke'")
         print("Temporary smoke fixtures removed; no tokens or signed URLs logged.")

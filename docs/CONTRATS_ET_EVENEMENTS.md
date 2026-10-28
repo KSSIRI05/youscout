@@ -1,6 +1,8 @@
 # Contrats API et événements
 
-Document de conception. Le diagnostic JWT et les endpoints de profil personnel sont décrits dans [user-foundation.yaml](../contracts/openapi/user-foundation.yaml). Le catalogue et les abonnements sont décrits dans [skill-hashtag.json](../contracts/openapi/skill-hashtag.json). Les autres API métier et les contrats Kafka restent à réaliser.
+Document de conception et état des premiers contrats. Le diagnostic JWT et les profils sont décrits dans [user-foundation.yaml](../contracts/openapi/user-foundation.yaml), le catalogue dans [skill-hashtag.json](../contracts/openapi/skill-hashtag.json), les uploads dans [video-foundation.yaml](../contracts/openapi/video-foundation.yaml). Le premier contrat Kafka implémenté est [VideoUploaded v1](../contracts/events/video-uploaded.v1.schema.json), publié sur `video.uploaded.v1` par le [relais outbox Video](VIDEO_OUTBOX.md).
+
+Ce premier événement utilise `eventVersion` et `data`, selon son schéma publié. L'enveloppe `schemaVersion`/`payload` ci-dessous reste une proposition pour les futurs événements de cycle de vie : elle ne doit pas être utilisée pour interpréter `VideoUploaded` v1. Une harmonisation ultérieure exigera un contrat versionné et une migration des consommateurs.
 
 ## API
 
