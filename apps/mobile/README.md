@@ -1,6 +1,6 @@
 # YouScout — Frontend Flutter
 
-Interface en français avec deux modes indépendants : compte connecté au backend et démonstration locale. Le mode connecté utilise les vraies API de profil, de compétences et de hashtags ; les vidéos, les interactions sociales et les messages restent dans la démo.
+Interface en français avec deux modes indépendants : compte connecté au backend et démonstration locale. Le mode connecté utilise les API de profil, de compétences, de hashtags et d'upload vidéo ; le fil social, les interactions et les messages restent dans la démo.
 
 ## Exécuter sur le web
 
@@ -42,6 +42,26 @@ Le serveur local fournit `index.html` sur `/auth/callback`, sans journaliser le 
 - Déconnexion locale immédiate et déconnexion Keycloak ; si le serveur est inaccessible, l’application indique que la fermeture distante n’est pas confirmée.
 
 Les jetons restent **en mémoire**, sans localStorage, sessionStorage ni fichier. Le sessionStorage web contient seulement le verifier/state PKCE pendant la redirection, retirés avant l’échange du code. Le callback est immédiatement nettoyé de l’historique. Un rechargement de page demande de se reconnecter ; la session navigateur Keycloak peut éviter de ressaisir les identifiants. Fermer un onglet ne révoque pas à lui seul la session Keycloak : utiliser « Se déconnecter ».
+
+## Envoyer une vidéo depuis le compte connecté
+
+Activer Video et son accès AWS temporaire depuis la racine du dépôt, après connexion AWS du développeur :
+
+```sh
+python infra/compose/init-env.py --upgrade
+python scripts/prepare-video-aws.py
+docker compose -f infra/compose/compose.yml -f infra/compose/compose.video-aws.yml --profile video up -d --build --wait --wait-timeout 300 video gateway
+```
+
+Conserver les **deux fichiers Compose** pour les démarrages suivants afin de conserver le montage AWS. Voir [le guide Video](../../services/video/README.md) pour les profils et le renouvellement des identifiants ; aucune clé AWS n'est placée dans Flutter.
+
+Se connecter à YouScout, ouvrir **Vidéo**, choisir un fichier MP4, WebM ou MOV non vide de 100 Mio maximum, saisir un titre de 1 à 150 unités UTF-16 puis envoyer. Le client crée une demande avec `POST /v1/videos/uploads` et une clé d'idempotence aléatoire, envoie les octets bruts avec un PUT HTTPS vers S3 sans Bearer Keycloak, puis confirme avec `POST /v1/videos/{id}/complete`. Le navigateur calcule Content-Length ; le client natif le fixe à la taille du fichier. Les URL signées restent uniquement en mémoire et ne sont jamais affichées dans les erreurs.
+
+La progression distingue préparation, envoi et confirmation. Après une erreur, le bouton réessaie avec la même clé et le même titre ; une nouvelle préparation renouvelle le lien PUT. Si le PUT a réussi, seule la confirmation est répétée. Une sélection d'un autre fichier commence une nouvelle demande. Changer d'onglet conserve la tentative ; recharger l'application ou se déconnecter la perd. Un PUT interrompu n'est pas repris par morceaux : le fichier est renvoyé en entier. Le web charge au plus la taille autorisée en mémoire ; le natif utilise un flux.
+
+Le message « Vidéo reçue et enregistrée » apparaît après confirmation `UPLOADED`. Il n'annonce pas une vidéo publiée : FFmpeg, Kafka, la lecture distante, les compétences/hashtags associés et l'intégration au fil restent à développer.
+
+Validation automatisée : 41 tests Flutter réussis, analyse statique sans problème et build web release réussi. Les nouveaux tests couvrent le contrôleur, l'interface, le renouvellement Keycloak simulé et le transfert natif vers un serveur HTTP de test ; ils ne nécessitent aucun identifiant AWS. Le 28 octobre 2026, le parcours complet Flutter web → Gateway → S3 réel a également été validé dans Edge avec un clip MP4 synthétique de deux secondes : message de réception dans l'interface, état `UPLOADED`, taille et confirmation persistés en PostgreSQL. Le test backend réel a confirmé le rejeu idempotent après redémarrage. Voir [le compte rendu](../../docs/validation/video-upload-2026-10-28.md). Les parcours Android/iOS restent à valider sur appareils.
 
 ## Android et iOS
 
