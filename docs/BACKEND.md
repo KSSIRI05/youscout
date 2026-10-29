@@ -119,6 +119,8 @@ La procédure redémarre ensuite la Gateway pour renouveler ses connexions et sa
 
 ## Prochaine itération
 
-Le frontend est connecté à Keycloak, aux profils, au catalogue et aux uploads Video. La chaîne outbox/Kafka de Video est disponible ; créer ensuite le worker FFmpeg et sa déduplication persistante. Les événements User nécessiteront leur propre outbox. Feed et les autres services restent à créer. Aucun service ne doit lire la base d'un autre.
+Le socle [media-worker](../services/media-worker/README.md) est disponible : consommation Kafka, base PostgreSQL indépendante, tâches `QUEUED`, déduplication et quarantaine durable. Le prochain chantier est l'exécution de ces tâches avec FFmpeg et les événements de résultat.
+
+Le frontend est connecté à Keycloak, aux profils, au catalogue et aux uploads Video. La chaîne outbox/Kafka et l'ingestion dédupliquée dans le worker sont disponibles ; ajouter ensuite l'exécuteur FFmpeg et les événements de résultat. Les événements User nécessiteront leur propre outbox. Feed et les autres services restent à créer. Aucun service ne doit lire la base d'un autre.
 
 Références : [compatibilité Spring Cloud/Boot](https://spring.io/projects/spring-cloud/), [JWT Spring Security](https://docs.spring.io/spring-security/reference/reactive/oauth2/resource-server/jwt.html), [Keycloak en conteneur](https://www.keycloak.org/server/containers), [hostname Keycloak](https://www.keycloak.org/server/hostname), [support PostgreSQL](https://www.postgresql.org/support/versioning/).

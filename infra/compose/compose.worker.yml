@@ -1,0 +1,34 @@
+# À combiner avec compose.yml et compose.kafka.yml ; aucun accès à la base Video ni à AWS.
+services:
+  worker-db:
+    profiles: [worker]
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: youscout_media_worker
+      POSTGRES_USER: youscout_media_worker
+      POSTGRES_PASSWORD: ${MEDIA_WORKER_DB_PASSWORD:?Run init-env.py --upgrade first}
+    volumes: [worker-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U youscout_media_worker -d youscout_media_worker']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  media-worker:
+    profiles: [worker]
+    build:
+      context: ../..
+      dockerfile: infra/docker/service.Dockerfile
+      args: {MODULE: media-worker}
+    environment:
+      SERVER_PORT: '8080'
+      MEDIA_WORKER_DB_URL: jdbc:postgresql://worker-db:5432/youscout_media_worker
+      MEDIA_WORKER_DB_USERNAME: youscout_media_worker
+      MEDIA_WORKER_DB_PASSWORD: ${MEDIA_WORKER_DB_PASSWORD:?Run init-env.py --upgrade first}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MEDIA_WORKER_INGESTION_ENABLED: 'true'
+    depends_on:
+      worker-db: {condition: service_healthy}
+      kafka-init: {condition: service_completed_successfully}
+    # Santé interne uniquement, héritée du Dockerfile ; pas de port ni d'API métier exposés.
+volumes:
+  worker-data:
