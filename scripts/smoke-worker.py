@@ -32,11 +32,15 @@ def wait_for(condition):
     raise RuntimeError("Worker smoke timed out waiting for durable ingestion.")
 
 
-def caught_up():
-    output = command("exec", "-T", "kafka", "/opt/kafka/bin/kafka-consumer-groups.sh", "--bootstrap-server",
-                     "kafka:9092", "--group", GROUP, "--describe")
+def offsets_caught_up(output):
     rows = [line.split() for line in output.splitlines() if len(line.split()) >= 6 and line.split()[1] == "video.uploaded.v1"]
-    return len(rows) == 3 and all(row[5] == "0" for row in rows)
+    # Une partition vide peut n'avoir aucun offset commité : '-' avec fin 0 n'est pas un retard.
+    return len(rows) == 3 and all(row[5] == "0" or (row[3] == "-" and row[4] == "0") for row in rows)
+
+
+def caught_up():
+    return offsets_caught_up(command("exec", "-T", "kafka", "/opt/kafka/bin/kafka-consumer-groups.sh", "--bootstrap-server",
+                                    "kafka:9092", "--group", GROUP, "--describe"))
 
 
 def main():
