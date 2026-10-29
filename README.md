@@ -19,6 +19,8 @@ Docker doit être démarré. Le générateur de secrets est exécuté une seule 
 
 La chaîne [VideoUploaded → outbox → Kafka](docs/VIDEO_OUTBOX.md) est implémentée et activable via `infra/compose/compose.kafka.yml`. Elle conserve les événements en cas de panne du broker et reprend leur publication après redémarrage. Le worker FFmpeg reste la prochaine étape.
 
+Le [worker d'ingestion](services/media-worker/README.md) consomme ces événements et conserve des tâches `QUEUED` dans sa propre base, avec déduplication durable et acquittement après commit. Il s'active avec `compose.worker.yml` et le profil `worker`. Le téléchargement S3 et l'exécution FFmpeg restent à développer.
+
 Microservices orientés événements derrière une API Gateway, avec Flutter pour le mobile, Kafka pour les événements, S3/CDN pour les médias et Kubernetes pour l'orchestration. La cible comporte 11 services logiques, dont Auth fourni par Keycloak, plus des workers FFmpeg. Le MVP commence avec Auth, User, Video, Feed, Interaction et Skill/Hashtag, sans fusionner leurs responsabilités.
 
 Le backend recommandé est Java / Spring Boot ; l'admin utilise React. PostgreSQL, MongoDB et Redis répondent à des usages différents et restent sous la responsabilité exclusive de chaque service. OpenSearch et le multi-région arrivent après le socle.

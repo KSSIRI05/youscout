@@ -59,7 +59,7 @@ Avec une session AWS valide et les trois fichiers Compose actifs, le test suivan
 python scripts/smoke-video-upload.py --put-object --complete --verify-restart --verify-outbox
 ```
 
-Ce test utilise un petit objet de transport synthétique, pas un média à traiter. Il supprime son objet S3 et ses lignes PostgreSQL avec les identités dédiées. Les messages Kafka de test restent soumis à la rétention. Les URL signées et jetons ne sont jamais affichés. La CI a été étendue avec ces tests sans AWS, mais sa nouvelle exécution distante nécessite un push.
+Ce test utilise un petit objet de transport synthétique, pas un média à traiter. Il supprime son objet S3 et ses lignes PostgreSQL avec les identités dédiées. Les messages Kafka de test restent soumis à la rétention. Les URL signées et jetons ne sont jamais affichés. Les workflows GitHub backend et Flutter ont réussi pour la [PR #8](https://github.com/KSSIRI05/youscout/pull/8), fusionnée dans `main` après vérification.
 
 Le smoke de la pile déployée suspend temporairement Kafka, insère des métadonnées synthétiques, attend une erreur enregistrée, redémarre Video, réactive Kafka et vérifie le message reçu. Il teste le câblage du relais ; il ne simule pas un upload S3 ni une confirmation HTTP. Il supprime uniquement ses lignes PostgreSQL. Le message synthétique Kafka expire selon la rétention. Exécuter ce test uniquement sur la pile locale : il suspend temporairement toute publication sur ce broker. La CI exécute également ce test, sans login AWS.
 
@@ -71,4 +71,4 @@ docker compose -f infra/compose/compose.yml --profile video exec -T video-db psq
 
 ## Étape suivante
 
-Créer le worker FFmpeg et sa déduplication persistante, puis `VideoProcessed`. Le worker devra lire S3 avec **`If-Match: sourceETag`** : une URL PUT encore valide peut remplacer la source après confirmation. Il publiera ses résultats sans modifier directement la base Video. Les transitions de traitement/publication seront ajoutées à Video avec leurs migrations. Pour l'instant, les vidéos restent `UPLOADED` après publication Kafka.
+Le [worker d'ingestion](../services/media-worker/README.md) reçoit désormais les événements et enregistre ses tâches avec déduplication persistante. Ajouter ensuite l'exécuteur FFmpeg et `VideoProcessed`. Il devra lire S3 avec **`If-Match: sourceETag`** : une URL PUT encore valide peut remplacer la source après confirmation. Il publiera ses résultats sans modifier directement la base Video. Les transitions de traitement/publication seront ajoutées à Video avec leurs migrations. Pour l'instant, les vidéos restent `UPLOADED` après publication Kafka et les tâches worker restent `QUEUED`.

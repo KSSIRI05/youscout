@@ -17,6 +17,7 @@
     <module>services/user</module>
     <module>services/skill</module>
     <module>services/video</module>
+    <module>services/media-worker</module>
   </modules>
   <properties>
     <java.version>21</java.version>
