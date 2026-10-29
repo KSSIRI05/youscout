@@ -17,6 +17,13 @@ spring:
 server:
   port: ${SERVER_PORT:8083}
 youscout:
+  outbox:
+    # L'enregistrement en base est toujours actif ; seul le relais est optionnel.
+    enabled: ${VIDEO_OUTBOX_ENABLED:false}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    topic: video.uploaded.v1
+    poll-ms: 1000
+    initial-delay-ms: 5000
   storage:
     s3:
       # Identifiants publics de l'infrastructure existante ; aucun secret AWS ici.

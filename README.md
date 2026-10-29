@@ -2,7 +2,7 @@
 
 YouScout est une plateforme de découverte des talents du football. Elle permet de partager des vidéos, de mettre en valeur ses compétences et d'échanger avec la communauté.
 
-**État réel : frontend Flutter dans `apps/mobile`, avec démonstration locale, connexion Keycloak, profils et catalogue connectés. Le backend comprend la Gateway, les profils User persistants, le catalogue Skill/Hashtag et le service Video avec préparation et confirmation d'uploads S3, Keycloak et PostgreSQL. Le bucket S3 privé et les rôles IAM dédiés sont provisionnés. L'upload Flutter, le traitement vidéo, les autres API métier et le back-office restent à développer.** Les workflows CI vérifient le mobile et le backend ; l'architecture cible reste à valider progressivement avec les tests de chaque service.
+**État réel : frontend Flutter dans `apps/mobile`, avec démonstration locale, connexion Keycloak, profils, catalogue et parcours d'upload vidéo connectés. Le backend comprend la Gateway, les profils User persistants, le catalogue Skill/Hashtag et le service Video avec préparation et confirmation d'uploads S3, Keycloak et PostgreSQL. Le bucket S3 privé et les rôles IAM dédiés sont provisionnés. Le traitement vidéo, la publication dans le fil, les autres API métier et le back-office restent à développer.** Les workflows CI vérifient le mobile et le backend ; l'architecture cible reste à valider progressivement avec les tests de chaque service. Le parcours Flutter web avec le vrai bucket a été [validé le 28 octobre 2026](docs/validation/video-upload-2026-10-28.md).
 
 ## Lancer le socle backend
 
@@ -16,6 +16,8 @@ python scripts/smoke-backend.py
 Docker doit être démarré. Le générateur de secrets est exécuté une seule fois. Sur un environnement existant, utiliser `python infra/compose/init-env.py --upgrade` pour ajouter les secrets manquants sans changer les anciens. Lire [le guide backend](docs/BACKEND.md) pour les ports, les tests, Keycloak et les limites, et [le guide Video](services/video/README.md) pour activer le profil Compose Video et l'accès S3 temporaire. Flutter propose aussi un mode connecté pour le profil et le catalogue ; voir [le guide mobile](apps/mobile/README.md).
 
 ## Architecture retenue
+
+La chaîne [VideoUploaded → outbox → Kafka](docs/VIDEO_OUTBOX.md) est implémentée et activable via `infra/compose/compose.kafka.yml`. Elle conserve les événements en cas de panne du broker et reprend leur publication après redémarrage. Le worker FFmpeg reste la prochaine étape.
 
 Microservices orientés événements derrière une API Gateway, avec Flutter pour le mobile, Kafka pour les événements, S3/CDN pour les médias et Kubernetes pour l'orchestration. La cible comporte 11 services logiques, dont Auth fourni par Keycloak, plus des workers FFmpeg. Le MVP commence avec Auth, User, Video, Feed, Interaction et Skill/Hashtag, sans fusionner leurs responsabilités.
 

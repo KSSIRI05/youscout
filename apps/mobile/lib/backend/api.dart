@@ -23,11 +23,13 @@ class BackendApi {
     String token, {
     Map<String, Object>? body,
     Map<String, String>? query,
+    Map<String, String>? headers,
   }) async {
     final uri = Uri.parse('${config.api}$path').replace(queryParameters: query);
     final request = http.Request(method, uri)
       ..headers['Authorization'] = 'Bearer $token';
     request.headers['Accept'] = 'application/json, application/problem+json';
+    if (headers != null) request.headers.addAll(headers);
     if (body != null) {
       request.headers['Content-Type'] = 'application/json';
       request.body = jsonEncode(body);

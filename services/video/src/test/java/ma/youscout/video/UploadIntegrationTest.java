@@ -56,6 +56,7 @@ class UploadIntegrationTest {
         registry.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri", () -> oidc.base() + "/jwks");
     }
     @BeforeEach void setup() {
+        jdbc.update("DELETE FROM outbox_events");
         jdbc.update("DELETE FROM videos");
         when(credentials.resolveCredentials()).thenReturn(AwsBasicCredentials.create("test-only", "test-only"));
         when(s3.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder()
@@ -167,6 +168,12 @@ class UploadIntegrationTest {
         var row = jdbc.queryForMap("SELECT * FROM videos WHERE id = ?", UUID.fromString(id));
         assertThat(row.get("source_etag")).isEqualTo("\"source-etag\"");
         assertThat(row.get("completed_at")).isNotNull();
+        var event = jdbc.queryForMap("SELECT id, aggregate_id, payload::text FROM outbox_events WHERE aggregate_id = ?", UUID.fromString(id));
+        var payload = JsonPath.parse((String) event.get("payload"));
+        assertThat(payload.read("$.eventId", String.class)).isEqualTo(event.get("id").toString());
+        assertThat(payload.read("$.data.videoId", String.class)).isEqualTo(id);
+        assertThat(payload.read("$.data.sourceETag", String.class)).isEqualTo("\"source-etag\"");
+        assertThat((String) event.get("payload")).doesNotContain("ownerSubject", "Authorization", "X-Amz-", "http");
         verify(s3).headObject(HeadObjectRequest.builder().bucket("youscout-014663857971-dev-videos")
                 .key("videos/" + id + "/source").build());
         assertThat(response.body()).doesNotContain("source-etag", "s3_key", "owner_subject");
@@ -181,6 +188,7 @@ class UploadIntegrationTest {
         assertThat(first.statusCode()).isEqualTo(200);
         assertThat(second.statusCode()).isEqualTo(200);
         assertThat(second.body()).isEqualTo(first.body());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM outbox_events", Integer.class)).isEqualTo(1);
         verify(s3, times(1)).headObject(any(HeadObjectRequest.class));
         assertThat(post(INPUT, key, "alice").statusCode()).isEqualTo(409);
     }
@@ -252,7 +260,23 @@ class UploadIntegrationTest {
         CompletableFuture.allOf(requests.toArray(CompletableFuture[]::new)).join();
         assertThat(requests.stream().map(r -> r.join().statusCode()).toList()).containsOnly(200);
         assertThat(requests.stream().map(r -> r.join().body()).distinct().count()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM outbox_events WHERE aggregate_id = ?", Integer.class,
+                UUID.fromString(id))).isEqualTo(1);
         verify(s3, times(1)).headObject(any(HeadObjectRequest.class));
+    }
+
+    @Test void outboxInsertFailureRollsBackConfirmation() throws Exception {
+        String id = prepareId("alice");
+        // Provoque une vraie erreur SQL, pas un mock de la frontière transactionnelle.
+        jdbc.execute("ALTER TABLE outbox_events ADD CONSTRAINT test_reject_events CHECK (false)");
+        try {
+            assertThat(complete(id, "alice").statusCode()).isEqualTo(503);
+            assertPending(id);
+        } finally {
+            jdbc.execute("ALTER TABLE outbox_events DROP CONSTRAINT test_reject_events");
+        }
+        assertThat(complete(id, "alice").statusCode()).isEqualTo(200);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM outbox_events", Integer.class)).isEqualTo(1);
     }
 
     private void assertPending(String id) {
@@ -260,6 +284,8 @@ class UploadIntegrationTest {
         assertThat(row.get("status")).isEqualTo("PENDING_UPLOAD");
         assertThat(row.get("completed_at")).isNull();
         assertThat(row.get("source_etag")).isNull();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM outbox_events WHERE aggregate_id = ?", Integer.class,
+                UUID.fromString(id))).isZero();
     }
     private String prepareId(String owner) throws Exception {
         var response = post(INPUT, key(), owner);

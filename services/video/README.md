@@ -1,6 +1,6 @@
 # Socle du service Video
 
-Ce module Spring Boot valide Keycloak, persiste les métadonnées dans PostgreSQL, prépare les uploads S3 et confirme les fichiers reçus. La Gateway expose `GET /v1/videos/session`, `POST /v1/videos/uploads` et `POST /v1/videos/{id}/complete`. La validation du format réel du média, le traitement vidéo et les événements restent à implémenter.
+Ce module Spring Boot valide Keycloak, persiste les métadonnées dans PostgreSQL, prépare les uploads S3, confirme les fichiers reçus et écrit `VideoUploaded` dans une outbox transactionnelle. Un relais optionnel publie ensuite dans Kafka. La Gateway expose `GET /v1/videos/session`, `POST /v1/videos/uploads` et `POST /v1/videos/{id}/complete`. La validation du média et son traitement restent à implémenter. Voir [le guide Kafka/outbox](../../docs/VIDEO_OUTBOX.md).
 
 ## Identité Keycloak
 
@@ -34,7 +34,7 @@ Un fichier absent/inaccessible ou une taille/un type différent provoque 409 ; u
 
 Une confirmation répétée retourne les mêmes données et dates, sans nouvel appel S3. Des confirmations concurrentes n'appliquent qu'une seule transition. Après confirmation, réutiliser la clé de création d'upload renvoie 409 et ne produit plus de nouvelle URL PUT.
 
-`UPLOADED` signifie que les métadonnées S3 ont été vérifiées à cet instant, pas que le média est lisible, sûr ou prêt à publier. Le type S3 est déclaré par le client ; FFmpeg devra vérifier le format réel et la durée. L'ETag est opaque, pas une preuve MD5 universelle. Les anciennes URL PUT peuvent encore remplacer l'objet avant expiration et le bucket n'est pas versionné : les futurs workers devront lire avec une condition `If-Match` sur `source_etag` et refuser un objet modifié. La confirmation ne révoque pas les URL déjà émises et ne déclenche encore aucun événement Kafka.
+`UPLOADED` signifie que les métadonnées S3 ont été vérifiées à cet instant, pas que le média est lisible, sûr ou prêt à publier. Le type S3 est déclaré par le client ; FFmpeg devra vérifier le format réel et la durée. L'ETag est opaque, pas une preuve MD5 universelle. Les anciennes URL PUT peuvent encore remplacer l'objet avant expiration et le bucket n'est pas versionné : les futurs workers devront lire avec une condition `If-Match` sur `source_etag` et refuser un objet modifié. La confirmation ne révoque pas les URL déjà émises. Elle écrit `VideoUploaded` dans l'outbox dans la même transaction ; le relais activé le publie ensuite dans Kafka, avec livraison au moins une fois et `eventId` stable.
 
 ## Paramètres
 
@@ -87,6 +87,8 @@ Pour signer réellement depuis Docker en développement local :
 python scripts/prepare-video-aws.py
 docker compose -f infra/compose/compose.yml -f infra/compose/compose.video-aws.yml --profile video up -d --build --wait --wait-timeout 300 video gateway
 ```
+
+Si Kafka est activé, conserver aussi `-f infra/compose/compose.kafka.yml` dans cette commande et les suivantes. Voir [le guide outbox](../../docs/VIDEO_OUTBOX.md) pour le lancement avec les trois fichiers et le test de reprise.
 
 Le préparateur refuse tout autre rôle que `YouScoutVideo`. Les seuls identifiants transmis sont temporaires, conservés sous `infra/compose/.aws/`, avec accès local restreint, exclus de Git et du contexte Docker. Le dossier est monté en lecture seule, et le SDK Linux lit le JSON par `credential_process` ; AWS CLI et les profils administrateurs restent sur le poste. Relancer le préparateur avant expiration : le fichier est remplacé sans redémarrer le service. Les signatures déjà émises restent limitées par leur session initiale. Pour un hôte Linux, le compte non privilégié du conteneur doit pouvoir lire ce dossier privé ; adapter le propriétaire sans ouvrir les permissions à tous. En production, utiliser une identité de workload Kubernetes : cette passerelle est locale uniquement.
 

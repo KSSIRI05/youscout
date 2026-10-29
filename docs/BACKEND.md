@@ -6,7 +6,7 @@ Cette itération ajoute Java 21, Spring Boot 4.0.8, Spring Cloud 2025.1.3, Keycl
 
 ## Composants réellement implémentés
 
-- `services/video` : Keycloak, préparation idempotente d'uploads S3 et confirmation (`POST /v1/videos/{id}/complete`), avec métadonnées PostgreSQL et propriétaire issu du `sub`. La confirmation vérifie présence/accessibilité, taille et type déclarés dans S3 avant l'état `UPLOADED`. Voir [configuration, limites et lancement](../services/video/README.md). Compose le démarre avec sa base via le profil `video`. Validation du média et événements restent à développer.
+- `services/video` : Keycloak, préparation idempotente d'uploads S3 et confirmation (`POST /v1/videos/{id}/complete`), avec métadonnées PostgreSQL et propriétaire issu du `sub`. La confirmation vérifie le fichier avant l'état `UPLOADED` et écrit `VideoUploaded` dans une outbox transactionnelle. Un relais optionnel publie dans Kafka ; voir [le guide outbox](VIDEO_OUTBOX.md) et [le guide Video](../services/video/README.md). Compose démarre Video avec sa base via le profil `video`. La validation du média et le worker restent à développer.
 
 - `services/gateway` : Spring Cloud Gateway WebFlux, route `/v1/users/**`, contrôles JWT, CORS local et identifiant `X-Request-Id` borné et propagé. Aucun appel aux bases.
 - `services/user` : Spring MVC, validation indépendante des JWT, profils personnels persistants via JDBC et migration Flyway `user_profiles`.
@@ -119,6 +119,6 @@ La procédure redémarre ensuite la Gateway pour renouveler ses connexions et sa
 
 ## Prochaine itération
 
-Brancher les parcours Keycloak OIDC/PKCE et les API de profil dans Flutter. Les parcours serveur sont décrits dans [IDENTITE_ET_AUTORISATIONS.md](IDENTITE_ET_AUTORISATIONS.md). Les événements User nécessiteront une outbox et Kafka avant d’alimenter d’autres services. Video, Feed et les autres services restent à créer. Aucun service ne doit lire la base d’un autre.
+Le frontend est connecté à Keycloak, aux profils, au catalogue et aux uploads Video. La chaîne outbox/Kafka de Video est disponible ; créer ensuite le worker FFmpeg et sa déduplication persistante. Les événements User nécessiteront leur propre outbox. Feed et les autres services restent à créer. Aucun service ne doit lire la base d'un autre.
 
 Références : [compatibilité Spring Cloud/Boot](https://spring.io/projects/spring-cloud/), [JWT Spring Security](https://docs.spring.io/spring-security/reference/reactive/oauth2/resource-server/jwt.html), [Keycloak en conteneur](https://www.keycloak.org/server/containers), [hostname Keycloak](https://www.keycloak.org/server/hostname), [support PostgreSQL](https://www.postgresql.org/support/versioning/).

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../backend/api.dart';
 import '../backend/connected_session.dart';
 import '../core/theme.dart';
+import 'connected_upload_screen.dart';
 
 class ConnectedScreen extends StatefulWidget {
   const ConnectedScreen({required this.session, super.key});
@@ -45,20 +46,30 @@ class _ConnectedScreenState extends State<ConnectedScreen> {
                 ),
               ),
             Expanded(
-              child: tab == 0
-                  ? session.profile == null
-                        ? Center(
-                            child: FilledButton(
-                              onPressed: session.busy ? null : session.reload,
-                              child: const Text('Recharger mon profil'),
-                            ),
-                          )
-                        : ProfileEditor(
-                            key: ValueKey(session.profile!.subject),
-                            session: session,
-                            profile: session.profile!,
-                          )
-                  : CataloguePanel(session: session),
+              child: IndexedStack(
+                index: tab,
+                children: [
+                  session.profile == null
+                      ? Center(
+                          child: FilledButton(
+                            onPressed: session.busy ? null : session.reload,
+                            child: const Text('Recharger mon profil'),
+                          ),
+                        )
+                      : ProfileEditor(
+                          key: ValueKey(session.profile!.subject),
+                          session: session,
+                          profile: session.profile!,
+                        ),
+                  CataloguePanel(session: session),
+                  if (session.profile != null)
+                    ConnectedUploadScreen(
+                      key: ValueKey(session.profile!.subject),
+                      session: session,
+                    ),
+                  if (session.profile == null) const SizedBox.shrink(),
+                ],
+              ),
             ),
           ],
         ),
@@ -72,6 +83,10 @@ class _ConnectedScreenState extends State<ConnectedScreen> {
             label: 'Mon profil',
           ),
           NavigationDestination(icon: Icon(Icons.tag), label: 'Catalogue'),
+          NavigationDestination(
+            icon: Icon(Icons.video_call_outlined),
+            label: 'Vidéo',
+          ),
         ],
       ),
     );

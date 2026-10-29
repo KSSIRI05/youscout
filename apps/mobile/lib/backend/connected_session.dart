@@ -92,6 +92,7 @@ class ConnectedSession extends ChangeNotifier {
     String path, {
     Map<String, Object>? body,
     Map<String, String>? query,
+    Map<String, String>? headers,
   }) async {
     var tokens = _tokens;
     if (tokens == null) {
@@ -111,6 +112,7 @@ class ConnectedSession extends ChangeNotifier {
         tokens.access,
         body: body,
         query: query,
+        headers: headers,
       );
     } on ApiFailure catch (e) {
       if (e.status != 401) rethrow;
@@ -122,6 +124,7 @@ class ConnectedSession extends ChangeNotifier {
           tokens.access,
           body: body,
           query: query,
+          headers: headers,
         );
       } on ApiFailure catch (retryError) {
         if (retryError.status == 401 && generation == _generation) _clear();
@@ -142,6 +145,22 @@ class ConnectedSession extends ChangeNotifier {
     Map<String, String>? query,
   }) async =>
       await _request(method, path, body: body, query: query)
+          as Map<String, dynamic>;
+
+  /// Réutilise le renouvellement Keycloak, y compris pour les appels idempotents.
+  Future<Map<String, dynamic>> videoRequest(
+    String path, {
+    Map<String, Object>? body,
+    String? idempotencyKey,
+  }) async =>
+      await _request(
+            'POST',
+            path,
+            body: body,
+            headers: idempotencyKey == null
+                ? null
+                : {'Idempotency-Key': idempotencyKey},
+          )
           as Map<String, dynamic>;
 
   Future<List<CatalogueItem>> _page(

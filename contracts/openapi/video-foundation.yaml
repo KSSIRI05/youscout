@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: YouScout Video identity API
-  version: 0.3.0
+  version: 0.4.0
   description: Identité Keycloak, préparation et confirmation d'uploads S3 avec métadonnées persistantes.
 servers:
   - url: http://localhost:8080
@@ -14,6 +14,8 @@ paths:
         Exige user ou admin et le sub propriétaire de la vidéo, sans exception pour admin.
         Un HEAD S3 vérifie taille et type déclarés avant la transition PENDING_UPLOAD vers UPLOADED.
         Capture la date de confirmation et l'ETag opaque en base, sans valider le format réel du média.
+        Écrit VideoUploaded dans l'outbox dans la même transaction ; Kafka peut être indisponible.
+        Le relais publie ensuite vers video.uploaded.v1, au moins une fois, avec eventId stable.
         Une reprise après confirmation retourne le même résultat sans nouvel appel S3.
         Sans ListBucket, S3 peut masquer un objet absent par 403 : l'API renvoie alors 409,
         comme pour un fichier inaccessible. Aucun champ de propriétaire ou de stockage n'est accepté.
