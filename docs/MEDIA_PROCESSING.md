@@ -20,7 +20,7 @@ Les outils sont lancés avec `ProcessBuilder`, sans shell ni arguments fournis d
 
 ## Fichiers produits
 
-FFmpeg génère un MP4 H.264/AAC, pixels `yuv420p`, 30 images/s et au plus 1280×720, avec métadonnées retirées et `faststart`. Une miniature JPEG est extraite de la version de lecture. Le fichier produit est à nouveau inspecté ; une différence de durée excessive est refusée. Le transcodage est limité à 120 secondes par défaut, le probe à dix secondes et la miniature à vingt secondes.
+FFmpeg génère un MP4 H.264/AAC, pixels `yuv420p`, 30 images/s et au plus 1280×720, avec métadonnées retirées et `faststart`. Une miniature JPEG est extraite dans un cadre maximal de 640×360, sans agrandissement et en conservant les proportions. Le fichier produit est à nouveau inspecté : la sortie bénéficie d'une tolérance maximale d'une seconde pour le bourrage AAC et l'arrondi des images, tandis que la limite de la source reste stricte. Une différence de durée supérieure à 1,5 seconde entre source et sortie est refusée. Le transcodage est limité à 120 secondes par défaut, le probe à dix secondes et la miniature à vingt secondes.
 
 Chaque tentative écrit sous son propre préfixe :
 
@@ -45,7 +45,7 @@ Les deux états sont séparés pour préserver le contrat de confirmation :
 | Traitement dans Video | `WAITING` → `READY` ou `FAILED` |
 | Tâche du worker | `QUEUED` → `PROCESSING` → `SUCCEEDED` ou `FAILED` |
 
-`POST /complete` conserve ses dates et son résultat après traitement. **`GET /v1/videos/{id}`** permet au propriétaire Keycloak de consulter les métadonnées et le code d'échec, avec `Cache-Control: no-store`. Un administrateur ne peut pas consulter la vidéo d'un autre joueur. Les clés S3 et URL de lecture ne sont pas exposées par cet endpoint. La lecture privée dans Flutter et la publication dans le fil restent les prochaines intégrations.
+`POST /complete` conserve ses dates et son résultat après traitement. **`GET /v1/videos/{id}`** permet au propriétaire Keycloak de consulter les métadonnées et le code d'échec, avec `Cache-Control: no-store`. Un administrateur ne peut pas consulter la vidéo d'un autre joueur. Les clés S3 et URL de lecture ne sont pas exposées par cet endpoint. La [lecture privée dans Flutter](PRIVATE_PLAYBACK.md) utilise un endpoint séparé de signature temporaire ; la publication dans le fil reste à développer.
 
 ## Activer le traitement local avec S3
 
@@ -73,5 +73,7 @@ python -m unittest discover -s scripts/tests
 Validation locale : **127 tests Java et 7 tests Python** réussis. Les nouveaux tests exercent FFmpeg réellement, PostgreSQL et Kafka Testcontainers, et le SDK S3 contre un serveur HTTP isolé. Ils couvrent le changement d'ETag, les limites du média, les délais, le fencing, les reprises, l'atomicité des deux outbox/inbox, la panne Kafka et la confidentialité des métadonnées. Aucun identifiant AWS n'est nécessaire à ces tests. Le Dockerfile de traitement a également été construit avec FFmpeg.
 
 Le smoke S3 réel crée un petit clip synthétique, vérifie `READY` via la Gateway et une tâche `SUCCEEDED`, puis vérifie le rejeu de `/complete`. Il supprime uniquement sa source, ses fichiers dérivés et ses lignes de base ; ses messages Kafka restent soumis à la rétention. Ce test demande une session AWS Video et Terraform valide, et n'est pas exécuté par la CI sans identifiants. La CI installe FFmpeg pour les tests isolés, tout en gardant le traitement S3 réel désactivé dans le smoke d'ingestion.
+
+La chaîne backend a été [validée avec le vrai bucket S3 le 30 octobre 2026](validation/media-processing-2026-10-30.md), avec contrôle de la présence, des tailles et des types du MP4 et de la miniature, puis nettoyage des données propres au test.
 
 Références : [protocoles FFmpeg](https://ffmpeg.org/ffmpeg-protocols.html), [S3 GetObject et If-Match](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html).
