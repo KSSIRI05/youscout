@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:youscout:event:video-processing-result:v1",
+  "title": "VideoProcessed / VideoProcessingFailed v1",
+  "description": "Topic video.processing.results.v1, clé videoId. Livraison au moins une fois ; dédupliquer eventId et vérifier sourceEventId/sourceETag.",
+  "type": "object", "additionalProperties": false,
+  "required": ["eventId", "eventType", "eventVersion", "occurredAt", "producer", "data"],
+  "properties": {
+    "eventId": {"type": "string", "format": "uuid"},
+    "eventType": {"enum": ["VideoProcessed", "VideoProcessingFailed"]},
+    "eventVersion": {"const": 1}, "occurredAt": {"type": "string", "format": "date-time"},
+    "producer": {"const": "media-worker"},
+    "data": {
+      "type": "object", "additionalProperties": false,
+      "required": ["videoId", "sourceEventId", "attemptId", "sourceETag", "s3Bucket"],
+      "properties": {
+        "videoId": {"type": "string", "format": "uuid"},
+        "sourceEventId": {"type": "string", "format": "uuid"},
+        "attemptId": {"type": "string", "format": "uuid"},
+        "sourceETag": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "s3Bucket": {"type": "string", "minLength": 3, "maxLength": 63},
+        "videoKey": {"type": "string", "pattern": "^processed/[0-9a-f-]{36}/[0-9a-f-]{36}/video\\.mp4$"},
+        "thumbnailKey": {"type": "string", "pattern": "^processed/[0-9a-f-]{36}/[0-9a-f-]{36}/thumbnail\\.jpg$"},
+        "durationMillis": {"type": "integer", "minimum": 1, "maximum": 181000},
+        "width": {"type": "integer", "minimum": 1, "maximum": 1280},
+        "height": {"type": "integer", "minimum": 1, "maximum": 720},
+        "errorCode": {"type": "string", "pattern": "^[A-Z_]{1,40}$"}
+      }
+    }
+  },
+  "allOf": [
+    {"if": {"properties": {"eventType": {"const": "VideoProcessed"}}},
+     "then": {"properties": {"data": {"required": ["videoKey", "thumbnailKey", "durationMillis", "width", "height"], "not": {"required": ["errorCode"]}}}},
+     "else": {"properties": {"data": {"required": ["errorCode"], "not": {"anyOf": [{"required": ["videoKey"]}, {"required": ["thumbnailKey"]}, {"required": ["durationMillis"]}, {"required": ["width"]}, {"required": ["height"]}]}}}}}
+  ]
+}

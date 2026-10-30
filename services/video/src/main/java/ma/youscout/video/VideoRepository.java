@@ -34,7 +34,8 @@ class VideoRepository {
     VideoUpload confirm(UUID id, String owner, String etag) {
         return jdbc.queryForObject("""
                 UPDATE videos SET status = 'UPLOADED', source_etag = ?,
-                    completed_at = statement_timestamp(), updated_at = statement_timestamp()
+                    completed_at = statement_timestamp(), updated_at = statement_timestamp(),
+                    processing_status = 'WAITING', processing_updated_at = statement_timestamp()
                 WHERE id = ? AND owner_subject = ? AND status = 'PENDING_UPLOAD'
                 RETURNING *
                 """, this::map, etag, id, owner);

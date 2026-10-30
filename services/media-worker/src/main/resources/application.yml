@@ -1,4 +1,8 @@
 spring:
+  task:
+    scheduling:
+      pool:
+        size: 2
   application:
     name: media-worker
   datasource:
@@ -14,6 +18,16 @@ spring:
 server:
   port: ${SERVER_PORT:8084}
 worker:
+  processing:
+    enabled: ${MEDIA_PROCESSING_ENABLED:false}
+    bucket: ${VIDEO_S3_BUCKET:youscout-014663857971-dev-videos}
+    region: ${VIDEO_S3_REGION:us-east-1}
+    profile: ${MEDIA_WORKER_AWS_PROFILE:}
+    max-bytes: 104857600
+    max-duration-seconds: 180
+    transcode-seconds: 120
+    ffmpeg: ${FFMPEG_BIN:ffmpeg}
+    ffprobe: ${FFPROBE_BIN:ffprobe}
   ingestion:
     enabled: ${MEDIA_WORKER_INGESTION_ENABLED:true}
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}

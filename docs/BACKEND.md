@@ -119,6 +119,8 @@ La procédure redémarre ensuite la Gateway pour renouveler ses connexions et sa
 
 ## Prochaine itération
 
+Le [profil de traitement FFmpeg](MEDIA_PROCESSING.md) exécute les tâches avec leases, produit les fichiers dérivés et renvoie le résultat à Video via Kafka/outbox. `GET /v1/videos/{id}` permet au propriétaire de consulter l'état. La lecture des fichiers privés dans Flutter et le fil restent à intégrer.
+
 Le socle [media-worker](../services/media-worker/README.md) est disponible : consommation Kafka, base PostgreSQL indépendante, tâches `QUEUED`, déduplication et quarantaine durable. Le prochain chantier est l'exécution de ces tâches avec FFmpeg et les événements de résultat.
 
 Le frontend est connecté à Keycloak, aux profils, au catalogue et aux uploads Video. La chaîne outbox/Kafka et l'ingestion dédupliquée dans le worker sont disponibles ; ajouter ensuite l'exécuteur FFmpeg et les événements de résultat. Les événements User nécessiteront leur propre outbox. Feed et les autres services restent à créer. Aucun service ne doit lire la base d'un autre.

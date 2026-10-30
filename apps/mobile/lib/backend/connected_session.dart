@@ -148,6 +148,11 @@ class ConnectedSession extends ChangeNotifier {
           as Map<String, dynamic>;
 
   /// Réutilise le renouvellement Keycloak, y compris pour les appels idempotents.
+  Future<Map<String, dynamic>> videoGet(
+    String path, {
+    Map<String, String>? query,
+  }) => _object('GET', path, query: query);
+
   Future<Map<String, dynamic>> videoRequest(
     String path, {
     Map<String, Object>? body,

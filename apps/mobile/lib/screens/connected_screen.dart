@@ -64,6 +64,7 @@ class _ConnectedScreenState extends State<ConnectedScreen> {
                   CataloguePanel(session: session),
                   if (session.profile != null)
                     ConnectedUploadScreen(
+                      active: tab == 2,
                       key: ValueKey(session.profile!.subject),
                       session: session,
                     ),

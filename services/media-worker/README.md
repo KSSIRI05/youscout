@@ -1,6 +1,6 @@
 # Worker média — ingestion des tâches
 
-Ce module consomme `VideoUploaded` sur `video.uploaded.v1` et enregistre des tâches **`QUEUED`** dans sa propre base PostgreSQL. Il prépare le traitement FFmpeg ; il ne télécharge, ne transforme et ne publie encore aucun média. Aucun accès AWS ni accès à la base Video n'est configuré pour ce socle.
+Ce module consomme `VideoUploaded` sur `video.uploaded.v1` et enregistre des tâches **`QUEUED`** dans sa propre base PostgreSQL. Le profil d'ingestion fonctionne sans AWS. Un profil de traitement optionnel exécute les tâches avec leases, lit S3 avec `If-Match`, génère un MP4 et une miniature avec FFmpeg, puis publie son résultat via sa propre outbox. Voir [le guide du traitement](../../docs/MEDIA_PROCESSING.md). Le worker n'accède jamais à la base Video.
 
 ## Traitement d'un message
 
@@ -51,7 +51,7 @@ python scripts/smoke-worker.py
 
 Les tests utilisent Kafka et PostgreSQL Testcontainers. Ils couvrent la validation du contrat, les doublons, les conflits, l'insertion concurrente, le rejeu après arrêt/réinitialisation des offsets, les messages invalides suivis de messages valides, et la reprise après échec d'insertion en base sans avancement des offsets.
 
-Validation locale : **13 tests worker**, **103 tests Java au total** et **3 tests Python** réussis. Le service et sa base ont démarré sains dans Compose ; le smoke a confirmé une seule tâche inchangée après trois livraisons et un redémarrage.
+Validation initiale de l'ingestion : **13 tests worker**, **103 tests Java au total** et **3 tests Python** réussis. Le profil de traitement ajoute les tests d'exécution ; la validation actuelle est détaillée dans [le guide FFmpeg](../../docs/MEDIA_PROCESSING.md). Le service et sa base ont démarré sains dans Compose ; le smoke a confirmé une seule tâche inchangée après trois livraisons et un redémarrage.
 
 Le smoke publie trois fois le même événement synthétique, dont une fois après redémarrage du worker. Il attend que le groupe par défaut ait rattrapé les trois partitions, vérifie l'unicité de la tâche et ses dates inchangées, puis supprime uniquement cette tâche synthétique. Les événements de test restent dans Kafka jusqu'à expiration de la rétention. Ce test ne fait aucun appel S3 ni aucun transcodage. Il est également inclus dans la CI backend.
 
@@ -63,6 +63,6 @@ docker compose -f infra/compose/compose.yml -f infra/compose/compose.kafka.yml -
 
 ## Étape suivante
 
-Ajouter un exécuteur avec états et leases persistants, téléchargement S3 avec `If-Match` sur l'ETag conservé, contrôle `ffprobe`, limites de ressources et FFmpeg. Le résultat sera publié via une outbox propre au worker ; Video consommera `VideoProcessed`/`VideoProcessingFailed` pour faire évoluer son domaine. Aucune écriture directe dans la base Video ne doit être ajoutée.
+L'exécuteur FFmpeg et le retour d'état vers Video sont disponibles via le [profil de traitement](../../docs/MEDIA_PROCESSING.md). La prochaine étape est la lecture privée des médias prêts dans Flutter, puis la publication dans le fil. La réconciliation des sorties abandonnées et les outils de relance opérateur restent à ajouter.
 
 Référence : [contrôle manuel des offsets Kafka](https://kafka.apache.org/41/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html).

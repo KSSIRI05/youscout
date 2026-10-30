@@ -71,4 +71,4 @@ docker compose -f infra/compose/compose.yml --profile video exec -T video-db psq
 
 ## Étape suivante
 
-Le [worker d'ingestion](../services/media-worker/README.md) reçoit désormais les événements et enregistre ses tâches avec déduplication persistante. Ajouter ensuite l'exécuteur FFmpeg et `VideoProcessed`. Il devra lire S3 avec **`If-Match: sourceETag`** : une URL PUT encore valide peut remplacer la source après confirmation. Il publiera ses résultats sans modifier directement la base Video. Les transitions de traitement/publication seront ajoutées à Video avec leurs migrations. Pour l'instant, les vidéos restent `UPLOADED` après publication Kafka et les tâches worker restent `QUEUED`.
+Le [worker média](../services/media-worker/README.md) reçoit les événements et possède désormais un [exécuteur FFmpeg optionnel](MEDIA_PROCESSING.md), avec lecture S3 `If-Match` et outbox de résultat. Video consomme les résultats dans sa propre base et expose un état privé `READY`/`FAILED`, distinct de `UPLOADED`. La prochaine étape est de permettre la lecture privée des médias prêts dans Flutter, puis leur publication dans le fil.

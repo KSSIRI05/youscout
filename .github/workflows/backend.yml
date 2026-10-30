@@ -19,6 +19,8 @@ jobs:
           java-version: '21'
           cache: maven
       - run: python3 -m unittest discover -s scripts/tests
+      - name: Install FFmpeg for media integration tests
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
       # Les tests Java valident les JWT et les requêtes SQL contre PostgreSQL Testcontainers.
       - run: ./mvnw -B -ntp verify
       # Le runner possède son propre fichier de secrets éphémère, jamais publié comme artefact.

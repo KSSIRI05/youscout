@@ -21,6 +21,7 @@ class SecurityConfig {
                 .authorizeHttpRequests(access -> access
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/v1/videos/session").hasAnyRole("user", "admin")
+                        .requestMatchers(HttpMethod.GET, "/v1/videos", "/v1/videos/{id:[0-9a-fA-F-]+}", "/v1/videos/{id:[0-9a-fA-F-]+}/playback").hasAnyRole("user", "admin")
                         .requestMatchers(HttpMethod.POST, "/v1/videos/uploads").hasAnyRole("user", "admin")
                         .requestMatchers(HttpMethod.POST, "/v1/videos/*/complete").hasAnyRole("user", "admin")
                         .anyRequest().denyAll())

@@ -1,0 +1,31 @@
+# Extension explicite du worker : activer seulement avec une identité S3 valable.
+services:
+  processing-topics:
+    profiles: [worker]
+    image: apache/kafka:4.1.2
+    depends_on:
+      kafka: {condition: service_healthy}
+    entrypoint: [/opt/kafka/bin/kafka-topics.sh]
+    command: [--bootstrap-server, 'kafka:9092', --create, --if-not-exists, --topic, video.processing.results.v1, --partitions, '3', --replication-factor, '1', --config, retention.ms=604800000]
+    restart: 'no'
+  media-worker:
+    build:
+      dockerfile: infra/docker/media-worker.Dockerfile
+    environment:
+      MEDIA_PROCESSING_ENABLED: 'true'
+      VIDEO_S3_BUCKET: ${VIDEO_S3_BUCKET:-youscout-014663857971-dev-videos}
+      VIDEO_S3_REGION: ${VIDEO_S3_REGION:-us-east-1}
+    depends_on:
+      processing-topics: {condition: service_completed_successfully}
+    cpus: 2
+    mem_limit: 1g
+    pids_limit: 128
+    read_only: true
+    tmpfs: ['/tmp:size=512m,mode=1777']
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+  video:
+    environment:
+      VIDEO_PROCESSING_RESULTS_ENABLED: 'true'
+    depends_on:
+      processing-topics: {condition: service_completed_successfully}

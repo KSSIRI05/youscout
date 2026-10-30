@@ -1,0 +1,15 @@
+# Poste local : même rôle temporaire du projet, conservé dans le dossier privé ignoré par Git.
+services:
+  media-worker:
+    environment:
+      MEDIA_WORKER_AWS_PROFILE: video-container
+      AWS_CONFIG_FILE: /run/youscout-aws/config
+      AWS_SHARED_CREDENTIALS_FILE: /dev/null
+      AWS_EC2_METADATA_DISABLED: 'true'
+    volumes:
+      - type: bind
+        source: ./.aws
+        target: /run/youscout-aws
+        read_only: true
+        bind:
+          create_host_path: false
