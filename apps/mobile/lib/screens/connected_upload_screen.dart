@@ -4,15 +4,18 @@ import '../backend/api.dart';
 import '../backend/connected_session.dart';
 import '../backend/video_upload.dart';
 import '../widgets/scout_widgets.dart';
+import '../widgets/private_video_library.dart';
 
 class ConnectedUploadScreen extends StatefulWidget {
   const ConnectedUploadScreen({
     required this.session,
     this.upload,
     this.pickVideo,
+    this.active = true,
     super.key,
   });
   final ConnectedSession session;
+  final bool active;
   final VideoUpload? upload;
   final Future<XFile?> Function()? pickVideo;
   @override
@@ -21,6 +24,7 @@ class ConnectedUploadScreen extends StatefulWidget {
 
 class _ConnectedUploadScreenState extends State<ConnectedUploadScreen> {
   late final upload = widget.upload ?? VideoUpload.forSession(widget.session);
+  late final owner = widget.session.profile?.subject;
   final title = TextEditingController();
   bool picking = false;
   String? selectionError;
@@ -119,9 +123,7 @@ class _ConnectedUploadScreenState extends State<ConnectedUploadScreen> {
               'Vidéo reçue et enregistrée.',
               key: Key('video-upload-success'),
             ),
-            const Text(
-              'Le traitement et la publication dans le fil seront disponibles prochainement.',
-            ),
+            const Text('Suis le traitement dans Mes vidéos ci-dessous.'),
           ] else ...[
             const SizedBox(height: 16),
             ScoutButton(
@@ -139,6 +141,17 @@ class _ConnectedUploadScreenState extends State<ConnectedUploadScreen> {
         const SizedBox(height: 24),
         const Text(
           'La vidéo est conservée dans le stockage privé de ton compte. Le titre est enregistré ; les compétences et hashtags ne sont pas encore associés aux vidéos.',
+        ),
+        PrivateVideoLibrary(
+          active: widget.active,
+          refreshKey: upload.uploaded ? upload.id : null,
+          request: (path, {query}) {
+            if (!widget.session.signedIn ||
+                widget.session.profile?.subject != owner) {
+              throw const ApiFailure(401, 'Reconnecte-toi pour continuer.');
+            }
+            return widget.session.videoGet(path, query: query);
+          },
         ),
       ],
     ),
