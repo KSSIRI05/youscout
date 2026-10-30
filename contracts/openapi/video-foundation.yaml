@@ -1,11 +1,44 @@
 openapi: 3.0.3
 info:
   title: YouScout Video identity API
-  version: 0.4.0
+  version: 0.5.0
   description: Identité Keycloak, préparation et confirmation d'uploads S3 avec métadonnées persistantes.
 servers:
   - url: http://localhost:8080
 paths:
+  /v1/videos/{id}:
+    get:
+      operationId: getOwnVideoProcessingStatus
+      summary: Consulter les métadonnées de traitement de sa vidéo
+      description: |
+        Le propriétaire vient du sub Keycloak ; aucun accès global pour admin.
+        uploadStatus reste UPLOADED après traitement. processingStatus passe de WAITING
+        à READY ou FAILED ; les clés S3 et liens de lecture ne sont pas exposés.
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Métadonnées privées, Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, title, uploadStatus, processingStatus]
+                properties:
+                  id: {type: string, format: uuid}
+                  title: {type: string}
+                  uploadStatus: {type: string, enum: [PENDING_UPLOAD, UPLOADED]}
+                  processingStatus: {type: string, nullable: true, enum: [WAITING, READY, FAILED]}
+                  errorCode: {type: string, nullable: true}
+                  durationMillis: {type: integer, format: int64, nullable: true}
+                  width: {type: integer, nullable: true}
+                  height: {type: integer, nullable: true}
+                  processingUpdatedAt: {type: string, format: date-time, nullable: true}
+        '401': {description: Session absente ou invalide}
+        '403': {description: Rôle insuffisant}
+        '404': {description: Vidéo inconnue ou appartenant à un autre joueur}
+        '503': {description: Base temporairement indisponible}
   /v1/videos/{id}/complete:
     post:
       operationId: completeVideoUpload

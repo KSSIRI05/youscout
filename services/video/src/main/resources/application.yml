@@ -17,6 +17,8 @@ spring:
 server:
   port: ${SERVER_PORT:8083}
 youscout:
+  processing-results:
+    enabled: ${VIDEO_PROCESSING_RESULTS_ENABLED:false}
   outbox:
     # L'enregistrement en base est toujours actif ; seul le relais est optionnel.
     enabled: ${VIDEO_OUTBOX_ENABLED:false}
