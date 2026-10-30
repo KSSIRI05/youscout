@@ -1,6 +1,6 @@
 # Socle du service Video
 
-Ce module Spring Boot valide Keycloak, persiste les métadonnées dans PostgreSQL, prépare les uploads S3, confirme les fichiers reçus et écrit `VideoUploaded` dans une outbox transactionnelle. Un relais optionnel publie ensuite dans Kafka. La Gateway expose `GET /v1/videos/session`, `POST /v1/videos/uploads` et `POST /v1/videos/{id}/complete`. La validation du média et son traitement restent à implémenter. Voir [le guide Kafka/outbox](../../docs/VIDEO_OUTBOX.md).
+Ce module Spring Boot valide Keycloak, persiste les métadonnées dans PostgreSQL, prépare les uploads S3, confirme les fichiers reçus et écrit `VideoUploaded` dans une outbox transactionnelle. Un relais optionnel publie ensuite dans Kafka. La Gateway expose `GET /v1/videos/session`, `POST /v1/videos/uploads` et `POST /v1/videos/{id}/complete`. Le profil de traitement du worker valide le média et publie son résultat ; voir [le guide FFmpeg](../../docs/MEDIA_PROCESSING.md). Voir [le guide Kafka/outbox](../../docs/VIDEO_OUTBOX.md).
 
 ## Identité Keycloak
 
@@ -37,6 +37,8 @@ Une confirmation répétée retourne les mêmes données et dates, sans nouvel a
 `UPLOADED` signifie que les métadonnées S3 ont été vérifiées à cet instant, pas que le média est lisible, sûr ou prêt à publier. Le type S3 est déclaré par le client ; FFmpeg devra vérifier le format réel et la durée. L'ETag est opaque, pas une preuve MD5 universelle. Les anciennes URL PUT peuvent encore remplacer l'objet avant expiration et le bucket n'est pas versionné : les futurs workers devront lire avec une condition `If-Match` sur `source_etag` et refuser un objet modifié. La confirmation ne révoque pas les URL déjà émises. Elle écrit `VideoUploaded` dans l'outbox dans la même transaction ; le relais activé le publie ensuite dans Kafka, avec livraison au moins une fois et `eventId` stable.
 
 ## Paramètres
+
+Le profil de traitement ajoute `GET /v1/videos/{id}` pour consulter ses propres états de réception et de traitement. Le résultat reste privé, sans clé S3 ni URL de lecture. Video consomme `VideoProcessed`/`VideoProcessingFailed` avec un inbox transactionnel, contrôles de source et d'ETag, puis passe `processingStatus` à `READY` ou `FAILED`. L'état d'upload et les dates de `/complete` restent stables. Voir [le guide FFmpeg](../../docs/MEDIA_PROCESSING.md) pour l'activation et les limites.
 
 | Variable | Valeur par défaut | Usage |
 | --- | --- | --- |

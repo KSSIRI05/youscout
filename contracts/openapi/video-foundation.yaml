@@ -29,7 +29,7 @@ paths:
                   id: {type: string, format: uuid}
                   title: {type: string}
                   uploadStatus: {type: string, enum: [PENDING_UPLOAD, UPLOADED]}
-                  processingStatus: {type: string, nullable: true, enum: [WAITING, READY, FAILED]}
+                  processingStatus: {type: string, nullable: true, enum: [WAITING, READY, FAILED, null]}
                   errorCode: {type: string, nullable: true}
                   durationMillis: {type: integer, format: int64, nullable: true}
                   width: {type: integer, nullable: true}
