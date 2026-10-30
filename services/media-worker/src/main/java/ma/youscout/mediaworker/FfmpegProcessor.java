@@ -9,6 +9,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 /** Commandes sans shell, chemins fixes, protocoles et formats bornés ; diagnostics non publiés. */
 class FfmpegProcessor {
+    // Le bourrage AAC et l'arrondi des images peuvent prolonger légèrement le conteneur de sortie.
+    private static final double OUTPUT_DURATION_TOLERANCE_SECONDS = 1;
     private final ProcessingProperties properties;
     private final JsonMapper json = new JsonMapper();
     FfmpegProcessor(ProcessingProperties properties) { this.properties = properties; }
@@ -23,15 +25,21 @@ class FfmpegProcessor {
             "-pix_fmt", "yuv420p", "-r", "30", "-c:a", "aac", "-b:a", "128k", "-threads", "2", "-filter_threads", "1",
             "-movflags", "+faststart", "-fs", Long.toString(properties.maxBytes()), "-y", video.toString()),
             directory, null, properties.transcodeSeconds(), "TRANSCODE_FAILED", true);
-        var output = probe(video, directory.resolve("output.json"));
+        var output = probe(video, directory.resolve("output.json"),
+            properties.maxDurationSeconds() + OUTPUT_DURATION_TOLERANCE_SECONDS);
         if (Math.abs(input.durationMillis() - output.durationMillis()) > 1500) throw new ProcessingFailure("OUTPUT_TRUNCATED", false);
         run(List.of(properties.ffmpeg(), "-nostdin", "-hide_banner", "-loglevel", "error", "-protocol_whitelist", "file,pipe",
-            "-i", video.toString(), "-map", "0:v:0", "-frames:v", "1", "-vf", "scale=640:-2", "-threads", "1",
+            "-i", video.toString(), "-map", "0:v:0", "-frames:v", "1", "-vf",
+            "scale=w='min(640,iw)':h='min(360,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2", "-threads", "1",
             "-q:v", "2", "-update", "1", "-y", thumbnail.toString()), directory, null, 20, "THUMBNAIL_FAILED", true);
         return output;
     }
 
     ExecutionStore.Output probe(Path source, Path result) {
+        return probe(source, result, properties.maxDurationSeconds());
+    }
+
+    private ExecutionStore.Output probe(Path source, Path result, double maxDurationSeconds) {
         run(List.of(properties.ffprobe(), "-v", "error", "-max_alloc", "67108864", "-protocol_whitelist", "file,pipe",
             "-format_whitelist", "mov,matroska,webm", "-show_entries",
             "format=duration,format_name:stream=codec_type,width,height:stream_disposition=attached_pic",
@@ -41,7 +49,7 @@ class FfmpegProcessor {
             var root = json.readValue(Files.readString(result), Map.class);
             var format = (Map<?, ?>) root.get("format");
             double seconds = Double.parseDouble(format.get("duration").toString());
-            if (!Double.isFinite(seconds) || seconds <= 0 || seconds > properties.maxDurationSeconds())
+            if (!Double.isFinite(seconds) || seconds <= 0 || seconds > maxDurationSeconds)
                 throw new ProcessingFailure("DURATION_LIMIT", false);
             var streams = (List<?>) root.get("streams");
             var video = streams.stream().map(v -> (Map<?, ?>) v).filter(v -> "video".equals(v.get("codec_type"))).findFirst()

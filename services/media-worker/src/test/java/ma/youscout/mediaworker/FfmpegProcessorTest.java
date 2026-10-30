@@ -36,6 +36,28 @@ class FfmpegProcessorTest {
         assertThatThrownBy(() -> new FfmpegProcessor(properties(1)).process(directory))
             .isInstanceOfSatisfying(ProcessingFailure.class, e -> assertThat(e.code).isEqualTo("DURATION_LIMIT"));
     }
+    @Test void sourceAtDurationLimitSurvivesAacPadding() {
+        FfmpegProcessor.run(List.of("ffmpeg", "-nostdin", "-loglevel", "error", "-f", "lavfi", "-i",
+            "color=c=black:s=64x64:r=24", "-f", "lavfi", "-i", "sine=frequency=440", "-t", "180",
+            "-c:v", "libx264", "-threads", "1", "-c:a", "aac", "-f", "mp4", "-y", directory.resolve("source").toString()),
+            directory, null, 30, "TEST_CLIP_FAILED", false);
+        var processor = new FfmpegProcessor(properties(180));
+        assertThat(processor.probe(directory.resolve("source"), directory.resolve("source-check.json")).durationMillis())
+            .isEqualTo(180000L);
+        assertThat(processor.process(directory).durationMillis()).isBetween(179000L, 181000L);
+    }
+    @Test void narrowVideoProducesThumbnailWithinBothDimensionLimits() throws Exception {
+        FfmpegProcessor.run(List.of("ffmpeg", "-nostdin", "-loglevel", "error", "-f", "lavfi", "-i",
+            "color=c=black:s=4x720:r=24", "-t", "1", "-an", "-c:v", "libx264", "-threads", "1",
+            "-pix_fmt", "yuv420p", "-f", "mp4", "-y", directory.resolve("source").toString()),
+            directory, null, 20, "TEST_CLIP_FAILED", false);
+        new FfmpegProcessor(properties(180)).process(directory);
+        var thumbnail = javax.imageio.ImageIO.read(directory.resolve("thumbnail.jpg").toFile());
+        assertThat(thumbnail).isNotNull();
+        assertThat(thumbnail.getWidth()).isBetween(1, 640);
+        assertThat(thumbnail.getHeight()).isBetween(1, 360);
+        assertThat((double) thumbnail.getWidth() / thumbnail.getHeight()).isCloseTo(4.0 / 720, within(0.001));
+    }
     @Test void audioOnlyMediaCannotBecomeAVideo() {
         FfmpegProcessor.run(List.of("ffmpeg", "-nostdin", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=440",
             "-t", "1", "-c:a", "aac", "-f", "mp4", "-y", directory.resolve("source").toString()), directory, null, 20, "TEST_AUDIO_FAILED", false);
