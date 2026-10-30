@@ -27,7 +27,7 @@ class SecurityConfig {
                 .pathMatchers("/v1/users/me").hasAnyRole("user", "admin")
                 .pathMatchers("/v1/users/session").authenticated()
                 .pathMatchers(org.springframework.http.HttpMethod.GET, "/v1/videos/session").hasAnyRole("user", "admin")
-                .pathMatchers(org.springframework.http.HttpMethod.GET, "/v1/videos/{id:[0-9a-fA-F-]+}").hasAnyRole("user", "admin")
+                .pathMatchers(org.springframework.http.HttpMethod.GET, "/v1/videos", "/v1/videos/{id:[0-9a-fA-F-]+}", "/v1/videos/{id:[0-9a-fA-F-]+}/playback").hasAnyRole("user", "admin")
                 .pathMatchers(org.springframework.http.HttpMethod.POST, "/v1/videos/uploads").hasAnyRole("user", "admin")
                 .pathMatchers(org.springframework.http.HttpMethod.POST, "/v1/videos/*/complete").hasAnyRole("user", "admin")
                 .anyExchange().denyAll())

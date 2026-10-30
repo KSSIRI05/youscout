@@ -80,10 +80,30 @@ def main():
                 raise RuntimeError("Processing smoke timed out waiting for Video READY.")
             assert details["durationMillis"] > 0 and details["width"] > 0 and details["height"] > 0
             assert sql("worker-db", "youscout_media_worker", f"SELECT count(*) FROM processing_jobs WHERE video_id = '{video_id}' AND status = 'SUCCEEDED';") == "1"
+            outputs = json.loads(sql("worker-db", "youscout_media_worker",
+                f"SELECT json_build_object('video/mp4', output_video_key, 'image/jpeg', thumbnail_key) FROM processing_jobs WHERE video_id = '{video_id}';"))
+            for content_type, object_key in outputs.items():
+                metadata = json.loads(command([*aws_base, "s3api", "head-object", "--bucket", bucket, "--key", object_key, "--output", "json"]))
+                assert metadata["ContentLength"] > 0 and metadata["ContentType"] == content_type, "Derived S3 object missing or invalid"
+            status, playback = request(f"http://localhost:8080/v1/videos/{video_id}/playback", headers=headers)
+            assert status == 200, "Private playback ticket unavailable"
+            status, library = request("http://localhost:8080/v1/videos", headers=headers)
+            assert status == 200 and any(item["id"] == video_id and item["processingStatus"] == "READY" for item in library["items"]), "Private library missing ready clip"
+            # Le Bearer reste côté API ; les GET S3 utilisent uniquement leur signature temporaire.
+            for field, content_type in (("videoUrl", "video/mp4"), ("thumbnailUrl", "image/jpeg")):
+                try:
+                    target = urllib.request.Request(playback[field], headers={"Range": "bytes=0-63"})
+                    with urllib.request.urlopen(target, timeout=20) as media:
+                        assert media.status == 206 and media.headers.get_content_type() == content_type
+                        assert len(media.read()) == 64
+                except Exception:
+                    raise RuntimeError("Private S3 range read failed; signed URL omitted.") from None
             replay_status, replay = request(f"http://localhost:8080/v1/videos/{video_id}/complete", b"{}", headers, "POST")
             assert replay_status == 200 and replay == confirmation, "Completion replay changed after processing"
             print("PASS: real S3 conditional download, FFmpeg MP4/thumbnail, worker outbox, Kafka and Video READY.", flush=True)
             print("PASS: private status metadata and stable upload confirmation after processing.", flush=True)
+            print("PASS: derived MP4 and JPEG exist in S3 with nonzero sizes and correct content types.", flush=True)
+            print("PASS: private playback links support S3 range GET without API Bearer.", flush=True)
     finally:
         if video_id:
             prefix = f"processed/{video_id}/"

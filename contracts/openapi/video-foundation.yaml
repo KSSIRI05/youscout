@@ -1,11 +1,68 @@
 openapi: 3.0.3
 info:
   title: YouScout Video identity API
-  version: 0.5.0
+  version: 0.6.0
   description: Identité Keycloak, préparation et confirmation d'uploads S3 avec métadonnées persistantes.
 servers:
   - url: http://localhost:8080
 paths:
+  /v1/videos:
+    get:
+      operationId: listOwnVideos
+      summary: Lister ses vidéos et leurs états de traitement
+      description: Ordre created_at puis id décroissants. 20 résultats par page, sans clé S3 ni URL signée.
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: query, name: offset, schema: {type: integer, minimum: 0, maximum: 10000, default: 0}}
+      responses:
+        '200':
+          description: Page privée, Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hasMore]
+                properties:
+                  hasMore: {type: boolean}
+                  items:
+                    type: array
+                    maxItems: 20
+                    items:
+                      $ref: '#/paths/~1v1~1videos~1{id}/get/responses/200/content/application~1json/schema'
+        '400': {description: Pagination invalide}
+        '401': {description: Session absente ou invalide}
+        '403': {description: Rôle insuffisant}
+        '503': {description: Base temporairement indisponible}
+  /v1/videos/{id}/playback:
+    get:
+      operationId: getOwnVideoPlayback
+      summary: Obtenir des liens temporaires pour lire sa vidéo prête
+      description: |
+        Exige user ou admin et le sub propriétaire, sans exception pour admin.
+        Seules les vidéos UPLOADED et READY peuvent être lues.
+        Liens GET S3 privés pour le MP4 et la miniature, signés pour 120 secondes.
+        Leur validité dépend aussi des identifiants temporaires AWS.
+        Les liens donnent accès à leur détenteur pendant leur validité : ne pas les enregistrer ni les journaliser.
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Liens de lecture, Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [videoUrl, thumbnailUrl, expiresAt]
+                properties:
+                  videoUrl: {type: string, format: uri}
+                  thumbnailUrl: {type: string, format: uri}
+                  expiresAt: {type: string, format: date-time}
+        '401': {description: Session absente ou invalide}
+        '403': {description: Rôle insuffisant}
+        '404': {description: Vidéo inconnue ou appartenant à un autre joueur}
+        '409': {description: Vidéo en attente ou en échec de traitement}
+        '503': {description: Signature ou stockage temporairement indisponible}
   /v1/videos/{id}:
     get:
       operationId: getOwnVideoProcessingStatus
