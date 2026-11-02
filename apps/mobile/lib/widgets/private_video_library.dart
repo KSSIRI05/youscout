@@ -3,14 +3,18 @@ import 'package:flutter/material.dart';
 import '../backend/private_video.dart';
 import 'private_video_player.dart';
 
+typedef VideoPublish = Future<Map<String, dynamic>> Function(String id);
+
 class PrivateVideoLibrary extends StatefulWidget {
   const PrivateVideoLibrary({
     required this.request,
+    this.publish,
     this.refreshKey,
     this.active = true,
     super.key,
   });
   final VideoRead request;
+  final VideoPublish? publish;
   final String? refreshKey;
   final bool active;
   @override
@@ -22,6 +26,8 @@ class _PrivateVideoLibraryState extends State<PrivateVideoLibrary> {
   Timer? poll;
   String? selected;
   bool loading = false, failed = false, more = false;
+  final Set<String> publishing = {};
+  String? publicationMessage;
   int offset = 0, generation = 0;
   @override
   void initState() {
@@ -74,6 +80,22 @@ class _PrivateVideoLibraryState extends State<PrivateVideoLibrary> {
     }
   }
 
+  Future<void> publish(PrivateVideo video) async {
+    final action = widget.publish;
+    if (action == null || !widget.active || publishing.contains(video.id)) return;
+    setState(() { publishing.add(video.id); publicationMessage = null; });
+    try {
+      await action(video.id);
+      if (!mounted) return;
+      setState(() => publicationMessage = 'Vidéo publiée dans le fil.');
+      await load();
+    } catch (_) {
+      if (mounted) setState(() => publicationMessage = 'Publication impossible. Réessaie.');
+    } finally {
+      if (mounted) setState(() => publishing.remove(video.id));
+    }
+  }
+
   @override
   void dispose() {
     generation++;
@@ -106,6 +128,11 @@ class _PrivateVideoLibraryState extends State<PrivateVideoLibrary> {
         const Text(
           'Impossible de charger tes vidéos. Actualise pour réessayer.',
         ),
+      if (publicationMessage != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(publicationMessage!, key: const Key('publication-message')),
+        ),
       if (!loading && !failed && videos.isEmpty)
         const Text('Tes clips apparaîtront ici après leur envoi.'),
       if (selected != null) ...[
@@ -131,7 +158,18 @@ class _PrivateVideoLibraryState extends State<PrivateVideoLibrary> {
                   ? Icons.error_outline
                   : Icons.schedule,
             ),
-            trailing: video.ready ? const Icon(Icons.chevron_right) : null,
+            trailing: video.ready
+                ? video.published
+                    ? const Chip(label: Text('Publié'))
+                    : widget.publish == null
+                        ? const Icon(Icons.chevron_right)
+                        : OutlinedButton(
+                            onPressed: publishing.contains(video.id) ? null : () => publish(video),
+                            child: publishing.contains(video.id)
+                                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                                : const Text('Publier'),
+                          )
+                : null,
             onTap: video.ready
                 ? () => setState(() => selected = video.id)
                 : null,

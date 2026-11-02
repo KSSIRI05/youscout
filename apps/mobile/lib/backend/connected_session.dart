@@ -153,6 +153,51 @@ class ConnectedSession extends ChangeNotifier {
     Map<String, String>? query,
   }) => _object('GET', path, query: query);
 
+  Future<Map<String, dynamic>> feedGet({
+    int offset = 0,
+    bool followingOnly = false,
+  }) => _object(
+    'GET',
+    '/v1/feed',
+    query: {'offset': '$offset', 'following': '$followingOnly'},
+  );
+
+  Future<Map<String, dynamic>> publicProfile(String subject) =>
+      _object('GET', '/v1/users/${Uri.encodeComponent(subject)}');
+
+  Future<Map<String, dynamic>> followUser(
+    String subject, {
+    required bool follow,
+  }) => _object(
+    follow ? 'PUT' : 'DELETE',
+    '/v1/users/${Uri.encodeComponent(subject)}/follow',
+  );
+
+  Future<Map<String, dynamic>> socialGet(
+    String path, {
+    Map<String, String>? query,
+  }) => _object('GET', '/v1/social/$path', query: query);
+
+  Future<Map<String, dynamic>> socialPost(
+    String path,
+    Map<String, Object> body,
+  ) => _object('POST', '/v1/social/$path', body: body);
+
+  Future<Map<String, dynamic>> socialPut(String path) =>
+      _object('PUT', '/v1/social/$path');
+
+  Future<void> socialDelete(String path) async =>
+      _request('DELETE', '/v1/social/$path');
+
+  Future<List<Map<String, dynamic>>> socialList(
+    String path, {
+    Map<String, String>? query,
+  }) async => (await _request('GET', '/v1/social/$path', query: query) as List)
+      .cast<Map<String, dynamic>>();
+
+  Future<Map<String, dynamic>> publishVideo(String id) =>
+      videoRequest('/v1/videos/$id/publish');
+
   Future<Map<String, dynamic>> videoRequest(
     String path, {
     Map<String, Object>? body,

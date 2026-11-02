@@ -7,10 +7,12 @@ class PrivateVideoPlayer extends StatefulWidget {
   const PrivateVideoPlayer({
     required this.id,
     required this.request,
+    this.publicPlayback = false,
     super.key,
   });
   final String id;
   final VideoRead request;
+  final bool publicPlayback;
   @override
   State<PrivateVideoPlayer> createState() => _PrivateVideoPlayerState();
 }
@@ -46,7 +48,9 @@ class _PrivateVideoPlayerState extends State<PrivateVideoPlayer>
     VideoPlayerController? next;
     try {
       final fresh = PlaybackTicket.fromJson(
-        await widget.request('/v1/videos/${widget.id}/playback'),
+        await widget.request(
+          '/v1/videos/${widget.id}/${widget.publicPlayback ? 'public-playback' : 'playback'}',
+        ),
       );
       if (!mounted || current != generation) return;
       // Aucun Bearer Keycloak n'est transmis au stockage S3.
