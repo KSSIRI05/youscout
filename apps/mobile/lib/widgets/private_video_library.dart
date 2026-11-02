@@ -82,15 +82,24 @@ class _PrivateVideoLibraryState extends State<PrivateVideoLibrary> {
 
   Future<void> publish(PrivateVideo video) async {
     final action = widget.publish;
-    if (action == null || !widget.active || publishing.contains(video.id)) return;
-    setState(() { publishing.add(video.id); publicationMessage = null; });
+    if (action == null || !widget.active || publishing.contains(video.id)) {
+      return;
+    }
+    setState(() {
+      publishing.add(video.id);
+      publicationMessage = null;
+    });
     try {
       await action(video.id);
       if (!mounted) return;
       setState(() => publicationMessage = 'Vidéo publiée dans le fil.');
       await load();
     } catch (_) {
-      if (mounted) setState(() => publicationMessage = 'Publication impossible. Réessaie.');
+      if (mounted) {
+        setState(
+          () => publicationMessage = 'Publication impossible. Réessaie.',
+        );
+      }
     } finally {
       if (mounted) setState(() => publishing.remove(video.id));
     }
@@ -131,7 +140,10 @@ class _PrivateVideoLibraryState extends State<PrivateVideoLibrary> {
       if (publicationMessage != null)
         Padding(
           padding: const EdgeInsets.only(top: 8),
-          child: Text(publicationMessage!, key: const Key('publication-message')),
+          child: Text(
+            publicationMessage!,
+            key: const Key('publication-message'),
+          ),
         ),
       if (!loading && !failed && videos.isEmpty)
         const Text('Tes clips apparaîtront ici après leur envoi.'),
@@ -160,15 +172,23 @@ class _PrivateVideoLibraryState extends State<PrivateVideoLibrary> {
             ),
             trailing: video.ready
                 ? video.published
-                    ? const Chip(label: Text('Publié'))
-                    : widget.publish == null
-                        ? const Icon(Icons.chevron_right)
-                        : OutlinedButton(
-                            onPressed: publishing.contains(video.id) ? null : () => publish(video),
-                            child: publishing.contains(video.id)
-                                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                                : const Text('Publier'),
-                          )
+                      ? const Chip(label: Text('Publié'))
+                      : widget.publish == null
+                      ? const Icon(Icons.chevron_right)
+                      : OutlinedButton(
+                          onPressed: publishing.contains(video.id)
+                              ? null
+                              : () => publish(video),
+                          child: publishing.contains(video.id)
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('Publier'),
+                        )
                 : null,
             onTap: video.ready
                 ? () => setState(() => selected = video.id)

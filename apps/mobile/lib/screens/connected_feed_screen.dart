@@ -301,190 +301,190 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
   Widget build(BuildContext context) => RefreshIndicator(
     onRefresh: () => load(firstPage: true),
     child: ListView(
-    padding: const EdgeInsets.all(20),
-    physics: const AlwaysScrollableScrollPhysics(),
-    children: [
-      Row(
-        children: [
-          Expanded(
-            child: Text(
-              'Le fil',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-          ),
-          IconButton(
-            tooltip: 'Actualiser le fil',
-            onPressed: loading ? null : () => load(firstPage: true),
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
-      const Text(
-        'Les vidéos publiées par la communauté YouScout.',
-        style: TextStyle(color: ScoutColors.muted),
-      ),
-      Wrap(
-        spacing: 8,
-        children: [
-          ChoiceChip(
-            label: const Text('Tout'),
-            selected: !followingOnly,
-            onSelected: (_) {
-              setState(() {
-                followingOnly = false;
-                offset = 0;
-                hasMore = false;
-                videos = [];
-                selected = null;
-              });
-              load(firstPage: true);
-            },
-          ),
-          ChoiceChip(
-            label: const Text('Abonnements'),
-            selected: followingOnly,
-            onSelected: (_) {
-              setState(() {
-                followingOnly = true;
-                offset = 0;
-                hasMore = false;
-                videos = [];
-                selected = null;
-              });
-              load(firstPage: true);
-            },
-          ),
-        ],
-      ),
-      const SizedBox(height: 16),
-      if (loading) const LinearProgressIndicator(),
-      if (failed) ...[
-        const Text(
-          'Impossible de charger le fil. Vérifie ta connexion puis réessaie.',
-        ),
-        TextButton(
-          onPressed: loading ? null : () => load(firstPage: true),
-          child: const Text('Réessayer'),
-        ),
-      ],
-      if (!loading && !failed && videos.isEmpty && !followingOnly)
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 32),
-          child: Text('Aucune vidéo publiée pour le moment.'),
-        ),
-      if (!loading && !failed && videos.isEmpty && followingOnly)
-        const Padding(
-          padding: EdgeInsets.only(bottom: 24),
-          child: Text('Suis des joueurs pour voir leurs videos ici.'),
-        ),
-      if (selected != null) ...[
-        PrivateVideoPlayer(
-          key: ValueKey('public-$selected'),
-          id: selected!,
-          publicPlayback: true,
-          request: (path, {query}) =>
-              widget.session.videoGet(path, query: query),
-        ),
-        TextButton(
-          onPressed: () => setState(() => selected = null),
-          child: const Text('Fermer le lecteur'),
-        ),
-      ],
-      for (final video in videos)
-        Card(
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.sports_soccer)),
-                title: Text(
-                  video.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  video.publishedAt.toLocal().toString().substring(0, 16),
-                ),
-                trailing: const Icon(
-                  Icons.play_circle_outline,
-                  color: ScoutColors.brand,
-                ),
-                onTap: () => setState(() => selected = video.id),
-              ),
-              if (video.skills.isNotEmpty || video.hashtags.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: [
-                      for (final skill in video.skills)
-                        Chip(
-                          avatar: const Icon(Icons.sports, size: 15),
-                          label: Text(skill),
-                        ),
-                      for (final tag in video.hashtags)
-                        Chip(avatar: const Text('#'), label: Text(tag)),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
-      for (final video in videos)
-        Padding(
-          padding: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
-          child: Row(
-            children: [
-              TextButton.icon(
-                onPressed: () => _profile(video),
-                icon: const Icon(Icons.person_outline),
-                label: const Text('Profil'),
-              ),
-              TextButton.icon(
-                onPressed: () => _like(video),
-                icon: Icon(
-                  likeStates[video.id]?['liked'] == true
-                      ? Icons.favorite
-                      : Icons.favorite_border,
-                ),
-                label: Text('${likeStates[video.id]?['count'] ?? 'J’aime'}'),
-              ),
-              TextButton.icon(
-                onPressed: () => _comments(video),
-                icon: const Icon(Icons.mode_comment_outlined),
-                label: const Text('Commenter'),
-              ),
-              PopupMenuButton<String>(
-                onSelected: (_) => _report(video),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'report', child: Text('Signaler')),
-                ],
-                icon: const Icon(Icons.more_horiz),
-              ),
-            ],
-          ),
-        ),
-      if (offset > 0 || hasMore)
+      padding: const EdgeInsets.all(20),
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            TextButton(
-              onPressed: loading || offset == 0
-                  ? null
-                  : () => load(pageOffset: offset - 20),
-              child: const Text('Précédentes'),
+            Expanded(
+              child: Text(
+                'Le fil',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
             ),
-            TextButton(
-              onPressed: loading || !hasMore
-                  ? null
-                  : () => load(pageOffset: offset + 20),
-              child: const Text('Suivantes'),
+            IconButton(
+              tooltip: 'Actualiser le fil',
+              onPressed: loading ? null : () => load(firstPage: true),
+              icon: const Icon(Icons.refresh),
             ),
           ],
         ),
-    ],
+        const Text(
+          'Les vidéos publiées par la communauté YouScout.',
+          style: TextStyle(color: ScoutColors.muted),
+        ),
+        Wrap(
+          spacing: 8,
+          children: [
+            ChoiceChip(
+              label: const Text('Tout'),
+              selected: !followingOnly,
+              onSelected: (_) {
+                setState(() {
+                  followingOnly = false;
+                  offset = 0;
+                  hasMore = false;
+                  videos = [];
+                  selected = null;
+                });
+                load(firstPage: true);
+              },
+            ),
+            ChoiceChip(
+              label: const Text('Abonnements'),
+              selected: followingOnly,
+              onSelected: (_) {
+                setState(() {
+                  followingOnly = true;
+                  offset = 0;
+                  hasMore = false;
+                  videos = [];
+                  selected = null;
+                });
+                load(firstPage: true);
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (loading) const LinearProgressIndicator(),
+        if (failed) ...[
+          const Text(
+            'Impossible de charger le fil. Vérifie ta connexion puis réessaie.',
+          ),
+          TextButton(
+            onPressed: loading ? null : () => load(firstPage: true),
+            child: const Text('Réessayer'),
+          ),
+        ],
+        if (!loading && !failed && videos.isEmpty && !followingOnly)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 32),
+            child: Text('Aucune vidéo publiée pour le moment.'),
+          ),
+        if (!loading && !failed && videos.isEmpty && followingOnly)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 24),
+            child: Text('Suis des joueurs pour voir leurs videos ici.'),
+          ),
+        if (selected != null) ...[
+          PrivateVideoPlayer(
+            key: ValueKey('public-$selected'),
+            id: selected!,
+            publicPlayback: true,
+            request: (path, {query}) =>
+                widget.session.videoGet(path, query: query),
+          ),
+          TextButton(
+            onPressed: () => setState(() => selected = null),
+            child: const Text('Fermer le lecteur'),
+          ),
+        ],
+        for (final video in videos)
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.sports_soccer)),
+                  title: Text(
+                    video.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    video.publishedAt.toLocal().toString().substring(0, 16),
+                  ),
+                  trailing: const Icon(
+                    Icons.play_circle_outline,
+                    color: ScoutColors.brand,
+                  ),
+                  onTap: () => setState(() => selected = video.id),
+                ),
+                if (video.skills.isNotEmpty || video.hashtags.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        for (final skill in video.skills)
+                          Chip(
+                            avatar: const Icon(Icons.sports, size: 15),
+                            label: Text(skill),
+                          ),
+                        for (final tag in video.hashtags)
+                          Chip(avatar: const Text('#'), label: Text(tag)),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        for (final video in videos)
+          Padding(
+            padding: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
+            child: Row(
+              children: [
+                TextButton.icon(
+                  onPressed: () => _profile(video),
+                  icon: const Icon(Icons.person_outline),
+                  label: const Text('Profil'),
+                ),
+                TextButton.icon(
+                  onPressed: () => _like(video),
+                  icon: Icon(
+                    likeStates[video.id]?['liked'] == true
+                        ? Icons.favorite
+                        : Icons.favorite_border,
+                  ),
+                  label: Text('${likeStates[video.id]?['count'] ?? 'J’aime'}'),
+                ),
+                TextButton.icon(
+                  onPressed: () => _comments(video),
+                  icon: const Icon(Icons.mode_comment_outlined),
+                  label: const Text('Commenter'),
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (_) => _report(video),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'report', child: Text('Signaler')),
+                  ],
+                  icon: const Icon(Icons.more_horiz),
+                ),
+              ],
+            ),
+          ),
+        if (offset > 0 || hasMore)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              TextButton(
+                onPressed: loading || offset == 0
+                    ? null
+                    : () => load(pageOffset: offset - 20),
+                child: const Text('Précédentes'),
+              ),
+              TextButton(
+                onPressed: loading || !hasMore
+                    ? null
+                    : () => load(pageOffset: offset + 20),
+                child: const Text('Suivantes'),
+              ),
+            ],
+          ),
+      ],
     ),
   );
 }
