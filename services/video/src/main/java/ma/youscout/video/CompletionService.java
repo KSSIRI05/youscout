@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -19,33 +18,60 @@ class CompletionService {
                         Instant createdAt, Instant updatedAt, Instant completedAt) {}
     private final VideoRepository videos;
     private final S3Client s3;
-    private final OutboxRepository outbox;
+    private final CompletionTransaction completionTransaction;
 
-    CompletionService(VideoRepository videos, S3Client s3, OutboxRepository outbox) {
-        this.videos = videos; this.s3 = s3; this.outbox = outbox;
+    CompletionService(VideoRepository videos, S3Client s3, CompletionTransaction completionTransaction) {
+        this.videos = videos; this.s3 = s3; this.completionTransaction = completionTransaction;
     }
 
-    @Transactional
     public Confirmation complete(UUID id, String owner) {
-        var video = videos.lockOwned(id, owner).orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Vidéo introuvable."));
-        // Une reprise ne réécrit ni date ni ETag, et fonctionne même si S3 est indisponible ensuite.
+        VideoUpload video = videos.lockOwned(id, owner).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Vid?o introuvable."));
         if (video.status().equals("UPLOADED")) return response(video);
         if (!video.status().equals("PENDING_UPLOAD")) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cette vidéo ne peut pas être confirmée.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cette vid?o ne peut pas ?tre confirm?e.");
         }
-        var object = inspect(video);
-        if (object.contentLength() == null || object.contentLength() != video.sizeBytes()
-                || !video.contentType().equals(object.contentType())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Taille ou type déclaré du fichier incorrect.");
+
+        String leaseToken = null;
+        long deadline = System.nanoTime() + java.time.Duration.ofSeconds(30).toNanos();
+        while (leaseToken == null) {
+            String candidate = UUID.randomUUID().toString();
+            var claimed = videos.claimCompletion(id, owner, candidate);
+            if (claimed.isPresent()) {
+                video = claimed.get();
+                leaseToken = candidate;
+                break;
+            }
+            video = videos.lockOwned(id, owner).orElseThrow(() ->
+                    new ResponseStatusException(HttpStatus.NOT_FOUND, "Vid?o introuvable."));
+            if (video.status().equals("UPLOADED")) return response(video);
+            if (!video.status().equals("PENDING_UPLOAD")) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Cette vid?o ne peut pas ?tre confirm?e.");
+            }
+            if (System.nanoTime() >= deadline) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "La confirmation de cette vid?o est toujours en cours.");
+            }
+            try {
+                Thread.sleep(25);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Confirmation temporairement interrompue.");
+            }
         }
-        if (object.eTag() == null || object.eTag().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Métadonnées S3 temporairement indisponibles.");
+
+        try {
+            var object = inspect(video);
+            if (object.contentLength() == null || object.contentLength() != video.sizeBytes()
+                    || !video.contentType().equals(object.contentType())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Taille ou type d?clar? du fichier incorrect.");
+            }
+            if (object.eTag() == null || object.eTag().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "M?tadonn?es S3 temporairement indisponibles.");
+            }
+            return completionTransaction.confirm(video.id(), owner, object.eTag(), leaseToken);
+        } finally {
+            videos.releaseCompletion(id, owner, leaseToken);
         }
-        var confirmed = videos.confirm(video.id(), owner, object.eTag());
-        // Même transaction JDBC : une panne d'outbox annule aussi le passage à UPLOADED.
-        outbox.enqueue(confirmed.id());
-        return response(confirmed);
     }
 
     private HeadObjectResponse inspect(VideoUpload video) {

@@ -1,6 +1,8 @@
 # Socle du service Video
 
-Ce module Spring Boot valide Keycloak, persiste les métadonnées dans PostgreSQL, prépare les uploads S3, confirme les fichiers reçus et écrit `VideoUploaded` dans une outbox transactionnelle. Un relais optionnel publie ensuite dans Kafka. La Gateway expose `GET /v1/videos/session`, `POST /v1/videos/uploads` et `POST /v1/videos/{id}/complete`. Le profil de traitement du worker valide le média et publie son résultat ; voir [le guide FFmpeg](../../docs/MEDIA_PROCESSING.md). Voir [le guide Kafka/outbox](../../docs/VIDEO_OUTBOX.md).
+`POST /v1/videos/{id}/publish` permet au propriétaire de publier une vidéo `READY`. L'état de publication est indépendant de l'upload et du traitement. Une publication écrit `VideoPublished v2` dans l'outbox transactionnelle ; le relais envoie l'événement catalogue vers `video.published.v2`. Les IDs sont validés par Skill et les noms sont enregistrés comme instantanés. Voir [le contrat et les garanties de publication](../../docs/VIDEO_PUBLICATION.md).
+
+Ce module Spring Boot valide Keycloak et persiste les documents Video et l'outbox transactionnelle dans MongoDB. PostgreSQL reste réservé à l'import ponctuel et à la conservation de la sauvegarde source. Le service prépare les uploads S3, confirme les fichiers reçus et publie les événements dans Kafka. La Gateway expose `GET /v1/videos/session`, `POST /v1/videos/uploads` et `POST /v1/videos/{id}/complete`. Le profil de traitement du worker valide le média et publie son résultat ; voir [le guide FFmpeg](../../docs/MEDIA_PROCESSING.md) et [le guide Kafka/outbox](../../docs/VIDEO_OUTBOX.md).
 
 ## Identité Keycloak
 
@@ -20,7 +22,7 @@ Le titre est nettoyé et limité à 150 unités UTF-16 ; un caractère NUL provo
 
 La réponse 201 contient `id`, `status`, `title`, `sizeBytes`, `createdAt` et `upload` : méthode `PUT`, URL, en-têtes `Content-Type`/`Content-Length` et `expiresAt`. Flutter enverra les octets bruts à cette URL, sans Bearer Keycloak et sans multipart/form-data. Le navigateur calcule `Content-Length` automatiquement : ne pas essayer de le définir manuellement en JavaScript. Type et longueur sont signés et doivent correspondre au fichier.
 
-Une reprise avec le même propriétaire, la même clé d'idempotence et les mêmes données normalisées retourne 200 et la même vidéo avec une nouvelle signature. Un autre corps retourne 409. Une clé identique utilisée par un autre joueur crée sa propre vidéo. Les reprises concurrentes sont protégées par une contrainte unique PostgreSQL. En cas d'échec de signature ou de transaction, aucune création partielle ne subsiste et une erreur 503 générique est renvoyée.
+Une reprise avec le meme proprietaire, la meme cle d'idempotence et les memes donnees normalisees retourne 200 et la meme video avec une nouvelle signature. Un autre corps retourne 409. Une cle identique utilisee par un autre joueur cree sa propre video. Les reprises concurrentes sont protegees par un index unique MongoDB sur proprietaire et cle d'idempotence. En cas d'echec de signature ou de transaction, aucune creation partielle ne subsiste et une erreur 503 generique est renvoyee.
 
 L'URL dure au plus 300 secondes par défaut et cesse aussi de fonctionner à l'expiration des identifiants AWS. Elle n'est pas à usage unique et un PUT peut remplacer le même objet tant qu'elle est valide. Ne jamais la journaliser ni la stocker dans Git. Les dates de signature ne sont pas stockées en base. Le statut reste en attente après un PUT jusqu'à la confirmation explicite. Quotas par joueur, expiration des métadonnées abandonnées, événements et traitement FFmpeg restent à développer.
 
@@ -28,7 +30,7 @@ L'URL dure au plus 300 secondes par défaut et cesse aussi de fonctionner à l'e
 
 Après le PUT S3, appeler `POST /v1/videos/{id}/complete` avec le Bearer Keycloak, sans corps ou avec `{}`. Aucun propriétaire, bucket, clé ou URL n'est accepté dans le corps. Les rôles `user` et `admin` doivent confirmer uniquement une vidéo dont le propriétaire correspond à leur propre `sub`. Un identifiant inconnu ou appartenant à quelqu'un d'autre renvoie le même 404, sans appel S3.
 
-Le service verrouille la ligne PostgreSQL pendant la vérification, puis appelle `HeadObject` sur le bucket et la clé persistés. Taille et `Content-Type` doivent correspondre aux valeurs attendues. En cas de succès, la migration V2 permet de passer à `UPLOADED` et de conserver `completed_at` et `source_etag`, sans modifier V1. L'appel S3 est borné à cinq secondes au total (trois secondes par tentative). La réponse 200, non cachable, contient `id`, `status`, `title`, `sizeBytes`, `createdAt`, `updatedAt` et `completedAt`.
+Le service acquiert un bail MongoDB par video avant d'appeler `HeadObject` sur le bucket et la cle persistes. Les confirmations concurrentes attendent cette operation au lieu de relancer S3. Taille et `Content-Type` doivent correspondre aux valeurs attendues. Une transaction MongoDB passe ensuite le document a `UPLOADED`, conserve `completedAt` et `sourceETag`, puis ecrit l'evenement dans l'outbox. L'appel S3 est borne a cinq secondes au total (trois secondes par tentative). La reponse 200, non cachable, contient `id`, `status`, `title`, `sizeBytes`, `createdAt`, `updatedAt` et `completedAt`.
 
 Un fichier absent/inaccessible ou une taille/un type différent provoque 409 ; une panne S3/SDK, un ETag manquant ou une panne de base provoque 503. L'état reste alors `PENDING_UPLOAD`. Aucun droit IAM supplémentaire n'est ajouté : `HeadObject` utilise `GetObject`. Sans `ListBucket`, AWS peut retourner 403 pour un objet absent ; ce 403 ambigu est traité comme un fichier non confirmable, sans annoncer à tort qu'il existe. Voir [la référence HeadObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html).
 
@@ -46,9 +48,11 @@ Le profil de traitement ajoute `GET /v1/videos/{id}` pour consulter ses propres 
 | `VIDEO_S3_REGION` | `us-east-1` | Région passée explicitement au client S3 |
 | `VIDEO_AWS_PROFILE` | vide ; `youscout-video-sdk` avec le profil Spring `local` | Nom du profil AWS, jamais un secret |
 | `SERVER_PORT` | `8083` ; `8080` dans Compose | Port HTTP du processus |
-| `VIDEO_DB_URL` | `jdbc:postgresql://localhost:5434/youscout_video` | URL JDBC ; remplacée par le réseau privé dans Compose |
-| `VIDEO_DB_USERNAME` | `youscout_video` | Compte propre à Video |
-| `VIDEO_DB_PASSWORD` | aucune | Secret généré localement par `init-env.py --upgrade` |
+| `VIDEO_MONGODB_URI` | `mongodb://localhost:27017/youscout_video?replicaSet=rs0` | Connexion au replica set Video |
+| `VIDEO_MONGODB_IMAGE` | `mongo:8.0` | Image locale ; cette machine utilise `mongo:7` depuis son `.env` ignoré |
+| `VIDEO_DB_URL` | `jdbc:postgresql://localhost:5434/youscout_video` | Connexion source pour l'import ponctuel PostgreSQL, pas utilisée par les endpoints |
+| `VIDEO_DB_USERNAME` | `youscout_video` | Compte de la base source pour l'import |
+| `VIDEO_DB_PASSWORD` | aucune | Secret local requis uniquement pour démarrer `video-db` en profil `video-migration` |
 | `VIDEO_MAX_UPLOAD_BYTES` | `104857600` | Taille maximale déclarée (1 octet à 5 Gio) |
 | `VIDEO_UPLOAD_URL_SECONDS` | `300` | Validité de signature (30 à 900 secondes) |
 
@@ -58,11 +62,12 @@ Les identifiants sont résolus au premier appel AWS, pas au démarrage. Le profi
 
 ## Démarrer sur le poste Windows
 
-Pour un lancement Java natif, fournir aussi une base PostgreSQL accessible, `VIDEO_DB_URL` et `VIDEO_DB_PASSWORD` dans l'environnement du processus (ne pas écrire de mot de passe dans la commande ou l'historique). La base Compose n'expose aucun port hôte. Avec Java 21 et une session `youscout-login` valide :
+Pour un lancement Java natif, fournir un replica set MongoDB via `VIDEO_MONGODB_URI`. PostgreSQL est requis uniquement pour l'import ponctuel ; la base Compose n'expose aucun port hôte. Avec Java 21 et une session `youscout-login` valide :
 
 ```powershell
 # Contrôle le rôle et la connexion ; n'affiche aucun identifiant temporaire.
 aws sts get-caller-identity --profile youscout-video-sdk
+$env:VIDEO_MONGODB_URI = 'mongodb://localhost:27017/youscout_video?replicaSet=rs0'
 $env:VIDEO_S3_BUCKET = 'youscout-014663857971-dev-videos'
 $env:VIDEO_S3_REGION = 'us-east-1'
 .\mvnw.cmd -pl services/video spring-boot:run '-Dspring-boot.run.profiles=local'
@@ -81,7 +86,7 @@ docker compose -f infra/compose/compose.yml --profile video up -d --build --wait
 docker compose -f infra/compose/compose.yml ps video
 ```
 
-Le profil Compose `video` est distinct du profil Spring `local`. Il démarre `video-db` et son volume persistant `video-data`, sans port hôte. La readiness inclut PostgreSQL ; elle n'appelle pas S3. Sans identité AWS, la santé fonctionne mais une demande valide de signature retourne 503. La configuration du poste Windows n'est pas montée dans l'image.
+Le profil Compose `video` démarre MongoDB en replica set et le service Video ; PostgreSQL n'est pas requis pour le fonctionnement normal. La readiness inclut MongoDB ; elle n'appelle pas S3. Sans identité AWS, la santé fonctionne mais une demande valide de signature retourne 503. La configuration du poste Windows n'est pas montée dans l'image.
 
 Pour signer réellement depuis Docker en développement local :
 
@@ -116,8 +121,26 @@ Avec la passerelle AWS locale active, `python scripts/smoke-video-upload.py --pu
 
 Les tests chargent les vrais YAML, vérifient les remplacements de bucket/région et le profil dédié, rejettent une URL à la place du nom du bucket et une région vide, puis démarrent le serveur pour vérifier la santé et le refus des autres routes. Ils n'effectuent aucun appel AWS et n'exigent aucun identifiant. Le workflow backend les inclut par le module Maven parent.
 
-Les 30 tests Video et les 15 tests Gateway passent le 18 octobre 2026. Ils couvrent les vrais JWT, PostgreSQL Testcontainers et un vrai presigner avec identifiants factices, sans réseau AWS : création, champs signés, isolation des propriétaires, titres NUL, validation, reprises concurrentes et rollback en cas d'échec de signature. Les tests de confirmation simulent les réponses S3 pour vérifier réussite, absence, refus d'accès, taille/type incorrects, panne SDK/S3, ETag manquant et reprise stable. Les trois tests Python de génération des secrets restent inclus dans le workflow CI. La CI démarre Video et sa base mais ne reçoit aucun identifiant AWS réel.
+Les tests d'integration utilisent MongoDB Testcontainers configure en replica set et Kafka Testcontainers. Ils couvrent l'upload, les transactions, la deduplication, les resultats du worker, la publication, la lecture privee et les roles Keycloak. La commande `verify` ci-dessus execute ces tests.
 
 Le smoke local avec `--put-object --verify-restart` a également réussi : PUT S3 réel, persistance après redémarrage et nettoyage des seules données temporaires. Les identifiants et URL sont restés hors des logs et du dépôt. Cela ne valide ni le format réel du média ni son traitement.
 
 Références : [chaîne d'identifiants AWS SDK Java](https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/credentials-chain.html), [sélection de région](https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/region-selection.html).
+
+## Import PostgreSQL vers MongoDB
+
+MongoDB est le stockage actif du service Video. Le profil Compose `video` utilise un replica set local pour les transactions multi-documents. Dans l'environnement de développement actuel, le snapshot initial a été importé et les comptes MongoDB/PostgreSQL ont correspondu.
+
+L'importeur ponctuel copie un snapshot PostgreSQL `REPEATABLE READ` vers `videos`, `video_outbox`, `processing_result_inbox` et `rejected_processing_results`. Les compétences et hashtags sont intégrés aux documents vidéo. Les UUID deviennent des chaînes, les horodatages des dates BSON et les payloads outbox restent des objets JSON. Le marqueur `video_migration_runs/postgres-video-v1` conserve les comptes importés ; il empêche de répéter cet import initial. Aucun secret ni URL S3 temporaire n'est importé.
+
+Pour reproduire un import initial, arrêter Video, le worker et les autres producteurs, sauvegarder PostgreSQL, puis démarrer les deux bases :
+
+```powershell
+docker compose -f infra/compose/compose.yml --profile video-migration up -d video-db
+docker compose -f infra/compose/compose.yml --profile video up -d video-mongo video-mongo-init
+docker compose -f infra/compose/compose.yml --profile video --profile video-migration run --rm --no-deps `
+  -e VIDEO_POSTGRES_TO_MONGO_ENABLED=true `
+  video --spring.main.web-application-type=none
+```
+
+L'import initial a été exécuté dans cet environnement. Il n'est pas une réplication continue. Ne pas remettre en service une ancienne version de Video qui écrit vers PostgreSQL ; toute reprise de PostgreSQL exige une procédure de rattrapage explicite. Le volume PostgreSQL et sa sauvegarde sont conservés pour le retour arrière.

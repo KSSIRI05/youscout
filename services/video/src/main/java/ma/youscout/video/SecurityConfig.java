@@ -7,9 +7,11 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 
 /** Valide le JWT indépendamment de la Gateway et refuse les routes non déclarées. */
 @Configuration(proxyBeanMethods = false)
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -21,9 +23,10 @@ class SecurityConfig {
                 .authorizeHttpRequests(access -> access
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/v1/videos/session").hasAnyRole("user", "admin")
-                        .requestMatchers(HttpMethod.GET, "/v1/videos", "/v1/videos/{id:[0-9a-fA-F-]+}", "/v1/videos/{id:[0-9a-fA-F-]+}/playback").hasAnyRole("user", "admin")
+                        .requestMatchers(HttpMethod.GET, "/v1/videos", "/v1/videos/{id:[0-9a-fA-F-]+}", "/v1/videos/{id:[0-9a-fA-F-]+}/playback", "/v1/videos/{id:[0-9a-fA-F-]+}/public-playback").hasAnyRole("user", "admin")
                         .requestMatchers(HttpMethod.POST, "/v1/videos/uploads").hasAnyRole("user", "admin")
                         .requestMatchers(HttpMethod.POST, "/v1/videos/*/complete").hasAnyRole("user", "admin")
+                        .requestMatchers(HttpMethod.POST, "/v1/videos/{id:[0-9a-fA-F-]+}/publish").hasAnyRole("user", "admin")
                         .anyRequest().denyAll())
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint((request, response, error) -> ApiSecurityErrors.unauthorized(response, error))

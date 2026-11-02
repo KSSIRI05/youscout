@@ -12,11 +12,14 @@ import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.bson.Document;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -38,26 +41,24 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
 class UploadIntegrationTest {
-    @Container static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17.11-alpine");
+    @Container static final MongoDBContainer mongoDb = new MongoDBContainer("mongo:7").withReplicaSet();
     static final OidcFixture oidc = new OidcFixture();
     static final HttpClient client = HttpClient.newHttpClient();
     static final String INPUT = "{\"title\":\" Mon talent \",\"contentType\":\"video/mp4\",\"sizeBytes\":12}";
     @Value("${local.server.port}") int port;
-    @Autowired JdbcTemplate jdbc;
+    @Autowired MongoTemplate mongo;
     @MockitoBean(name = "videoCredentialsProvider", answers = org.mockito.Answers.CALLS_REAL_METHODS)
     AwsCredentialsProvider credentials;
     @MockitoBean(name = "videoS3Client") S3Client s3;
 
     @DynamicPropertySource static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.mongodb.uri", () -> mongoDb.getReplicaSetUrl("youscout_video"));
         registry.add("spring.security.oauth2.resourceserver.jwt.issuer-uri", oidc::base);
         registry.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri", () -> oidc.base() + "/jwks");
     }
     @BeforeEach void setup() {
-        jdbc.update("DELETE FROM outbox_events");
-        jdbc.update("DELETE FROM videos");
+        mongo.remove(new Query(), "video_outbox");
+        mongo.remove(new Query(), "videos");
         when(credentials.resolveCredentials()).thenReturn(AwsBasicCredentials.create("test-only", "test-only"));
         when(s3.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder()
                 .contentLength(12L).contentType("video/mp4").eTag("\"source-etag\"").build());
@@ -72,11 +73,11 @@ class UploadIntegrationTest {
         UUID id = UUID.fromString(json.read("$.id", String.class));
         assertThat(json.read("$.status", String.class)).isEqualTo("PENDING_UPLOAD");
         assertThat(json.read("$.title", String.class)).isEqualTo("Mon talent");
-        var row = jdbc.queryForMap("SELECT * FROM videos WHERE id = ?", id);
-        assertThat(row.get("owner_subject")).isEqualTo("alice");
-        assertThat(row.get("s3_key")).isEqualTo("videos/" + id + "/source");
-        assertThat(row.get("created_at")).isNotNull();
-        assertThat(row.get("updated_at")).isNotNull();
+        var row = video(id.toString());
+        assertThat(row.getString("ownerSubject")).isEqualTo("alice");
+        assertThat(row.getString("s3Key")).isEqualTo("videos/" + id + "/source");
+        assertThat(row.get("createdAt")).isNotNull();
+        assertThat(row.get("updatedAt")).isNotNull();
         var url = URI.create(json.read("$.upload.url", String.class));
         assertThat(url.getScheme()).isEqualTo("https");
         assertThat(url.getHost()).startsWith("youscout-014663857971-dev-videos.s3.");
@@ -101,7 +102,7 @@ class UploadIntegrationTest {
         String key = key();
         assertThat(post(INPUT, key, "alice").statusCode()).isEqualTo(201);
         assertThat(post(INPUT, key, "bob").statusCode()).isEqualTo(201);
-        assertThat(jdbc.queryForList("SELECT owner_subject FROM videos", String.class))
+        assertThat(mongo.findAll(Document.class, "videos").stream().map(row -> row.getString("ownerSubject")).toList())
                 .containsExactlyInAnyOrder("alice", "bob");
     }
 
@@ -152,7 +153,7 @@ class UploadIntegrationTest {
         var requests = java.util.stream.IntStream.range(0, 4)
                 .mapToObj(i -> client.sendAsync(request(INPUT, key, token), HttpResponse.BodyHandlers.ofString())).toList();
         CompletableFuture.allOf(requests.toArray(CompletableFuture[]::new)).join();
-        assertThat(requests.stream().map(f -> f.join().statusCode()).toList())
+        assertThat(requests.stream().map(f -> f.join().statusCode()).toList()).withFailMessage(requests.getFirst().join().body())
                 .containsExactlyInAnyOrder(201, 200, 200, 200);
         assertThat(count()).isEqualTo(1);
     }
@@ -165,15 +166,15 @@ class UploadIntegrationTest {
         assertThat(json.read("$.status", String.class)).isEqualTo("UPLOADED");
         assertThat(json.read("$.completedAt", String.class)).isNotBlank();
         assertThat(response.headers().firstValue("Cache-Control").orElse("")).contains("no-store");
-        var row = jdbc.queryForMap("SELECT * FROM videos WHERE id = ?", UUID.fromString(id));
-        assertThat(row.get("source_etag")).isEqualTo("\"source-etag\"");
-        assertThat(row.get("completed_at")).isNotNull();
-        var event = jdbc.queryForMap("SELECT id, aggregate_id, payload::text FROM outbox_events WHERE aggregate_id = ?", UUID.fromString(id));
-        var payload = JsonPath.parse((String) event.get("payload"));
-        assertThat(payload.read("$.eventId", String.class)).isEqualTo(event.get("id").toString());
+        var row = video(id);
+        assertThat(row.getString("sourceETag")).isEqualTo("\"source-etag\"");
+        assertThat(row.get("completedAt")).isNotNull();
+        var event = mongo.findOne(Query.query(Criteria.where("aggregateId").is(id)), Document.class, "video_outbox");
+        var payload = JsonPath.parse(event.get("payload", Document.class).toJson());
+        assertThat(payload.read("$.eventId", String.class)).isEqualTo(event.getString("id"));
         assertThat(payload.read("$.data.videoId", String.class)).isEqualTo(id);
         assertThat(payload.read("$.data.sourceETag", String.class)).isEqualTo("\"source-etag\"");
-        assertThat((String) event.get("payload")).doesNotContain("ownerSubject", "Authorization", "X-Amz-", "http");
+        assertThat(event.get("payload", Document.class).toJson()).doesNotContain("ownerSubject", "Authorization", "X-Amz-", "http");
         verify(s3).headObject(HeadObjectRequest.builder().bucket("youscout-014663857971-dev-videos")
                 .key("videos/" + id + "/source").build());
         assertThat(response.body()).doesNotContain("source-etag", "s3_key", "owner_subject");
@@ -188,7 +189,7 @@ class UploadIntegrationTest {
         assertThat(first.statusCode()).isEqualTo(200);
         assertThat(second.statusCode()).isEqualTo(200);
         assertThat(second.body()).isEqualTo(first.body());
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM outbox_events", Integer.class)).isEqualTo(1);
+        assertThat(mongo.count(new Query(), "video_outbox")).isEqualTo(1);
         verify(s3, times(1)).headObject(any(HeadObjectRequest.class));
         assertThat(post(INPUT, key, "alice").statusCode()).isEqualTo(409);
     }
@@ -260,36 +261,34 @@ class UploadIntegrationTest {
         CompletableFuture.allOf(requests.toArray(CompletableFuture[]::new)).join();
         assertThat(requests.stream().map(r -> r.join().statusCode()).toList()).containsOnly(200);
         assertThat(requests.stream().map(r -> r.join().body()).distinct().count()).isEqualTo(1);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM outbox_events WHERE aggregate_id = ?", Integer.class,
-                UUID.fromString(id))).isEqualTo(1);
+        assertThat(mongo.count(Query.query(Criteria.where("aggregateId").is(id)), "video_outbox")).isEqualTo(1);
         verify(s3, times(1)).headObject(any(HeadObjectRequest.class));
     }
 
     @Test void outboxInsertFailureRollsBackConfirmation() throws Exception {
         String id = prepareId("alice");
         // Provoque une vraie erreur SQL, pas un mock de la frontière transactionnelle.
-        jdbc.execute("ALTER TABLE outbox_events ADD CONSTRAINT test_reject_events CHECK (false)");
+        rejectOutboxWrites(true);
         try {
             assertThat(complete(id, "alice").statusCode()).isEqualTo(503);
             assertPending(id);
         } finally {
-            jdbc.execute("ALTER TABLE outbox_events DROP CONSTRAINT test_reject_events");
+            rejectOutboxWrites(false);
         }
         assertThat(complete(id, "alice").statusCode()).isEqualTo(200);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM outbox_events", Integer.class)).isEqualTo(1);
+        assertThat(mongo.count(new Query(), "video_outbox")).isEqualTo(1);
     }
 
     private void assertPending(String id) {
-        var row = jdbc.queryForMap("SELECT status, completed_at, source_etag FROM videos WHERE id = ?", UUID.fromString(id));
-        assertThat(row.get("status")).isEqualTo("PENDING_UPLOAD");
-        assertThat(row.get("completed_at")).isNull();
-        assertThat(row.get("source_etag")).isNull();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM outbox_events WHERE aggregate_id = ?", Integer.class,
-                UUID.fromString(id))).isZero();
+        var row = video(id);
+        assertThat(row.getString("status")).isEqualTo("PENDING_UPLOAD");
+        assertThat(row.get("completedAt")).isNull();
+        assertThat(row.get("sourceETag")).isNull();
+        assertThat(mongo.count(Query.query(Criteria.where("aggregateId").is(id)), "video_outbox")).isZero();
     }
     private String prepareId(String owner) throws Exception {
         var response = post(INPUT, key(), owner);
-        assertThat(response.statusCode()).isEqualTo(201);
+        assertThat(response.statusCode()).withFailMessage(response.body()).isEqualTo(201);
         return JsonPath.parse(response.body()).read("$.id", String.class);
     }
     private HttpResponse<String> complete(String id, String subject) throws Exception {
@@ -303,7 +302,12 @@ class UploadIntegrationTest {
         return builder.POST(body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body)).build();
     }
 
-    private int count() { return jdbc.queryForObject("SELECT count(*) FROM videos", Integer.class); }
+    private Document video(String id) { return mongo.findById(id, Document.class, "videos"); }
+    private void rejectOutboxWrites(boolean reject) {
+        mongo.getDb().runCommand(new Document("collMod", "video_outbox").append("validator",
+                reject ? new Document("$expr", false) : new Document()));
+    }
+    private int count() { return (int) mongo.count(new Query(), "videos"); }
     private String key() { return UUID.randomUUID().toString(); }
     private HttpResponse<String> post(String body, String key, String subject) throws Exception {
         return client.send(request(body, key, oidc.profileToken(subject, null, subject)), HttpResponse.BodyHandlers.ofString());

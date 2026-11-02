@@ -1,52 +1,101 @@
 package ma.youscout.video;
 
-import java.util.UUID;
+import java.time.Instant;
+import java.util.Date;
 import java.util.Optional;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import org.springframework.jdbc.core.JdbcTemplate;
+import java.util.UUID;
+import org.bson.Document;
+import org.springframework.data.mongodb.core.FindAndModifyOptions;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Repository;
 
-/** Paramètres liés et unicité en base pour isoler les propriétaires et les tentatives concurrentes. */
+/** Persists Video documents and applies state changes with atomic MongoDB updates. */
 @Repository
 class VideoRepository {
-    private final JdbcTemplate jdbc;
-    VideoRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+    private final MongoTemplate mongo;
+
+    VideoRepository(MongoTemplate mongo) { this.mongo = mongo; }
 
     boolean create(UUID id, String owner, UploadInput input, String bucket, String key, String idempotencyKey) {
-        return jdbc.update("""
-                INSERT INTO videos (id, owner_subject, title, s3_bucket, s3_key, content_type, size_bytes, idempotency_key)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (owner_subject, idempotency_key) DO NOTHING
-                """, id, owner, input.title(), bucket, key, input.contentType(), input.sizeBytes(), idempotencyKey) == 1;
+        Instant now = Instant.now();
+        Query keyQuery = Query.query(Criteria.where("ownerSubject").is(owner).and("idempotencyKey").is(idempotencyKey));
+        Update insert = new Update().setOnInsert("_id", id.toString()).setOnInsert("id", id.toString())
+                .setOnInsert("ownerSubject", owner).setOnInsert("title", input.title())
+                .setOnInsert("s3Bucket", bucket).setOnInsert("s3Key", key)
+                .setOnInsert("contentType", input.contentType()).setOnInsert("sizeBytes", input.sizeBytes())
+                .setOnInsert("status", "PENDING_UPLOAD").setOnInsert("idempotencyKey", idempotencyKey)
+                .setOnInsert("createdAt", date(now)).setOnInsert("updatedAt", date(now))
+                .setOnInsert("processingStatus", null).setOnInsert("processingUpdatedAt", null)
+                .setOnInsert("processingError", null).setOnInsert("processedVideoKey", null)
+                .setOnInsert("thumbnailKey", null).setOnInsert("durationMillis", null)
+                .setOnInsert("width", null).setOnInsert("height", null)
+                .setOnInsert("publicationStatus", "UNPUBLISHED").setOnInsert("publishedAt", null)
+                .setOnInsert("skills", java.util.List.of()).setOnInsert("hashtags", java.util.List.of());
+        Document video = mongo.findAndModify(keyQuery, insert, FindAndModifyOptions.options().upsert(true).returnNew(true),
+                Document.class, "videos");
+        return id.toString().equals(video.getString("id"));
     }
 
     VideoUpload find(String owner, String idempotencyKey) {
-        return jdbc.queryForObject("SELECT * FROM videos WHERE owner_subject = ? AND idempotency_key = ?",
-                this::map, owner, idempotencyKey);
+        return Optional.ofNullable(mongo.findOne(Query.query(Criteria.where("ownerSubject").is(owner)
+                .and("idempotencyKey").is(idempotencyKey)), Document.class, "videos"))
+                .map(VideoRepository::toUpload).orElse(null);
     }
 
-    // Le verrou sérialise les confirmations concurrentes ; la requête n'expose jamais un autre propriétaire.
     Optional<VideoUpload> lockOwned(UUID id, String owner) {
-        return jdbc.query("SELECT * FROM videos WHERE id = ? AND owner_subject = ? FOR UPDATE",
-                this::map, id, owner).stream().findFirst();
+        // A Mongo transaction protects the later conditional update; Mongo has no row-level FOR UPDATE lock.
+        return Optional.ofNullable(mongo.findOne(Query.query(Criteria.where("_id").is(id.toString())
+                .and("ownerSubject").is(owner)), Document.class, "videos")).map(VideoRepository::toUpload);
     }
 
-    VideoUpload confirm(UUID id, String owner, String etag) {
-        return jdbc.queryForObject("""
-                UPDATE videos SET status = 'UPLOADED', source_etag = ?,
-                    completed_at = statement_timestamp(), updated_at = statement_timestamp(),
-                    processing_status = 'WAITING', processing_updated_at = statement_timestamp()
-                WHERE id = ? AND owner_subject = ? AND status = 'PENDING_UPLOAD'
-                RETURNING *
-                """, this::map, etag, id, owner);
+    Optional<VideoUpload> claimCompletion(UUID id, String owner, String token) {
+        Instant now = Instant.now();
+        Criteria available = new Criteria().orOperator(Criteria.where("completionLeaseUntil").is(null),
+                Criteria.where("completionLeaseUntil").lt(date(now)));
+        Query pending = Query.query(new Criteria().andOperator(Criteria.where("_id").is(id.toString())
+                .and("ownerSubject").is(owner).and("status").is("PENDING_UPLOAD"), available));
+        Update lease = new Update().set("completionLeaseToken", token)
+                .set("completionLeaseUntil", date(now.plusSeconds(60)));
+        return Optional.ofNullable(mongo.findAndModify(pending, lease, FindAndModifyOptions.options().returnNew(true),
+                Document.class, "videos")).map(VideoRepository::toUpload);
     }
 
-    private VideoUpload map(ResultSet row, int index) throws SQLException {
-        var completed = row.getTimestamp("completed_at");
-        return new VideoUpload(row.getObject("id", UUID.class), row.getString("owner_subject"),
-                row.getString("title"), row.getString("s3_bucket"), row.getString("s3_key"),
-                row.getString("content_type"), row.getLong("size_bytes"), row.getString("status"),
-                row.getTimestamp("created_at").toInstant(), row.getTimestamp("updated_at").toInstant(),
-                completed == null ? null : completed.toInstant(), row.getString("source_etag"));
+    void releaseCompletion(UUID id, String owner, String token) {
+        mongo.updateFirst(Query.query(Criteria.where("_id").is(id.toString()).and("ownerSubject").is(owner)
+                        .and("completionLeaseToken").is(token)),
+                new Update().unset("completionLeaseToken").unset("completionLeaseUntil"), "videos");
     }
+
+    VideoUpload confirm(UUID id, String owner, String etag, String leaseToken) {
+        Instant now = Instant.now();
+        Query pending = Query.query(Criteria.where("_id").is(id.toString())
+                .and("ownerSubject").is(owner).and("status").is("PENDING_UPLOAD")
+                .and("completionLeaseToken").is(leaseToken));
+        Update update = new Update().set("status", "UPLOADED").set("sourceETag", etag)
+                .set("completedAt", date(now)).set("updatedAt", date(now))
+                .set("processingStatus", "WAITING").set("processingUpdatedAt", date(now))
+                .unset("completionLeaseToken").unset("completionLeaseUntil");
+        return Optional.ofNullable(mongo.findAndModify(pending, update, FindAndModifyOptions.options().returnNew(true),
+                Document.class, "videos")).map(VideoRepository::toUpload).orElse(null);
+    }
+
+    static VideoUpload toUpload(Document doc) {
+        return new VideoUpload(UUID.fromString(doc.getString("id")), doc.getString("ownerSubject"),
+                doc.getString("title"), doc.getString("s3Bucket"), doc.getString("s3Key"),
+                doc.getString("contentType"), ((Number) doc.get("sizeBytes")).longValue(), doc.getString("status"),
+                instant(doc.get("createdAt")), instant(doc.get("updatedAt")), instant(doc.get("completedAt")),
+                doc.getString("sourceETag"));
+    }
+
+    static Instant instant(Object value) {
+        if (value == null) return null;
+        if (value instanceof Date date) return date.toInstant();
+        if (value instanceof Instant instant) return instant;
+        throw new IllegalStateException("Unexpected persisted timestamp type.");
+    }
+
+    static Date date(Instant value) { return Date.from(value); }
 }

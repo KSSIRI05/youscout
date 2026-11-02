@@ -1,11 +1,74 @@
 openapi: 3.0.3
 info:
   title: YouScout Video identity API
-  version: 0.6.0
+  version: 0.7.0
   description: Identité Keycloak, préparation et confirmation d'uploads S3 avec métadonnées persistantes.
 servers:
   - url: http://localhost:8080
 paths:
+  /v1/videos/{id}/public-playback:
+    get:
+      operationId: getPublishedVideoPlayback
+      summary: Lire une vidéo publiée avec des liens temporaires
+      description: Requiert un joueur connecté. Seules les vidéos PUBLISHED et READY sont accessibles ; les URL S3 expirent après 120 secondes.
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Liens temporaires MP4 et miniature, Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [videoUrl, thumbnailUrl, expiresAt]
+                properties:
+                  videoUrl: {type: string, format: uri}
+                  thumbnailUrl: {type: string, format: uri}
+                  expiresAt: {type: string, format: date-time}
+        '401': {description: Session absente ou invalide}
+        '403': {description: Rôle insuffisant}
+        '404': {description: Vidéo non publiée ou inconnue}
+        '409': {description: Vidéo publiée mais média indisponible}
+        '503': {description: Signature temporairement indisponible}
+  /v1/videos/{id}/publish:
+    post:
+      operationId: publishOwnReadyVideo
+      summary: Publier sa vidéo prête
+      description: |
+        Exige user ou admin et le sub propriétaire, sans exception pour admin.
+        Seules les vidéos UPLOADED et READY passent de UNPUBLISHED à PUBLISHED.
+        Appels répétés et concurrents retournent le même résultat avec le même publishedAt.
+        L'upload, le traitement et leurs dates restent inchangés, notamment la réponse de /complete.
+        Cette étape enregistre la publication dans Video et ajoute VideoPublished à l'outbox
+        transactionnelle. Le relais l'envoie ensuite dans Kafka ; aucun fil public ni droit de lecture
+        publique n'est créé à ce stade.
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {type: object, additionalProperties: false, maxProperties: 0}
+      responses:
+        '200':
+          description: Publication enregistrée ou résultat déjà enregistré, Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, publicationStatus, publishedAt]
+                properties:
+                  id: {type: string, format: uuid}
+                  publicationStatus: {type: string, enum: [PUBLISHED]}
+                  publishedAt: {type: string, format: date-time}
+        '400': {description: Corps non vide ou identifiant invalide}
+        '401': {description: Session absente ou invalide}
+        '403': {description: Rôle insuffisant}
+        '404': {description: Vidéo inconnue ou appartenant à un autre joueur}
+        '409': {description: Vidéo non reçue ou non prête}
+        '503': {description: Base temporairement indisponible}
   /v1/videos:
     get:
       operationId: listOwnVideos
@@ -81,7 +144,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [id, title, uploadStatus, processingStatus]
+                required: [id, title, uploadStatus, processingStatus, publicationStatus, publishedAt]
                 properties:
                   id: {type: string, format: uuid}
                   title: {type: string}
@@ -92,6 +155,8 @@ paths:
                   width: {type: integer, nullable: true}
                   height: {type: integer, nullable: true}
                   processingUpdatedAt: {type: string, format: date-time, nullable: true}
+                  publicationStatus: {type: string, enum: [UNPUBLISHED, PUBLISHED]}
+                  publishedAt: {type: string, format: date-time, nullable: true}
         '401': {description: Session absente ou invalide}
         '403': {description: Rôle insuffisant}
         '404': {description: Vidéo inconnue ou appartenant à un autre joueur}
@@ -142,6 +207,7 @@ paths:
       description: |
         Exige le rôle de realm user ou admin. Le propriétaire est le sub du JWT.
         Crée des métadonnées PENDING_UPLOAD et une clé S3 unique ; ne téléverse aucun fichier.
+        skillIds et hashtagIds sont facultatifs, limités chacun à 10 UUID du catalogue actif Skill.
         La même clé d'idempotence, pour le même propriétaire et le même corps normalisé,
         retourne la vidéo existante avec une nouvelle URL ; un corps différent produit 409.
         Les valeurs par défaut limitent la taille à 100 Mio et la signature à 300 secondes.
@@ -164,6 +230,8 @@ paths:
                 title: {type: string, minLength: 1, maxLength: 150}
                 contentType: {type: string, enum: [video/mp4, video/webm, video/quicktime]}
                 sizeBytes: {type: integer, format: int64, minimum: 1, description: 'Taille maximale configurable, par défaut 104857600 octets'}
+                skillIds: {type: array, maxItems: 10, uniqueItems: true, items: {type: string, format: uuid}}
+                hashtagIds: {type: array, maxItems: 10, uniqueItems: true, items: {type: string, format: uuid}}
       responses:
         '201':
           description: Métadonnées créées, URL PUT temporaire prête

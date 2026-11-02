@@ -4,6 +4,7 @@ import com.jayway.jsonpath.JsonPath;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
+import org.bson.Document;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -12,7 +13,10 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -21,35 +25,33 @@ import org.testcontainers.DockerClientFactory;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
-import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.testcontainers.mongodb.MongoDBContainer;
 import static org.assertj.core.api.Assertions.*;
 
-/** PostgreSQL et Kafka réels ; aucune identité AWS n'est requise. */
+/** MongoDB et Kafka réels ; aucune identité AWS n'est requise. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
 class OutboxIntegrationTest {
-    @Container static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17.11-alpine");
+    @Container static final MongoDBContainer mongoDb = new MongoDBContainer("mongo:7").withReplicaSet();
     @Container static final KafkaContainer kafka = new KafkaContainer("apache/kafka:4.1.2");
-    @Autowired JdbcTemplate jdbc;
+    @Autowired MongoTemplate mongo;
     @Autowired OutboxRepository outbox;
     @Autowired PlatformTransactionManager manager;
     String topic;
     KafkaOutboxConfiguration.KafkaEventPublisher publisher;
 
     @DynamicPropertySource static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.mongodb.uri", () -> mongoDb.getReplicaSetUrl("youscout_video"));
         registry.add("youscout.outbox.enabled", () -> "false");
     }
     @BeforeEach void setup() throws Exception {
-        jdbc.update("DELETE FROM outbox_events");
-        jdbc.update("DELETE FROM videos");
+        mongo.remove(new Query(), "video_outbox");
+        mongo.remove(new Query(), "videos");
         topic = "video.uploaded.test." + UUID.randomUUID();
         try (var admin = Admin.create(Map.of("bootstrap.servers", kafka.getBootstrapServers()))) {
             admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).all().get(15, TimeUnit.SECONDS);
         }
-        publisher = new KafkaOutboxConfiguration().eventPublisher(kafka.getBootstrapServers(), topic);
+        publisher = new KafkaOutboxConfiguration().eventPublisher(kafka.getBootstrapServers(), topic, topic);
     }
     @AfterEach void cleanup() { publisher.close(); }
 
@@ -65,7 +67,7 @@ class OutboxIntegrationTest {
         assertThat(payload.read("$.data.videoId", String.class)).isEqualTo(id.toString());
         assertThat(payload.read("$.data.sourceETag", String.class)).isEqualTo("\"opaque-etag\"");
         assertThat(payload.read("$.data.sizeBytes", Integer.class)).isEqualTo(12);
-        assertThat(jdbc.queryForObject("SELECT published_at IS NOT NULL FROM outbox_events", Boolean.class)).isTrue();
+        assertThat(mongo.findOne(new Query(), Document.class, "video_outbox").get("publishedAt")).isNotNull();
         assertThat(relay(publisher).publishNext()).isFalse();
     }
 
@@ -75,23 +77,23 @@ class OutboxIntegrationTest {
         docker.pauseContainerCmd(kafka.getContainerId()).exec();
         try {
             assertThat(relay(publisher).publishNext()).isFalse();
-            var row = jdbc.queryForMap("SELECT published_at, attempts, last_error, next_attempt_at > clock_timestamp() AS delayed FROM outbox_events");
-            assertThat(row.get("published_at")).isNull();
-            assertThat(row.get("attempts")).isEqualTo(1);
-            assertThat(row.get("last_error")).isEqualTo("KAFKA_UNAVAILABLE");
-            assertThat(row.get("delayed")).isEqualTo(true);
+            var row = mongo.findOne(new Query(), Document.class, "video_outbox");
+            assertThat(row.get("publishedAt")).isNull();
+            assertThat(row.getInteger("attempts")).isEqualTo(1);
+            assertThat(row.getString("lastError")).isEqualTo("KAFKA_UNAVAILABLE");
+            assertThat(row.getDate("nextAttemptAt")).isAfter(new Date());
             assertThat(relay(publisher).publishNext()).isFalse();
         } finally { docker.unpauseContainerCmd(kafka.getContainerId()).exec(); }
         dueNow();
-        // Nouvelle instance : l'état et le payload viennent exclusivement de PostgreSQL.
+        // Nouvelle instance : l'état et le payload viennent exclusivement de MongoDB.
         assertThat(relay(publisher).publishNext()).isTrue();
         assertThat(consume(1)).hasSize(1);
     }
 
     @Test void ackFollowedByLostConfirmationReplaysSameEventId() {
         enqueue();
-        EventPublisher ambiguous = (id, payload) -> {
-            publisher.publish(id, payload);
+        EventPublisher ambiguous = (id, eventType, payload) -> {
+            publisher.publish(id, eventType, payload);
             throw new IllegalStateException("simulated crash after broker ACK");
         };
         assertThat(relay(ambiguous).publishNext()).isFalse();
@@ -107,10 +109,10 @@ class OutboxIntegrationTest {
         enqueue();
         var entered = new CountDownLatch(1);
         var release = new CountDownLatch(1);
-        var first = CompletableFuture.supplyAsync(() -> relay((id, payload) -> {
+        var first = CompletableFuture.supplyAsync(() -> relay((id, eventType, payload) -> {
             entered.countDown();
             if (!release.await(10, TimeUnit.SECONDS)) throw new TimeoutException();
-            publisher.publish(id, payload);
+            publisher.publish(id, eventType, payload);
         }).publishNext());
         try {
             assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
@@ -126,34 +128,27 @@ class OutboxIntegrationTest {
             outbox.enqueue(id);
             tx.setRollbackOnly();
         });
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM outbox_events", Integer.class)).isZero();
+        assertThat(mongo.count(new Query(), "video_outbox")).isZero();
     }
 
     @Test void uniquenessPreventsSecondEventForOneConfirmation() {
         UUID id = enqueue();
         assertThatThrownBy(() -> new TransactionTemplate(manager).executeWithoutResult(tx -> outbox.enqueue(id)))
                 .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM outbox_events", Integer.class)).isEqualTo(1);
+        assertThat(mongo.count(new Query(), "video_outbox")).isEqualTo(1);
     }
 
-    @Test void migrationBackfillsExistingConfirmedVideosOnlyOnce() {
-        String schema = "upgrade_" + UUID.randomUUID().toString().replace("-", "");
-        var before = org.flywaydb.core.Flyway.configure().dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
-                .schemas(schema).defaultSchema(schema).target("2").load();
-        before.migrate();
-        UUID id = UUID.randomUUID();
-        jdbc.update("INSERT INTO " + schema + ".videos (id, owner_subject, title, s3_bucket, s3_key, content_type, size_bytes, idempotency_key, status, completed_at, source_etag) "
-                + "VALUES (?, 'owner', 'Existing clip', 'test-bucket', ?, 'video/mp4', 12, ?, 'UPLOADED', statement_timestamp(), 'opaque')",
-                id, "videos/" + id + "/source", UUID.randomUUID().toString());
-        var after = org.flywaydb.core.Flyway.configure().dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
-                .schemas(schema).defaultSchema(schema).load();
-        after.migrate();
-        after.migrate();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM " + schema + ".outbox_events WHERE aggregate_id = ?", Integer.class, id)).isEqualTo(1);
+    @Test void mongoIndexesAreInstalledAndEnforceEventDeduplication() {
+        assertThat(mongo.indexOps("video_outbox").getIndexInfo()).extracting("name")
+                .contains("video_outbox_aggregate_type_unique", "video_outbox_pending");
+        UUID id = enqueue();
+        assertThatThrownBy(() -> new TransactionTemplate(manager).executeWithoutResult(tx -> outbox.enqueue(id)))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        assertThat(mongo.count(Query.query(Criteria.where("aggregateId").is(id.toString())), "video_outbox")).isEqualTo(1);
     }
 
     private OutboxRelay relay(EventPublisher target) { return new OutboxRelay(outbox, target, manager); }
-    private void dueNow() { jdbc.update("UPDATE outbox_events SET next_attempt_at = clock_timestamp() - interval '1 second'"); }
+    private void dueNow() { mongo.updateMulti(new Query(), new Update().set("nextAttemptAt", new Date(System.currentTimeMillis() - 1000)), "video_outbox"); }
     private UUID enqueue() {
         UUID id = createVideo();
         new TransactionTemplate(manager).executeWithoutResult(tx -> outbox.enqueue(id));
@@ -161,11 +156,12 @@ class OutboxIntegrationTest {
     }
     private UUID createVideo() {
         UUID id = UUID.randomUUID();
-        jdbc.update("""
-            INSERT INTO videos(id, owner_subject, title, s3_bucket, s3_key, content_type, size_bytes,
-                idempotency_key, status, completed_at, source_etag)
-            VALUES (?, 'test-owner', 'Clip', 'test-bucket', ?, 'video/mp4', 12, ?, 'UPLOADED', statement_timestamp(), '"opaque-etag"')
-            """, id, "videos/" + id + "/source", UUID.randomUUID().toString());
+        mongo.insert(new Document("_id", id.toString()).append("id", id.toString()).append("ownerSubject", "test-owner")
+                .append("title", "Clip").append("s3Bucket", "test-bucket").append("s3Key", "videos/" + id + "/source")
+                .append("contentType", "video/mp4").append("sizeBytes", 12L)
+                .append("idempotencyKey", UUID.randomUUID().toString()).append("status", "UPLOADED")
+                .append("completedAt", new Date()).append("sourceETag", "\"opaque-etag\"")
+                .append("publicationStatus", "UNPUBLISHED"), "videos");
         return id;
     }
     private List<org.apache.kafka.clients.consumer.ConsumerRecord<String, String>> consume(int expected) {

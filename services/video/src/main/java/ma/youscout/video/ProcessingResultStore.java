@@ -1,43 +1,78 @@
 package ma.youscout.video;
 
-import org.springframework.jdbc.core.JdbcTemplate;
+import java.time.Instant;
+import java.util.Date;
+import java.util.List;
+import java.util.UUID;
+import org.bson.Document;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+/** Applies each worker result once and records rejected Kafka offsets idempotently. */
 @Repository
 class ProcessingResultStore {
-    private final JdbcTemplate jdbc;
-    ProcessingResultStore(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+    private final MongoTemplate mongo;
 
-    @Transactional(timeout = 10)
+    ProcessingResultStore(MongoTemplate mongo) { this.mongo = mongo; }
+
+    @Transactional(transactionManager = "mongoTransactionManager", timeout = 10)
     public void accept(ProcessingResult result, String topic, int partition, long offset) {
-        var rows = jdbc.queryForList("""
-            SELECT v.* FROM videos v JOIN outbox_events e ON e.aggregate_id = v.id
-            WHERE v.id = ? AND e.id = ? AND e.event_type = 'VideoUploaded' FOR UPDATE OF v
-            """, result.videoId(), result.sourceEventId());
-        if (rows.isEmpty()) { reject(topic, partition, offset, "UNKNOWN_SOURCE"); return; }
-        var seen = jdbc.queryForList("SELECT fingerprint FROM processing_result_inbox WHERE event_id = ?", String.class, result.eventId());
-        if (!seen.isEmpty()) {
-            if (!seen.getFirst().equals(result.fingerprint())) reject(topic, partition, offset, "EVENT_ID_CONFLICT");
+        String videoId = result.videoId().toString();
+        Document video = mongo.findById(videoId, Document.class, "videos");
+        Query source = Query.query(Criteria.where("_id").is(result.sourceEventId().toString())
+                .and("aggregateId").is(videoId).and("eventType").is("VideoUploaded"));
+        if (video == null || !mongo.exists(source, "video_outbox")) {
+            reject(topic, partition, offset, "UNKNOWN_SOURCE");
             return;
         }
-        var video = rows.getFirst();
-        if (!"UPLOADED".equals(video.get("status")) || !result.etag().equals(video.get("source_etag"))
-                || !result.bucket().equals(video.get("s3_bucket"))) { reject(topic, partition, offset, "SOURCE_MISMATCH"); return; }
-        if ("READY".equals(video.get("processing_status")) || "FAILED".equals(video.get("processing_status"))) {
-            reject(topic, partition, offset, "ALREADY_FINALIZED"); return;
+
+        Document seen = mongo.findById(result.eventId().toString(), Document.class, "processing_result_inbox");
+        if (seen != null) {
+            if (!result.fingerprint().equals(seen.getString("fingerprint")))
+                reject(topic, partition, offset, "EVENT_ID_CONFLICT");
+            return;
         }
-        jdbc.update("""
-            UPDATE videos SET processing_status = ?, processing_updated_at = clock_timestamp(), processing_error = ?,
-                processed_video_key = ?, thumbnail_key = ?, duration_millis = ?, width = ?, height = ? WHERE id = ?
-            """, result.success() ? "READY" : "FAILED", result.error(), result.videoKey(), result.thumbnailKey(),
-            result.durationMillis(), result.width(), result.height(), result.videoId());
-        jdbc.update("INSERT INTO processing_result_inbox(event_id, video_id, fingerprint) VALUES (?, ?, ?)",
-            result.eventId(), result.videoId(), result.fingerprint());
+        if (!"UPLOADED".equals(video.getString("status"))
+                || !result.etag().equals(video.getString("sourceETag"))
+                || !result.bucket().equals(video.getString("s3Bucket"))) {
+            reject(topic, partition, offset, "SOURCE_MISMATCH");
+            return;
+        }
+        if ("READY".equals(video.getString("processingStatus")) || "FAILED".equals(video.getString("processingStatus"))) {
+            reject(topic, partition, offset, "ALREADY_FINALIZED");
+            return;
+        }
+
+        Instant now = Instant.now();
+        Query processing = Query.query(Criteria.where("_id").is(videoId).and("status").is("UPLOADED")
+                .and("sourceETag").is(result.etag()).and("s3Bucket").is(result.bucket())
+                .and("processingStatus").nin("READY", "FAILED"));
+        var updateResult = mongo.updateFirst(processing, new Update()
+                .set("processingStatus", result.success() ? "READY" : "FAILED")
+                .set("processingUpdatedAt", Date.from(now)).set("processingError", result.error())
+                .set("processedVideoKey", result.videoKey()).set("thumbnailKey", result.thumbnailKey())
+                .set("durationMillis", result.durationMillis()).set("width", result.width()).set("height", result.height()),
+                "videos");
+        if (updateResult.getModifiedCount() != 1) {
+            reject(topic, partition, offset, "ALREADY_FINALIZED");
+            return;
+        }
+
+        Document inbox = new Document("_id", result.eventId().toString()).append("eventId", result.eventId().toString())
+                .append("videoId", videoId).append("fingerprint", result.fingerprint()).append("appliedAt", Date.from(now));
+        mongo.insert(inbox, "processing_result_inbox");
     }
-    @Transactional(timeout = 10)
+
+    @Transactional(transactionManager = "mongoTransactionManager", timeout = 10)
     public void reject(String topic, int partition, long offset, String reason) {
-        jdbc.update("INSERT INTO rejected_processing_results(topic, partition_id, record_offset, reason) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING",
-            topic, partition, offset, reason);
+        String id = topic + ":" + partition + ":" + offset;
+        if (mongo.exists(Query.query(Criteria.where("_id").is(id)), "rejected_processing_results")) return;
+        Document rejected = new Document("_id", id).append("topic", topic).append("partitionId", partition)
+                .append("recordOffset", offset).append("reason", reason).append("createdAt", new Date());
+        mongo.insert(rejected, "rejected_processing_results");
     }
 }
