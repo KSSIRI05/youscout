@@ -1,8 +1,10 @@
 # Contrats API et événements
 
-Document de conception et état des premiers contrats. Le diagnostic JWT et les profils sont décrits dans [user-foundation.yaml](../contracts/openapi/user-foundation.yaml), le catalogue dans [skill-hashtag.json](../contracts/openapi/skill-hashtag.json), les uploads dans [video-foundation.yaml](../contracts/openapi/video-foundation.yaml). Le premier contrat Kafka implémenté est [VideoUploaded v1](../contracts/events/video-uploaded.v1.schema.json), publié sur `video.uploaded.v1` par le [relais outbox Video](VIDEO_OUTBOX.md).
+Document de conception et état des premiers contrats. Le diagnostic JWT et les profils sont décrits dans [user-foundation.yaml](../contracts/openapi/user-foundation.yaml), le catalogue dans [skill-hashtag.json](../contracts/openapi/skill-hashtag.json), les uploads dans [video-foundation.yaml](../contracts/openapi/video-foundation.yaml). Les contrats Kafka Video incluent [VideoUploaded v1](../contracts/events/video-uploaded.v1.schema.json) sur `video.uploaded.v1` et [VideoPublished v2](../contracts/events/video-published.v2.schema.json) sur `video.published.v2` ; ce dernier transporte aussi les références du catalogue Skill. Ils sont publiés par le [relais outbox Video](VIDEO_OUTBOX.md).
 
 Ce premier événement utilise `eventVersion` et `data`, selon son schéma publié. L'enveloppe `schemaVersion`/`payload` ci-dessous reste une proposition pour les futurs événements de cycle de vie : elle ne doit pas être utilisée pour interpréter `VideoUploaded` v1. Une harmonisation ultérieure exigera un contrat versionné et une migration des consommateurs.
+
+Le contrat User [UserRelationChanged v1](../contracts/events/user-relation-changed.v1.schema.json) est publié sur `user.relationships.v1` après persistance transactionnelle dans son outbox. Un événement de snapshot initial termine le rattrapage des suivis/blocages existants avant que Feed n'accepte les lectures.
 
 ## API
 
@@ -33,6 +35,7 @@ Pas de binaire vidéo, jeton d'accès ou mot de passe dans Kafka. Minimiser les 
 | `media.processing.results.v1` | videoId | Workers | Video |
 | `interaction.events.v1` | videoId | Interaction | Feed, analytics, notification |
 | `user.events.v1` | userId | User | Feed, Chat, analytics, indexeur |
+| `user.relationships.v1` | clé fixe du flux (MVP, une partition) | User | projection relation Feed/Redis |
 | `rating.events.v1` | videoId | Rating | Feed, analytics |
 | `catalog.events.v1` | skillId ou hashtagId | Skill/Hashtag | Video, Feed, indexeur |
 | `moderation.commands.v1` | targetId | Moderation | Propriétaire ciblé, filtré par type |

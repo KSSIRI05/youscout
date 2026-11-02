@@ -6,6 +6,8 @@ Statut : cible retenue par le porteur du projet. Implémentation à réaliser. L
 
 Les commandes et lectures interactives passent principalement par REST. Les changements utiles à d'autres domaines sont diffusés par Kafka. Le mobile n'accède ni à Kafka ni aux bases. L'API Gateway traite les API métier ; OIDC, WebSocket, upload S3 et lecture CDN utilisent leurs points d'entrée explicitement autorisés.
 
+Voir aussi [l'etat actuel de l'implementation par rapport a cette cible](ETAT_IMPLEMENTATION_ARCHITECTURE.md).
+
 ## Comparaison qualitative
 
 Notes de 1 à 5, appréciations pour la cible envisagée, pas résultats de benchmark. Pondérations : scalabilité 5, disponibilité 4, performance 4, évolutivité 4, testabilité 3, simplicité 2 ; maximum 110.

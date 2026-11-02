@@ -6,14 +6,25 @@ Cette itération ajoute Java 21, Spring Boot 4.0.8, Spring Cloud 2025.1.3, Keycl
 
 ## Composants réellement implémentés
 
-- `services/video` : Keycloak, préparation idempotente d'uploads S3 et confirmation (`POST /v1/videos/{id}/complete`), avec métadonnées PostgreSQL et propriétaire issu du `sub`. La confirmation vérifie le fichier avant l'état `UPLOADED` et écrit `VideoUploaded` dans une outbox transactionnelle. Un relais optionnel publie dans Kafka ; voir [le guide outbox](VIDEO_OUTBOX.md) et [le guide Video](../services/video/README.md). Compose démarre Video avec sa base via le profil `video`. La validation du média et le worker restent à développer.
+- `services/video` : Keycloak, préparation idempotente d'uploads S3 et confirmation (`POST /v1/videos/{id}/complete`), avec métadonnées PostgreSQL et propriétaire issu du `sub`. La confirmation émet `VideoUploaded` via l'outbox. La publication d'une vidéo `READY` écrit `VideoPublished` dans la même transaction que son état ; le relais optionnel envoie ces événements à Kafka.
+- `services/feed` : consomme `VideoPublished` depuis Kafka, valide le contrat et conserve une projection PostgreSQL avec déduplication durable par `eventId`. `GET /v1/feed?offset=0` sert 20 publications par page aux comptes authentifiés (`user` ou `admin`), sans exposer le propriétaire ou les clés S3. La lecture passe par Video avec des URL présignées de courte durée.
 
 - `services/gateway` : Spring Cloud Gateway WebFlux, route `/v1/users/**`, contrôles JWT, CORS local et identifiant `X-Request-Id` borné et propagé. Aucun appel aux bases.
 - `services/user` : Spring MVC, validation indépendante des JWT, profils personnels persistants via JDBC et migration Flyway `user_profiles`.
 - `services/skill` : [catalogue Skill/Hashtag](SKILL_HASHTAG.md), administration des compétences et abonnements personnels.
-- `infra/compose` : trois processus PostgreSQL avec utilisateurs et volumes distincts, Keycloak et les trois applications Java.
+- `infra/compose` : processus PostgreSQL isolés par service, Keycloak et applications Java. Les profils `video`, `worker` et `feed` activent les composants événementiels selon le parcours local.
 - `infra/keycloak` : realm `youscout`, rôles `user`/`admin`, client public `youscout-mobile` avec Authorization Code + PKCE S256 obligatoire et audience `youscout-api`.
 - Contrat de diagnostic dans `contracts/openapi/user-foundation.yaml`.
+
+## Relations et fil personnalisé
+
+Pour activer le fil local, démarrer la pile avec Kafka et le profil Feed :
+
+```sh
+docker compose -f infra/compose/compose.yml -f infra/compose/compose.kafka.yml --profile feed up -d --build --wait --wait-timeout 300
+```
+
+Les commandes User de suivi/blocage écrivent un événement dans la même transaction PostgreSQL que la relation. Le relais publie `user.relationships.v1` ; Feed projette les relations dans Redis, filtre les résultats et garde les pages en cache avec des versions de relations et de publications. La migration V4 backfill les relations existantes et le flux publie un marqueur de snapshot ; jusqu'à son traitement, Feed renvoie 503. Redis AOF dispose d'un volume Compose. Après perte de ce volume, Feed reste non prêt et requiert une reconstruction/relecture opérée ; le runbook de récupération reste à écrire.
 
 `GET /v1/users/session` reste un diagnostic sans écriture. `GET /v1/users/me` et `PATCH /v1/users/me` gèrent désormais le profil persistant du sujet authentifié. Le mode connecté Flutter utilise ces API ; la démo sociale reste indépendante et locale. Voir [FRONTEND.md](FRONTEND.md).
 
@@ -119,10 +130,10 @@ La procédure redémarre ensuite la Gateway pour renouveler ses connexions et sa
 
 ## Prochaine itération
 
-Le [profil de traitement FFmpeg](MEDIA_PROCESSING.md) exécute les tâches avec leases, produit les fichiers dérivés et renvoie le résultat à Video via Kafka/outbox. `GET /v1/videos/{id}` permet au propriétaire de consulter l'état. La lecture des fichiers privés dans Flutter et le fil restent à intégrer.
+Le [profil de traitement FFmpeg](MEDIA_PROCESSING.md) exécute les tâches avec leases, produit les fichiers dérivés et renvoie le résultat à Video via Kafka/outbox. `GET /v1/videos/{id}` permet au propriétaire de consulter l'état. Le compte connecté dispose aussi d'une bibliothèque privée, peut publier une vidéo prête et parcourir le fil public avec lecture S3 signée.
 
 Le socle [media-worker](../services/media-worker/README.md) est disponible : consommation Kafka, base PostgreSQL indépendante, tâches `QUEUED`, déduplication et quarantaine durable. Le prochain chantier est l'exécution de ces tâches avec FFmpeg et les événements de résultat.
 
-Le frontend est connecté à Keycloak, aux profils, au catalogue et aux uploads Video. La chaîne outbox/Kafka et l'ingestion dédupliquée dans le worker sont disponibles ; ajouter ensuite l'exécuteur FFmpeg et les événements de résultat. Les événements User nécessiteront leur propre outbox. Feed et les autres services restent à créer. Aucun service ne doit lire la base d'un autre.
+Le frontend connecté utilise les profils publics et abonnements du service User, le fil des comptes suivis, et le service Social pour likes, commentaires, signalements et messages persistants. Les notifications temps réel, la console de modération et les événements User/outbox restent à développer. Aucun service ne doit lire la base d'un autre.
 
 Références : [compatibilité Spring Cloud/Boot](https://spring.io/projects/spring-cloud/), [JWT Spring Security](https://docs.spring.io/spring-security/reference/reactive/oauth2/resource-server/jwt.html), [Keycloak en conteneur](https://www.keycloak.org/server/containers), [hostname Keycloak](https://www.keycloak.org/server/hostname), [support PostgreSQL](https://www.postgresql.org/support/versioning/).

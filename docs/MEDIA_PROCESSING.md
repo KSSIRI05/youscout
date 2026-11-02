@@ -45,7 +45,7 @@ Les deux états sont séparés pour préserver le contrat de confirmation :
 | Traitement dans Video | `WAITING` → `READY` ou `FAILED` |
 | Tâche du worker | `QUEUED` → `PROCESSING` → `SUCCEEDED` ou `FAILED` |
 
-`POST /complete` conserve ses dates et son résultat après traitement. **`GET /v1/videos/{id}`** permet au propriétaire Keycloak de consulter les métadonnées et le code d'échec, avec `Cache-Control: no-store`. Un administrateur ne peut pas consulter la vidéo d'un autre joueur. Les clés S3 et URL de lecture ne sont pas exposées par cet endpoint. La [lecture privée dans Flutter](PRIVATE_PLAYBACK.md) utilise un endpoint séparé de signature temporaire ; la publication dans le fil reste à développer.
+`POST /complete` conserve ses dates et son résultat après traitement. **`GET /v1/videos/{id}`** permet au propriétaire Keycloak de consulter les métadonnées et le code d'échec, avec `Cache-Control: no-store`. Un administrateur ne peut pas consulter la vidéo d'un autre joueur. Les clés S3 et URL de lecture ne sont pas exposées par cet endpoint. La [lecture privée dans Flutter](PRIVATE_PLAYBACK.md) utilise un endpoint séparé de signature temporaire. Les vidéos `READY` peuvent être publiées dans Feed ; voir [Publication](VIDEO_PUBLICATION.md).
 
 ## Activer le traitement local avec S3
 

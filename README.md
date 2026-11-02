@@ -2,7 +2,7 @@
 
 YouScout est une plateforme de découverte des talents du football. Elle permet de partager des vidéos, de mettre en valeur ses compétences et d'échanger avec la communauté.
 
-**État réel : frontend Flutter dans `apps/mobile`, avec démonstration locale, connexion Keycloak, profils, catalogue, upload, suivi du traitement et lecture privée vidéo. Le backend comprend la Gateway, les profils User persistants, le catalogue Skill/Hashtag et le service Video avec uploads S3, Keycloak et PostgreSQL. Le bucket S3 privé et les rôles IAM dédiés sont provisionnés. La publication dans le fil, les autres API métier et le back-office restent à développer.** Les workflows CI vérifient le mobile et le backend ; l'architecture cible reste à valider progressivement avec les tests de chaque service. Le parcours Flutter web avec le vrai bucket a été [validé le 28 octobre 2026](docs/validation/video-upload-2026-10-28.md).
+**État réel :** Flutter connecté utilise les profils, le catalogue, l'upload, la lecture privée, le fil paginé et les interactions Social persistées. Le backend comprend User, Skill/Hashtag, Video, Feed, Social, Kafka et le worker média. User propage les suivis/blocages via outbox Kafka ; Feed les projette dans Redis et met en cache ses pages. Video utilise désormais MongoDB pour ses documents, métadonnées, traitements et outbox ; Social utilise encore PostgreSQL.
 
 ## Lancer le socle backend
 
@@ -19,11 +19,19 @@ Docker doit être démarré. Le générateur de secrets est exécuté une seule 
 
 La chaîne [VideoUploaded → outbox → Kafka](docs/VIDEO_OUTBOX.md) est implémentée et activable via `infra/compose/compose.kafka.yml`. Elle conserve les événements en cas de panne du broker et reprend leur publication après redémarrage. Le traitement FFmpeg est disponible via un profil optionnel.
 
-Le [worker média](services/media-worker/README.md) consomme ces événements et conserve ses tâches dans sa propre base, avec déduplication durable et acquittement après commit. Son [profil de traitement](docs/MEDIA_PROCESSING.md) ajoute les leases, la lecture S3 conditionnelle, FFmpeg, les miniatures et le retour de résultat vers Video. La [lecture privée dans Flutter](docs/PRIVATE_PLAYBACK.md) est intégrée ; la publication dans le fil reste à développer.
+Le [worker média](services/media-worker/README.md) consomme les uploads dans sa propre base, avec déduplication durable et acquittement après commit. Son [profil de traitement](docs/MEDIA_PROCESSING.md) ajoute les leases, FFmpeg, les miniatures et le retour de résultat. Le service [Feed](services/feed/README.md) consomme `VideoPublished`, stocke une projection indépendante et expose le fil paginé ; Flutter permet de parcourir les publications et de lire celles-ci via des URL signées temporaires. La [lecture privée dans Flutter](docs/PRIVATE_PLAYBACK.md) est intégrée.
 
 Microservices orientés événements derrière une API Gateway, avec Flutter pour le mobile, Kafka pour les événements, S3/CDN pour les médias et Kubernetes pour l'orchestration. La cible comporte 11 services logiques, dont Auth fourni par Keycloak, plus des workers FFmpeg. Le MVP commence avec Auth, User, Video, Feed, Interaction et Skill/Hashtag, sans fusionner leurs responsabilités.
 
 Le backend recommandé est Java / Spring Boot ; l'admin utilise React. PostgreSQL, MongoDB et Redis répondent à des usages différents et restent sous la responsabilité exclusive de chaque service. OpenSearch et le multi-région arrivent après le socle.
+
+Pour démarrer le fil local avec Redis et Kafka, ajouter les deux fichiers Compose et le profil Feed :
+
+```sh
+docker compose -f infra/compose/compose.yml -f infra/compose/compose.kafka.yml --profile feed up -d --build --wait --wait-timeout 300
+```
+
+User applique alors ses migrations d'outbox et de verrouillage des relations ; Feed reste non prêt jusqu'au rattrapage initial et à l'activation de son consommateur Kafka.
 
 ## Lire la documentation
 
@@ -34,6 +42,7 @@ Le backend recommandé est Java / Spring Boot ; l'admin utilise React. PostgreSQ
 | [Backend local](docs/BACKEND.md) | Lancement du socle, JWT, migration et vérifications |
 | [Projet](docs/PROJECT.md) | Vision produit, périmètre et questions ouvertes |
 | [Vidéo et S3](services/video/README.md) | Uploads signés, confirmation, persistance et configuration AWS locale |
+| [Feed](services/feed/README.md) | Consommation de `VideoPublished`, inbox dédupliquée et projection PostgreSQL |
 | [Exigences](docs/REQUIREMENTS.md) | Tous les besoins et leur service responsable |
 | [Caractéristiques](docs/QUALITY_ATTRIBUTES.md) | Exigences explicites, déductions et priorités |
 | [Architecture](docs/ARCHITECTURE.md) | Comparaison des styles et diagramme de la cible |
@@ -69,7 +78,7 @@ La démo couvre le fil, la découverte, les profils, les interactions, la public
 
 La [maquette Figma](https://www.figma.com/design/SZIskR01SeNgOsSrAwiB9p) guide les couleurs, composants et parcours.
 
-Arborescence actuelle : `apps/mobile/`, `services/gateway/`, `services/user/`, `services/skill/`, `services/video/`, `infra/`, `contracts/openapi/`, `scripts/`, `docs/` et les workflows mobile/backend. Les autres services, `apps/admin/` et `workers/` restent à créer.
+Arborescence actuelle : `apps/mobile/`, `services/gateway/`, `services/user/`, `services/skill/`, `services/video/`, `services/feed/`, `services/media-worker/`, `infra/`, `contracts/`, `scripts/`, `docs/` et les workflows mobile/backend. `apps/admin/` reste à créer.
 
 ## Livraison du produit
 
