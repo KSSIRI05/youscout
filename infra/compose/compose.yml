@@ -115,7 +115,7 @@ services:
       retries: 20
   video-mongo:
     profiles: [video]
-    image: ${VIDEO_MONGODB_IMAGE:-mongo:8.0}
+    image: ${VIDEO_MONGODB_IMAGE:-mongo:7.0}
     command: [mongod, --replSet, rs0, --bind_ip_all]
     volumes: [video-mongo-data:/data/db]
     healthcheck:
@@ -125,7 +125,7 @@ services:
       retries: 20
   video-mongo-init:
     profiles: [video]
-    image: ${VIDEO_MONGODB_IMAGE:-mongo:8.0}
+    image: ${VIDEO_MONGODB_IMAGE:-mongo:7.0}
     depends_on:
       video-mongo: {condition: service_healthy}
     entrypoint: [mongosh, 'mongodb://video-mongo:27017/admin', --quiet, --eval]

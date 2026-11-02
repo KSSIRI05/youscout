@@ -46,7 +46,7 @@ jobs:
         run: |
           docker compose -f infra/compose/compose.yml -f infra/compose/compose.kafka.yml -f infra/compose/compose.worker.yml --profile video --profile worker --profile feed ps
           docker compose -f infra/compose/compose.yml -f infra/compose/compose.kafka.yml -f infra/compose/compose.worker.yml --profile video --profile worker --profile feed logs --no-color --tail 100 media-worker feed
-          docker compose -f infra/compose/compose.yml logs --no-color --tail 100 gateway user skill video feed
+          docker compose -f infra/compose/compose.yml logs --no-color --tail 100 gateway user skill video video-mongo feed
       # Arrête la pile même après un échec ; les diagnostics précédents aident à en retrouver la cause.
       - name: Stop containers without deleting persisted volumes
         if: always()
