@@ -101,7 +101,7 @@ services:
       keycloak: {condition: service_healthy}
   # Base propriétaire du domaine Video, distincte des profils et du catalogue.
   video-db:
-    profiles: [video]
+    profiles: [video-migration]
     image: postgres:17.11-alpine
     environment:
       POSTGRES_DB: youscout_video
@@ -110,6 +110,60 @@ services:
     volumes: [video-data:/var/lib/postgresql/data]
     healthcheck:
       test: [CMD-SHELL, 'pg_isready -U youscout_video -d youscout_video']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  video-mongo:
+    profiles: [video]
+    image: ${VIDEO_MONGODB_IMAGE:-mongo:8.0}
+    command: [mongod, --replSet, rs0, --bind_ip_all]
+    volumes: [video-mongo-data:/data/db]
+    healthcheck:
+      test: [CMD, mongosh, --quiet, --eval, "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  video-mongo-init:
+    profiles: [video]
+    image: ${VIDEO_MONGODB_IMAGE:-mongo:8.0}
+    depends_on:
+      video-mongo: {condition: service_healthy}
+    entrypoint: [mongosh, 'mongodb://video-mongo:27017/admin', --quiet, --eval]
+    command: ["try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'video-mongo:27017'}]}) }"]
+    restart: 'no'
+  # Le fil public possède son stockage dédié, séparé des métadonnées privées de Video.
+  feed-db:
+    profiles: [feed]
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: youscout_feed
+      POSTGRES_USER: youscout_feed
+      POSTGRES_PASSWORD: ${FEED_DB_PASSWORD:?Run init-env.py --upgrade first}
+    volumes: [feed-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U youscout_feed -d youscout_feed']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  feed-redis:
+    profiles: [feed]
+    image: redis:7.4-alpine
+    command: [redis-server, --appendonly, 'yes', --maxmemory-policy, noeviction]
+    volumes: [feed-redis-data:/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  social-db:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: youscout_social
+      POSTGRES_USER: youscout_social
+      POSTGRES_PASSWORD: ${SOCIAL_DB_PASSWORD:?Run init-env.py --upgrade first}
+    volumes: [social-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U youscout_social -d youscout_social']
       interval: 5s
       timeout: 3s
       retries: 20
@@ -126,15 +180,56 @@ services:
       VIDEO_S3_REGION: ${VIDEO_S3_REGION:-us-east-1}
       VIDEO_DB_URL: jdbc:postgresql://video-db:5432/youscout_video
       VIDEO_DB_USERNAME: youscout_video
-      VIDEO_DB_PASSWORD: ${VIDEO_DB_PASSWORD:?Run init-env.py --upgrade first}
+      VIDEO_DB_PASSWORD: ${VIDEO_DB_PASSWORD:-}
+      VIDEO_MONGODB_URI: mongodb://video-mongo:27017/youscout_video?replicaSet=rs0
       VIDEO_MAX_UPLOAD_BYTES: ${VIDEO_MAX_UPLOAD_BYTES:-104857600}
       VIDEO_UPLOAD_URL_SECONDS: ${VIDEO_UPLOAD_URL_SECONDS:-300}
+      VIDEO_PUBLISHED_TOPIC: video.published.v2
+      VIDEO_SKILL_SERVICE_URL: http://skill:8080
       OIDC_ISSUER: http://localhost:8180/realms/youscout
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
     depends_on:
-      video-db: {condition: service_healthy}
+      video-mongo-init: {condition: service_completed_successfully}
       keycloak: {condition: service_healthy}
+      skill: {condition: service_healthy}
     # Aucun secret/profil Windows monté dans le conteneur ; identité cloud à raccorder ensuite.
+  # Feed consomme les publications Kafka et construit sa propre projection des vidéos publiques.
+  feed:
+    profiles: [feed]
+    build:
+      context: ../..
+      dockerfile: infra/docker/service.Dockerfile
+      args: {MODULE: feed}
+    environment:
+      SERVER_PORT: '8080'
+      FEED_DB_URL: jdbc:postgresql://feed-db:5432/youscout_feed
+      FEED_DB_USERNAME: youscout_feed
+      FEED_DB_PASSWORD: ${FEED_DB_PASSWORD:?Run init-env.py --upgrade first}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_HOST: feed-redis
+      USER_RELATIONSHIPS_TOPIC: user.relationships.v1
+      OIDC_ISSUER: http://localhost:8180/realms/youscout
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
+    depends_on:
+      feed-db: {condition: service_healthy}
+      feed-redis: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
+      user: {condition: service_healthy}
+  social:
+    build:
+      context: ../..
+      dockerfile: infra/docker/service.Dockerfile
+      args: {MODULE: social}
+    environment:
+      SERVER_PORT: '8080'
+      SOCIAL_DB_URL: jdbc:postgresql://social-db:5432/youscout_social
+      SOCIAL_DB_USERNAME: youscout_social
+      SOCIAL_DB_PASSWORD: ${SOCIAL_DB_PASSWORD:?Run init-env.py --upgrade first}
+      OIDC_ISSUER: http://localhost:8180/realms/youscout
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
+    depends_on:
+      social-db: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
   # Point d’entrée des API sur localhost ; attend que les services dépendants soient sains.
   gateway:
     build:
@@ -145,12 +240,15 @@ services:
       USER_SERVICE_URL: http://user:8080
       SKILL_SERVICE_URL: http://skill:8080
       VIDEO_SERVICE_URL: http://video:8080
+      FEED_SERVICE_URL: http://feed:8080
+      SOCIAL_SERVICE_URL: http://social:8080
       OIDC_ISSUER: http://localhost:8180/realms/youscout
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
     ports: ['127.0.0.1:8080:8080']
     depends_on:
       user: {condition: service_healthy}
       skill: {condition: service_healthy}
+      social: {condition: service_healthy}
       keycloak: {condition: service_healthy}
 # Les volumes survivent aux redémarrages et à docker compose down sans option -v.
 volumes:
@@ -158,3 +256,7 @@ volumes:
   user-data:
   skill-data:
   video-data:
+  video-mongo-data:
+  feed-data:
+  feed-redis-data:
+  social-data:

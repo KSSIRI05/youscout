@@ -21,12 +21,12 @@ jobs:
       - run: python3 -m unittest discover -s scripts/tests
       - name: Install FFmpeg for media integration tests
         run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
-      # Les tests Java valident les JWT et les requêtes SQL contre PostgreSQL Testcontainers.
+      # Java tests cover JWTs, MongoDB replica-set transactions and the Kafka outbox with Testcontainers.
       - run: ./mvnw -B -ntp verify
       # Le runner possède son propre fichier de secrets éphémère, jamais publié comme artefact.
       - run: python3 infra/compose/init-env.py
-      - run: docker compose -f infra/compose/compose.yml -f infra/compose/compose.kafka.yml -f infra/compose/compose.worker.yml --profile video --profile worker config --quiet
-      - run: docker compose -f infra/compose/compose.yml -f infra/compose/compose.kafka.yml -f infra/compose/compose.worker.yml --profile video --profile worker up -d --build --wait --wait-timeout 300
+      - run: docker compose -f infra/compose/compose.yml -f infra/compose/compose.kafka.yml -f infra/compose/compose.worker.yml --profile video --profile worker --profile feed config --quiet
+      - run: docker compose -f infra/compose/compose.yml -f infra/compose/compose.kafka.yml -f infra/compose/compose.worker.yml --profile video --profile worker --profile feed up -d --build --wait --wait-timeout 300
       - run: python3 scripts/apply-keycloak.py
       - run: python3 scripts/smoke-backend.py
       - run: python3 scripts/smoke-video.py
@@ -44,13 +44,13 @@ jobs:
       - name: Backend diagnostics on failure
         if: failure() && hashFiles('infra/compose/.env') != ''
         run: |
-          docker compose -f infra/compose/compose.yml -f infra/compose/compose.kafka.yml -f infra/compose/compose.worker.yml --profile video --profile worker ps
-          docker compose -f infra/compose/compose.yml -f infra/compose/compose.kafka.yml -f infra/compose/compose.worker.yml --profile video --profile worker logs --no-color --tail 100 media-worker
-          docker compose -f infra/compose/compose.yml logs --no-color --tail 100 gateway user skill video
+          docker compose -f infra/compose/compose.yml -f infra/compose/compose.kafka.yml -f infra/compose/compose.worker.yml --profile video --profile worker --profile feed ps
+          docker compose -f infra/compose/compose.yml -f infra/compose/compose.kafka.yml -f infra/compose/compose.worker.yml --profile video --profile worker --profile feed logs --no-color --tail 100 media-worker feed
+          docker compose -f infra/compose/compose.yml logs --no-color --tail 100 gateway user skill video feed
       # Arrête la pile même après un échec ; les diagnostics précédents aident à en retrouver la cause.
       - name: Stop containers without deleting persisted volumes
         if: always()
         run: |
           if [ -f infra/compose/.env ]; then
-            docker compose -f infra/compose/compose.yml -f infra/compose/compose.kafka.yml -f infra/compose/compose.worker.yml --profile video --profile worker down
+            docker compose -f infra/compose/compose.yml -f infra/compose/compose.kafka.yml -f infra/compose/compose.worker.yml --profile video --profile worker --profile feed down
           fi
