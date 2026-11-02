@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: social-service
+  datasource:
+    url: ${SOCIAL_DB_URL:jdbc:postgresql://localhost:5437/youscout_social}
+    username: ${SOCIAL_DB_USERNAME:youscout_social}
+    password: ${SOCIAL_DB_PASSWORD}
+  flyway:
+    enabled: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER:http://localhost:8180/realms/youscout}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:http://localhost:8180/realms/youscout/protocol/openid-connect/certs}
+          audiences: youscout-api
+server:
+  port: ${SERVER_PORT:8086}
+management:
+  endpoints.web.exposure.include: health
+  endpoint.health.show-details: never
+  endpoint.health.probes.enabled: true

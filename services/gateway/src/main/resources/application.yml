@@ -43,6 +43,20 @@ spring:
               filters:
                 - RemoveRequestHeader=X-User-Id
                 - RemoveRequestHeader=X-User-Roles
+            - id: feed-service
+              uri: ${FEED_SERVICE_URL:http://localhost:8085}
+              predicates:
+                - Path=/v1/feed
+              filters:
+                - RemoveRequestHeader=X-User-Id
+                - RemoveRequestHeader=X-User-Roles
+            - id: social-service
+              uri: ${SOCIAL_SERVICE_URL:http://localhost:8086}
+              predicates:
+                - Path=/v1/social/**
+              filters:
+                - RemoveRequestHeader=X-User-Id
+                - RemoveRequestHeader=X-User-Roles
 server:
   port: 8080
 # N’expose que les sondes de santé, sans détails internes dans les réponses.

@@ -1,0 +1,73 @@
+openapi: 3.0.3
+info:
+  title: YouScout Feed API
+  version: 0.1.0
+  description: Fil des vidéos publiées par la communauté.
+servers:
+  - url: http://localhost:8080
+paths:
+  /v1/feed:
+    get:
+      operationId: listPublishedVideos
+      summary: Consulter le fil des vidéos publiées
+      description: |
+        Requiert un rôle user ou admin. Les entrées sont ordonnées par date de publication décroissante,
+        puis videoId décroissant. 20 éléments sont renvoyés par page. Le fil ne contient aucun lien S3.
+        Avec following=true, seules les vidéos des profils suivis par le sujet authentifié sont renvoyées.
+      security: [{bearerAuth: []}]
+      x-filtering-policy:
+        - following=true returns only followed profiles.
+        - Both-direction blocks are excluded in every feed view.
+        - Redis relation projection is required; if unavailable or its initial snapshot is incomplete, return service unavailable and never return an unfiltered page.
+      parameters:
+        - in: query
+          name: offset
+          schema: {type: integer, minimum: 0, maximum: 10000, default: 0}
+        - in: query
+          name: following
+          schema: {type: boolean, default: false}
+      responses:
+        '200':
+          description: Page des publications, Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hasMore]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [videoId, title, publishedAt, ownerSubject, skills, hashtags]
+                      properties:
+                        videoId: {type: string, format: uuid}
+                        title: {type: string, minLength: 1, maxLength: 150}
+                        publishedAt: {type: string, format: date-time}
+                        ownerSubject: {type: string, maxLength: 255, description: Subject du profil public associé à la publication}
+                        skills: {type: array, maxItems: 10, items: {$ref: '#/components/schemas/SkillReference'}}
+                        hashtags: {type: array, maxItems: 10, items: {$ref: '#/components/schemas/HashtagReference'}}
+                  hasMore: {type: boolean}
+        '400': {description: Offset hors limites}
+        '401': {description: Session absente ou invalide}
+        '403': {description: Rôle insuffisant}
+        '503': {description: Redis relation projection incomplete or stale}
+components:
+  schemas:
+    SkillReference:
+      type: object
+      required: [id, name]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string, minLength: 1, maxLength: 80}
+    HashtagReference:
+      type: object
+      required: [id, name]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string, minLength: 1, maxLength: 50}
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

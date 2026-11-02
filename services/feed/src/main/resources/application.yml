@@ -1,0 +1,55 @@
+spring:
+  application:
+    name: feed-service
+  datasource:
+    url: ${FEED_DB_URL:jdbc:postgresql://localhost:5436/youscout_feed}
+    username: ${FEED_DB_USERNAME:youscout_feed}
+    password: ${FEED_DB_PASSWORD}
+    hikari:
+      connection-timeout: 5000
+      maximum-pool-size: 5
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2s
+  flyway:
+    enabled: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER:http://localhost:8180/realms/youscout}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:http://localhost:8180/realms/youscout/protocol/openid-connect/certs}
+          audiences: youscout-api
+  jdbc:
+    template:
+      query-timeout: 5s
+server:
+  port: ${SERVER_PORT:8085}
+feed:
+  ingestion:
+    enabled: ${FEED_INGESTION_ENABLED:true}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    topic: ${VIDEO_PUBLISHED_TOPIC:video.published.v2}
+    group-id: ${FEED_GROUP_ID:youscout-feed-v2}
+  relations:
+    enabled: ${FEED_RELATIONS_ENABLED:true}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    topic: ${USER_RELATIONSHIPS_TOPIC:user.relationships.v1}
+    group-id: ${FEED_RELATIONS_GROUP_ID:youscout-feed-relations-v1}
+  cache:
+    ttl: ${FEED_CACHE_TTL:60s}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db,redis,feedRelations

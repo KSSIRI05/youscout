@@ -1,0 +1,111 @@
+openapi: 3.0.3
+info:
+  title: YouScout Social API
+  version: 0.1.0
+  description: Likes, comments, reports, and persistent direct messages.
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerAuth: []
+paths:
+  /v1/social/videos/{videoId}/likes:
+    parameters:
+      - in: path
+        name: videoId
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      summary: Read like count and current user's like state
+      responses:
+        '200':
+          description: Current aggregate and caller state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count, liked]
+                properties:
+                  count: {type: integer, minimum: 0}
+                  liked: {type: boolean}
+    put:
+      summary: Like a video (idempotent)
+      responses: {'200': {description: Updated like state}}
+    delete:
+      summary: Remove the caller's like
+      responses: {'200': {description: Updated like state}}
+  /v1/social/videos/{videoId}/comments:
+    parameters:
+      - in: path
+        name: videoId
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      summary: List visible comments
+      responses: {'200': {description: Comments ordered oldest first}}
+    post:
+      summary: Create a comment as the authenticated subject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: {type: string, minLength: 1, maxLength: 1000}
+      responses: {'200': {description: Persisted comment}}
+  /v1/social/comments/{commentId}:
+    delete:
+      summary: Delete the caller's own comment
+      parameters:
+        - in: path
+          name: commentId
+          required: true
+          schema: {type: string, format: uuid}
+      responses: {'204': {description: Comment deleted}}
+  /v1/social/videos/{videoId}/reports:
+    post:
+      summary: Submit one report per account and video
+      parameters:
+        - in: path
+          name: videoId
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: {type: string, minLength: 1, maxLength: 500}
+      responses: {'202': {description: Report persisted for moderation}}
+  /v1/social/messages:
+    get:
+      summary: Read messages exchanged with a single subject
+      parameters:
+        - in: query
+          name: with
+          required: true
+          schema: {type: string, maxLength: 255}
+      responses: {'200': {description: Conversation messages visible to the caller}}
+    post:
+      summary: Send a persistent direct message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recipientSubject, body]
+              properties:
+                recipientSubject: {type: string, maxLength: 255}
+                body: {type: string, minLength: 1, maxLength: 2000}
+      responses: {'200': {description: Persisted message}}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
