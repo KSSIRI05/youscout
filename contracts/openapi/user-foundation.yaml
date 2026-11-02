@@ -70,6 +70,113 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '415':
           description: Content-Type must be application/json
+  /v1/users/{subject}:
+    get:
+      operationId: getPublicProfile
+      summary: Read a public profile and its follower counts
+      security: [{bearerAuth: []}]
+      parameters:
+        - in: path
+          name: subject
+          required: true
+          schema: {type: string, maxLength: 255}
+      responses:
+        '200':
+          description: Public name, biography and follow state for the authenticated subject
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [subject, displayName, biography, followingCount, followerCount, following]
+                properties:
+                  subject: {type: string}
+                  displayName: {type: string}
+                  biography: {type: string}
+                  followingCount: {type: integer, minimum: 0}
+                  followerCount: {type: integer, minimum: 0}
+                  following: {type: boolean}
+        '404': {description: Profile not found}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /v1/users/me/following:
+    get:
+      operationId: listFollowingSubjects
+      summary: List subjects followed by the authenticated user
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: Ordered list of followed profile subjects
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {type: string, maxLength: 255}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /v1/users/me/feed-relations:
+    get:
+      operationId: getFeedRelations
+      summary: Read the authenticated user's follow and block relations for feed filtering
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: Current relation snapshot; no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [followingSubjects, blockedSubjects, blockedBySubjects]
+                properties:
+                  followingSubjects: {type: array, items: {type: string, maxLength: 255}}
+                  blockedSubjects: {type: array, items: {type: string, maxLength: 255}}
+                  blockedBySubjects: {type: array, items: {type: string, maxLength: 255}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /v1/users/{subject}/follow:
+    put:
+      operationId: followPublicProfile
+      summary: Follow a public profile
+      security: [{bearerAuth: []}]
+      parameters:
+        - in: path
+          name: subject
+          required: true
+          schema: {type: string, maxLength: 255}
+      responses:
+        '200': {description: Follow state and updated follower count}
+    delete:
+      operationId: unfollowPublicProfile
+      summary: Unfollow a public profile
+      security: [{bearerAuth: []}]
+      parameters:
+        - in: path
+          name: subject
+          required: true
+          schema: {type: string, maxLength: 255}
+      responses:
+        '200': {description: Follow state and updated follower count}
+  /v1/users/{subject}/block:
+    put:
+      operationId: blockPublicProfile
+      summary: Block a public profile and remove follows in either direction
+      security: [{bearerAuth: []}]
+      parameters:
+        - in: path
+          name: subject
+          required: true
+          schema: {type: string, maxLength: 255}
+      responses:
+        '200': {description: Block state}
+        '400': {description: Self-block is not allowed}
+        '404': {description: Target profile not found}
+    delete:
+      operationId: unblockPublicProfile
+      summary: Unblock a profile
+      security: [{bearerAuth: []}]
+      parameters:
+        - in: path
+          name: subject
+          required: true
+          schema: {type: string, maxLength: 255}
+      responses:
+        '200': {description: Block state}
   /v1/users/admin/session:
     get:
       operationId: getAdminSessionDiagnostic
