@@ -28,6 +28,8 @@ class _ConnectedUploadScreenState extends State<ConnectedUploadScreen> {
   final title = TextEditingController();
   bool picking = false;
   String? selectionError;
+  final Set<String> selectedSkills = {};
+  final Set<String> selectedHashtags = {};
 
   Future<void> pick() async {
     setState(() {
@@ -40,7 +42,13 @@ class _ConnectedUploadScreenState extends State<ConnectedUploadScreen> {
               ImagePicker().pickVideo(source: ImageSource.gallery));
       if (!mounted || file == null) return;
       await upload.select(file);
-      if (mounted) setState(title.clear);
+      if (mounted) {
+        setState(() {
+          title.clear();
+          selectedSkills.clear();
+          selectedHashtags.clear();
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(
@@ -94,6 +102,61 @@ class _ConnectedUploadScreenState extends State<ConnectedUploadScreen> {
             maxLength: 150,
             decoration: const InputDecoration(labelText: 'Titre de la vidéo'),
           ),
+          const SizedBox(height: 12),
+          Text('Compétences', style: Theme.of(context).textTheme.titleSmall),
+          if (widget.session.skills.isEmpty)
+            const Text('Aucune compétence dans le catalogue.')
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                for (final item in widget.session.skills)
+                  FilterChip(
+                    label: Text(item.name),
+                    selected: selectedSkills.contains(item.id),
+                    onSelected:
+                        upload.key != null ||
+                            (!selectedSkills.contains(item.id) &&
+                                selectedSkills.length >= 10)
+                        ? null
+                        : (value) => setState(
+                            () => value
+                                ? selectedSkills.add(item.id)
+                                : selectedSkills.remove(item.id),
+                          ),
+                  ),
+              ],
+            ),
+          const SizedBox(height: 12),
+          Text('Hashtags', style: Theme.of(context).textTheme.titleSmall),
+          if (widget.session.hashtags.isEmpty)
+            const Text('Aucun hashtag dans le catalogue.')
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                for (final item in widget.session.hashtags)
+                  FilterChip(
+                    label: Text('#${item.name}'),
+                    selected: selectedHashtags.contains(item.id),
+                    onSelected:
+                        upload.key != null ||
+                            (!selectedHashtags.contains(item.id) &&
+                                selectedHashtags.length >= 10)
+                        ? null
+                        : (value) => setState(
+                            () => value
+                                ? selectedHashtags.add(item.id)
+                                : selectedHashtags.remove(item.id),
+                          ),
+                  ),
+              ],
+            ),
+          const Text(
+            'Sélectionne jusqu’à 10 compétences et 10 hashtags du catalogue.',
+          ),
           if (upload.busy) ...[
             const SizedBox(height: 12),
             LinearProgressIndicator(
@@ -134,17 +197,28 @@ class _ConnectedUploadScreenState extends State<ConnectedUploadScreen> {
                   : 'Envoyer la vidéo',
               onPressed: upload.busy || picking
                   ? null
-                  : () => upload.send(title.text),
+                  : () => upload.send(
+                      title.text,
+                      skillIds: selectedSkills.toList(),
+                      hashtagIds: selectedHashtags.toList(),
+                    ),
             ),
           ],
         ],
         const SizedBox(height: 24),
         const Text(
-          'La vidéo est conservée dans le stockage privé de ton compte. Le titre est enregistré ; les compétences et hashtags ne sont pas encore associés aux vidéos.',
+          'La vidéo est conservée dans le stockage privé de ton compte. Le titre, les compétences et les hashtags sélectionnés seront enregistrés à la publication.',
         ),
         PrivateVideoLibrary(
           active: widget.active,
           refreshKey: upload.uploaded ? upload.id : null,
+          publish: (id) {
+            if (!widget.session.signedIn ||
+                widget.session.profile?.subject != owner) {
+              throw const ApiFailure(401, 'Reconnecte-toi pour continuer.');
+            }
+            return widget.session.publishVideo(id);
+          },
           request: (path, {query}) {
             if (!widget.session.signedIn ||
                 widget.session.profile?.subject != owner) {

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:youscout:event:video-published:v2",
+  "title": "VideoPublished v2",
+  "description": "Topic video.published.v2, clé Kafka videoId. Livraison au moins une fois; dédupliquer par eventId. Les références catalogue sont des instantanés canoniques vérifiés par Skill.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "eventType", "eventVersion", "occurredAt", "producer", "data"],
+  "properties": {
+    "eventId": {"type": "string", "format": "uuid"},
+    "eventType": {"const": "VideoPublished"},
+    "eventVersion": {"const": 2},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "producer": {"const": "video-service"},
+    "data": {
+      "type": "object", "additionalProperties": false,
+      "required": ["videoId", "ownerSubject", "title", "publishedAt", "skills", "hashtags"],
+      "properties": {
+        "videoId": {"type": "string", "format": "uuid"},
+        "ownerSubject": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1, "maxLength": 150},
+        "publishedAt": {"type": "string", "format": "date-time"},
+        "skills": {"$ref": "#/$defs/skills"},
+        "hashtags": {"$ref": "#/$defs/hashtags"}
+      }
+    }
+  },
+  "$defs": {
+    "skills": {
+      "type": "array", "maxItems": 10, "uniqueItems": true,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "name"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "name": {"type": "string", "minLength": 1, "maxLength": 80}
+        }
+      }
+    },
+    "hashtags": {
+      "type": "array", "maxItems": 10, "uniqueItems": true,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "name"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "name": {"type": "string", "minLength": 1, "maxLength": 50}
+        }
+      }
+    }
+  }
+}

@@ -47,6 +47,7 @@ class VideoUpload extends ChangeNotifier {
   static const maxSize = 100 * 1024 * 1024;
   XFile? file;
   String? title, contentType, key, id, error;
+  List<String>? _skillIds, _hashtagIds;
   bool busy = false, transferred = false, uploaded = false, _disposed = false;
   double progress = 0;
   String phase = '';
@@ -79,6 +80,7 @@ class VideoUpload extends ChangeNotifier {
     }
     file = selected;
     title = key = id = error = null;
+    _skillIds = _hashtagIds = null;
     contentType = typeOf(selected);
     transferred = uploaded = false;
     progress = 0;
@@ -86,7 +88,11 @@ class VideoUpload extends ChangeNotifier {
     _notify();
   }
 
-  Future<void> send(String value) async {
+  Future<void> send(
+    String value, {
+    List<String> skillIds = const [],
+    List<String> hashtagIds = const [],
+  }) async {
     if (busy || uploaded || file == null || _disposed) return;
     final normalized = value.trim();
     if (normalized.isEmpty ||
@@ -98,6 +104,8 @@ class VideoUpload extends ChangeNotifier {
     }
     // Le titre reste figé dès la première demande, même si sa réponse est perdue.
     title ??= normalized;
+    _skillIds ??= List<String>.unmodifiable(skillIds);
+    _hashtagIds ??= List<String>.unmodifiable(hashtagIds);
     key ??= List.generate(
       24,
       (_) => Random.secure().nextInt(256),
@@ -116,6 +124,8 @@ class VideoUpload extends ChangeNotifier {
             'title': title!,
             'contentType': contentType!,
             'sizeBytes': await file!.length(),
+            if (_skillIds!.isNotEmpty) 'skillIds': _skillIds!,
+            if (_hashtagIds!.isNotEmpty) 'hashtagIds': _hashtagIds!,
           },
           idempotencyKey: key,
         );

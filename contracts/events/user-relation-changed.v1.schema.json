@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://youscout.example/contracts/events/user-relation-changed.v1.schema.json",
+  "title": "User relationship outbox event v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "eventType", "eventVersion", "occurredAt", "producer", "data"],
+      "properties": {
+        "eventId": {"type": "string", "format": "uuid"},
+        "eventType": {"const": "UserRelationChanged"},
+        "eventVersion": {"const": 1},
+        "occurredAt": {"type": "string", "format": "date-time"},
+        "producer": {"const": "user-service"},
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["action", "actorSubject", "targetSubject"],
+          "properties": {
+            "action": {"enum": ["FOLLOW", "UNFOLLOW", "BLOCK", "UNBLOCK"]},
+            "actorSubject": {"type": "string", "minLength": 1, "maxLength": 255},
+            "targetSubject": {"type": "string", "minLength": 1, "maxLength": 255}
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "eventType", "eventVersion", "occurredAt", "producer", "data"],
+      "properties": {
+        "eventId": {"type": "string", "format": "uuid"},
+        "eventType": {"const": "UserRelationshipsSnapshotComplete"},
+        "eventVersion": {"const": 1},
+        "occurredAt": {"type": "string", "format": "date-time"},
+        "producer": {"const": "user-service"},
+        "data": {"type": "object", "maxProperties": 0}
+      }
+    }
+  ]
+}

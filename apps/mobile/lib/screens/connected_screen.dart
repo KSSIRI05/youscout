@@ -3,6 +3,8 @@ import '../backend/api.dart';
 import '../backend/connected_session.dart';
 import '../core/theme.dart';
 import 'connected_upload_screen.dart';
+import 'connected_feed_screen.dart';
+import 'connected_messages_screen.dart';
 
 class ConnectedScreen extends StatefulWidget {
   const ConnectedScreen({required this.session, super.key});
@@ -13,6 +15,7 @@ class ConnectedScreen extends StatefulWidget {
 
 class _ConnectedScreenState extends State<ConnectedScreen> {
   int tab = 0;
+  String? messageRecipient;
   @override
   Widget build(BuildContext context) {
     final session = widget.session;
@@ -69,6 +72,23 @@ class _ConnectedScreenState extends State<ConnectedScreen> {
                       session: session,
                     ),
                   if (session.profile == null) const SizedBox.shrink(),
+                  session.profile == null
+                      ? const SizedBox.shrink()
+                      : ConnectedFeedScreen(
+                          session: session,
+                          active: tab == 3,
+                          onMessage: (recipient) => setState(() {
+                            messageRecipient = recipient;
+                            tab = 4;
+                          }),
+                        ),
+                  session.profile == null
+                      ? const SizedBox.shrink()
+                      : ConnectedMessagesScreen(
+                          key: ValueKey(messageRecipient ?? 'messages'),
+                          session: session,
+                          initialRecipient: messageRecipient,
+                        ),
                 ],
               ),
             ),
@@ -87,6 +107,14 @@ class _ConnectedScreenState extends State<ConnectedScreen> {
           NavigationDestination(
             icon: Icon(Icons.video_call_outlined),
             label: 'Vidéo',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.dynamic_feed_outlined),
+            label: 'Fil',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.chat_bubble_outline),
+            label: 'Messages',
           ),
         ],
       ),

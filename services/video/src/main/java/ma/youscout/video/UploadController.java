@@ -17,7 +17,7 @@ class UploadController {
     ResponseEntity<UploadService.Ticket> prepare(@AuthenticationPrincipal Jwt jwt,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @RequestBody Map<String, Object> fields) {
-        var result = uploads.prepare(jwt.getSubject(), idempotencyKey, fields);
+        var result = uploads.prepare(jwt.getSubject(), jwt.getTokenValue(), idempotencyKey, fields);
         return ResponseEntity.status(result.created() ? 201 : 200).cacheControl(CacheControl.noStore()).body(result.ticket());
     }
 }

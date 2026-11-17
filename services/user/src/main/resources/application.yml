@@ -21,6 +21,12 @@ spring:
     enabled: true
 server:
   port: ${SERVER_PORT:8081}
+youscout:
+  user-outbox:
+    enabled: ${USER_RELATIONSHIPS_ENABLED:false}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    topic: ${USER_RELATIONSHIPS_TOPIC:user.relationships.v1}
+    poll-ms: ${USER_OUTBOX_POLL_MS:1000}
 # N’expose que les sondes de santé, sans détails internes dans les réponses.
 management:
   endpoints:

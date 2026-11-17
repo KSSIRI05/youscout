@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:youscout:event:video-published:v1",
+  "title": "VideoPublished v1",
+  "description": "Topic video.published.v1, clé Kafka videoId. Livraison au moins une fois : dédupliquer durablement par eventId. L'événement est émis après READY et ne contient aucun jeton ni URL signée.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "eventType", "eventVersion", "occurredAt", "producer", "data"],
+  "properties": {
+    "eventId": {"type": "string", "format": "uuid"},
+    "eventType": {"const": "VideoPublished"},
+    "eventVersion": {"const": 1},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "producer": {"const": "video-service"},
+    "data": {
+      "type": "object", "additionalProperties": false,
+      "required": ["videoId", "ownerSubject", "title", "publishedAt"],
+      "properties": {
+        "videoId": {"type": "string", "format": "uuid"},
+        "ownerSubject": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1, "maxLength": 150},
+        "publishedAt": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

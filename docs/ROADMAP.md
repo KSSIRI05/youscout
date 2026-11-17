@@ -2,6 +2,8 @@
 
 Un frontend Flutter de démonstration locale existe désormais (voir [FRONTEND.md](FRONTEND.md)). Un [socle backend local](BACKEND.md) existe aussi : Gateway, profils personnels persistants, inscription/connexion Keycloak, rôles user/admin, catalogue Skill/Hashtag, abonnements hashtags, bases séparées, migrations et CI. Les cases ci-dessous portent sur la livraison intégrée complète et restent ouvertes. La cible de onze services est retenue ; l'ordre de livraison réduit le travail simultané sans fusionner les domaines.
 
+Implementation status (2026-11-02): the connected Flutter feed reads Feed pages and persists likes/comments through Social. User now writes follow/block changes to an ordered Kafka outbox; Feed projects those relationships into Redis and caches versioned pages. Video now uses MongoDB transactions for documents and outbox; Social still uses PostgreSQL. Missing Rating, Notification, Moderation and Admin/Analytics domains remain roadmap work.
+
 ## Phase 0 : valider le socle
 
 - [ ] Figer versions stables compatibles du JDK, Spring Boot/Cloud, Flutter et infrastructures.

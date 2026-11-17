@@ -26,22 +26,32 @@ class UploadService {
     private final S3StorageProperties storage;
     private final UploadProperties limits;
     private final S3Presigner presigner;
+    private final CatalogReferenceClient catalog;
+    private final VideoMetadataRepository metadata;
 
-    UploadService(VideoRepository videos, S3StorageProperties storage, UploadProperties limits, S3Presigner presigner) {
+    UploadService(VideoRepository videos, S3StorageProperties storage, UploadProperties limits, S3Presigner presigner,
+                  CatalogReferenceClient catalog, VideoMetadataRepository metadata) {
         this.videos = videos; this.storage = storage; this.limits = limits; this.presigner = presigner;
+        this.catalog = catalog; this.metadata = metadata;
     }
 
-    @Transactional
-    public Result prepare(String owner, String idempotencyKey, Map<String, Object> fields) {
+    @Transactional(transactionManager = "mongoTransactionManager")
+    public Result prepare(String owner, String accessToken, String idempotencyKey, Map<String, Object> fields) {
         if (idempotencyKey == null || !idempotencyKey.matches("[A-Za-z0-9_-]{16,128}")) {
             throw UploadInput.invalid("Idempotency-Key requis : 16 à 128 caractères alphanumériques, tiret ou underscore.");
         }
         UploadInput input = UploadInput.from(fields, limits.maxSizeBytes());
+        var skills = catalog.skills(input.skillIds(), accessToken);
+        var hashtags = catalog.hashtags(input.hashtagIds(), accessToken);
         UUID id = UUID.randomUUID();
         boolean created = videos.create(id, owner, input, storage.bucket(), "videos/" + id + "/source", idempotencyKey);
         VideoUpload video = videos.find(owner, idempotencyKey);
         if (!video.title().equals(input.title()) || !video.contentType().equals(input.contentType())
                 || video.sizeBytes() != input.sizeBytes()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cette clé d'idempotence correspond à un autre envoi.");
+        }
+        if (created) metadata.save(video.id(), skills, hashtags);
+        else if (!metadata.matches(video.id(), input.skillIds(), input.hashtagIds())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cette clé d'idempotence correspond à un autre envoi.");
         }
         if (!video.status().equals("PENDING_UPLOAD")) {

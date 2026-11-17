@@ -2,7 +2,7 @@
 # Conserver aussi compose.video-aws.yml si le test utilise S3 réel.
 services:
   kafka:
-    profiles: [video]
+    profiles: [video, feed]
     image: apache/kafka:4.1.2
     ports: ['127.0.0.1:9092:19092']
     environment:
@@ -36,11 +36,41 @@ services:
     entrypoint: [/opt/kafka/bin/kafka-topics.sh]
     command: [--bootstrap-server, 'kafka:9092', --create, --if-not-exists, --topic, video.uploaded.v1, --partitions, '3', --replication-factor, '1', --config, min.insync.replicas=1, --config, retention.ms=604800000]
     restart: 'no'
+  kafka-published-init:
+    profiles: [video, feed]
+    image: apache/kafka:4.1.2
+    depends_on:
+      kafka: {condition: service_healthy}
+    entrypoint: [/opt/kafka/bin/kafka-topics.sh]
+    command: [--bootstrap-server, 'kafka:9092', --create, --if-not-exists, --topic, video.published.v2, --partitions, '3', --replication-factor, '1', --config, min.insync.replicas=1, --config, retention.ms=604800000]
+    restart: 'no'
+  kafka-user-relations-init:
+    profiles: [video, feed]
+    image: apache/kafka:4.1.2
+    depends_on:
+      kafka: {condition: service_healthy}
+    entrypoint: [/opt/kafka/bin/kafka-topics.sh]
+    command: [--bootstrap-server, 'kafka:9092', --create, --if-not-exists, --topic, user.relationships.v1, --partitions, '1', --replication-factor, '1', --config, min.insync.replicas=1, --config, retention.ms=604800000]
+    restart: 'no'
   video:
     environment:
       VIDEO_OUTBOX_ENABLED: 'true'
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     depends_on:
       kafka-init: {condition: service_completed_successfully}
+      kafka-published-init: {condition: service_completed_successfully}
+  feed:
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      kafka-published-init: {condition: service_completed_successfully}
+      kafka-user-relations-init: {condition: service_completed_successfully}
+  user:
+    environment:
+      USER_RELATIONSHIPS_ENABLED: 'true'
+      USER_RELATIONSHIPS_TOPIC: user.relationships.v1
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      kafka-user-relations-init: {condition: service_completed_successfully}
 volumes:
   kafka-data:

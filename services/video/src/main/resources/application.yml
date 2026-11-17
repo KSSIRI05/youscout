@@ -1,12 +1,14 @@
 spring:
   application:
     name: video-service
+  mongodb:
+    uri: ${VIDEO_MONGODB_URI:mongodb://localhost:27017/youscout_video?replicaSet=rs0}
   datasource:
     url: ${VIDEO_DB_URL:jdbc:postgresql://localhost:5434/youscout_video}
     username: ${VIDEO_DB_USERNAME:youscout_video}
-    password: ${VIDEO_DB_PASSWORD}
+    password: ${VIDEO_DB_PASSWORD:}
   flyway:
-    enabled: true
+    enabled: ${VIDEO_FLYWAY_ENABLED:false}
   security:
     oauth2:
       resourceserver:
@@ -17,13 +19,17 @@ spring:
 server:
   port: ${SERVER_PORT:8083}
 youscout:
+  migration:
+    postgres-to-mongo:
+      enabled: ${VIDEO_POSTGRES_TO_MONGO_ENABLED:false}
   processing-results:
     enabled: ${VIDEO_PROCESSING_RESULTS_ENABLED:false}
   outbox:
     # L'enregistrement en base est toujours actif ; seul le relais est optionnel.
     enabled: ${VIDEO_OUTBOX_ENABLED:false}
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-    topic: video.uploaded.v1
+    uploaded-topic: ${VIDEO_UPLOADED_TOPIC:video.uploaded.v1}
+    published-topic: ${VIDEO_PUBLISHED_TOPIC:video.published.v2}
     poll-ms: 1000
     initial-delay-ms: 5000
   storage:
@@ -46,6 +52,6 @@ management:
       show-details: never
       group:
         readiness:
-          include: readinessState,db
+          include: readinessState,mongo
       probes:
         enabled: true

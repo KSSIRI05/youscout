@@ -2,7 +2,7 @@
 
 YouScout est une plateforme de découverte des talents du football. Elle permet de partager des vidéos, de mettre en valeur ses compétences et d'échanger avec la communauté.
 
-**État réel : frontend Flutter dans `apps/mobile`, avec démonstration locale, connexion Keycloak, profils, catalogue, upload, suivi du traitement et lecture privée vidéo. Le backend comprend la Gateway, les profils User persistants, le catalogue Skill/Hashtag et le service Video avec uploads S3, Keycloak et PostgreSQL. Le bucket S3 privé et les rôles IAM dédiés sont provisionnés. La publication dans le fil, les autres API métier et le back-office restent à développer.** Les workflows CI vérifient le mobile et le backend ; l'architecture cible reste à valider progressivement avec les tests de chaque service. Le parcours Flutter web avec le vrai bucket a été [validé le 28 octobre 2026](docs/validation/video-upload-2026-10-28.md).
+**État réel :** Flutter connecté utilise les profils, le catalogue, l'upload, la lecture privée, le fil paginé et les interactions Social persistées. Le backend comprend User, Skill/Hashtag, Video, Feed, Social, Kafka et le worker média. User propage les suivis/blocages via outbox Kafka ; Feed les projette dans Redis et met en cache ses pages. Video utilise désormais MongoDB pour ses documents, métadonnées, traitements et outbox ; Social utilise encore PostgreSQL ; ses écritures vérifient auprès de Video que la vidéo est publiée et auprès de User qu'aucun blocage ne s'applique.
 
 ## Lancer le socle backend
 
@@ -19,11 +19,19 @@ Docker doit être démarré. Le générateur de secrets est exécuté une seule 
 
 La chaîne [VideoUploaded → outbox → Kafka](docs/VIDEO_OUTBOX.md) est implémentée et activable via `infra/compose/compose.kafka.yml`. Elle conserve les événements en cas de panne du broker et reprend leur publication après redémarrage. Le traitement FFmpeg est disponible via un profil optionnel.
 
-Le [worker média](services/media-worker/README.md) consomme ces événements et conserve ses tâches dans sa propre base, avec déduplication durable et acquittement après commit. Son [profil de traitement](docs/MEDIA_PROCESSING.md) ajoute les leases, la lecture S3 conditionnelle, FFmpeg, les miniatures et le retour de résultat vers Video. La [lecture privée dans Flutter](docs/PRIVATE_PLAYBACK.md) est intégrée ; la publication dans le fil reste à développer.
+Le [worker média](services/media-worker/README.md) consomme les uploads dans sa propre base, avec déduplication durable et acquittement après commit. Son [profil de traitement](docs/MEDIA_PROCESSING.md) ajoute les leases, FFmpeg, les miniatures et le retour de résultat. Le service [Feed](services/feed/README.md) consomme `VideoPublished`, stocke une projection indépendante et expose le fil paginé ; Flutter permet de parcourir les publications et de lire celles-ci via des URL signées temporaires. La [lecture privée dans Flutter](docs/PRIVATE_PLAYBACK.md) est intégrée.
 
 Microservices orientés événements derrière une API Gateway, avec Flutter pour le mobile, Kafka pour les événements, S3/CDN pour les médias et Kubernetes pour l'orchestration. La cible comporte 11 services logiques, dont Auth fourni par Keycloak, plus des workers FFmpeg. Le MVP commence avec Auth, User, Video, Feed, Interaction et Skill/Hashtag, sans fusionner leurs responsabilités.
 
 Le backend recommandé est Java / Spring Boot ; l'admin utilise React. PostgreSQL, MongoDB et Redis répondent à des usages différents et restent sous la responsabilité exclusive de chaque service. OpenSearch et le multi-région arrivent après le socle.
+
+Pour démarrer le fil local avec Redis et Kafka, ajouter les deux fichiers Compose et le profil Feed :
+
+```sh
+docker compose -f infra/compose/compose.yml -f infra/compose/compose.kafka.yml --profile feed up -d --build --wait --wait-timeout 300
+```
+
+User applique alors ses migrations d'outbox et de verrouillage des relations ; Feed reste non prêt jusqu'au rattrapage initial et à l'activation de son consommateur Kafka.
 
 ## Lire la documentation
 
@@ -34,6 +42,7 @@ Le backend recommandé est Java / Spring Boot ; l'admin utilise React. PostgreSQ
 | [Backend local](docs/BACKEND.md) | Lancement du socle, JWT, migration et vérifications |
 | [Projet](docs/PROJECT.md) | Vision produit, périmètre et questions ouvertes |
 | [Vidéo et S3](services/video/README.md) | Uploads signés, confirmation, persistance et configuration AWS locale |
+| [Feed](services/feed/README.md) | Consommation de `VideoPublished`, inbox dédupliquée et projection PostgreSQL |
 | [Exigences](docs/REQUIREMENTS.md) | Tous les besoins et leur service responsable |
 | [Caractéristiques](docs/QUALITY_ATTRIBUTES.md) | Exigences explicites, déductions et priorités |
 | [Architecture](docs/ARCHITECTURE.md) | Comparaison des styles et diagramme de la cible |
@@ -44,7 +53,7 @@ Le backend recommandé est Java / Spring Boot ; l'admin utilise React. PostgreSQ
 | [Sécurité et modération](docs/SECURITE_ET_MODERATION.md) | Authentification, blocage, retrait et fermeture de compte |
 | [Roadmap](docs/ROADMAP.md) | MVP, phases suivantes et critères de démonstration |
 | [Déploiement](docs/DEPLOYMENT.md) | Compose, Kubernetes et cible cloud |
-| [ADRs](docs/adr/README.md) | Dix décisions d'architecture et décisions de stack |
+| [ADRs](docs/adr/README.md) | Onze décisions retenues (ADR-001 à ADR-011), dont la stack de référence |
 | [Contribution](CONTRIBUTING.md) | Organisation et vérifications |
 
 ## Lancer le projet
@@ -65,11 +74,11 @@ flutter test
 flutter build web --release
 ```
 
-La démo couvre le fil, la découverte, les profils, les interactions, la publication et les messages en mémoire. Les données disparaissent au rechargement. La sélection vidéo est locale ; aucun upload, transcodage, serveur, authentification ou envoi de message distant n’est effectué. Voir [le guide mobile](apps/mobile/README.md) et [l’état du frontend](docs/FRONTEND.md).
+L'application a deux modes. Le **mode démo** couvre le fil, la découverte, les profils, les interactions, la publication et les messages en mémoire : les données disparaissent au rechargement et rien n'est envoyé à un serveur. Le **mode connecté** utilise Keycloak et le backend décrit plus haut : profils, catalogue, upload S3, traitement, lecture privée, fil, likes, commentaires avec réponses et messages persistants. Voir [le guide mobile](apps/mobile/README.md) et [l’état du frontend](docs/FRONTEND.md).
 
 La [maquette Figma](https://www.figma.com/design/SZIskR01SeNgOsSrAwiB9p) guide les couleurs, composants et parcours.
 
-Arborescence actuelle : `apps/mobile/`, `services/gateway/`, `services/user/`, `services/skill/`, `services/video/`, `infra/`, `contracts/openapi/`, `scripts/`, `docs/` et les workflows mobile/backend. Les autres services, `apps/admin/` et `workers/` restent à créer.
+Arborescence actuelle : `apps/mobile/`, `services/gateway/`, `services/user/`, `services/skill/`, `services/video/`, `services/feed/`, `services/media-worker/`, `infra/`, `contracts/`, `scripts/`, `docs/` et les workflows mobile/backend. `apps/admin/` reste à créer.
 
 ## Livraison du produit
 

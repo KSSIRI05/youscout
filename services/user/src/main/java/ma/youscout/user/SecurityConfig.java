@@ -19,7 +19,7 @@ class SecurityConfig {
             .authorizeHttpRequests(a -> a
                 .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                 .requestMatchers("/v1/users/admin/**").hasRole("admin")
-                .requestMatchers("/v1/users/me").hasAnyRole("user", "admin")
+                .requestMatchers("/v1/users/me", "/v1/users/me/**", "/v1/users/*", "/v1/users/*/follow", "/v1/users/*/block").hasAnyRole("user", "admin")
                 .requestMatchers("/v1/users/session").authenticated()
                 .anyRequest().denyAll())
             .exceptionHandling(e -> e.authenticationEntryPoint((request, response, error) -> ApiSecurityErrors.unauthorized(response, error))

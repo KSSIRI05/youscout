@@ -47,6 +47,12 @@ final class OidcFixture {
                 e.getResponseHeaders().set("Content-Type", "application/json");
                 e.sendResponseHeaders(200, body.length); e.getResponseBody().write(body); e.close();
             });
+            server.createContext("/v1/feed", e -> {
+                authorization.set(e.getRequestHeaders().getFirst("Authorization"));
+                byte[] body = "{\"service\":\"stub-feed\"}".getBytes(StandardCharsets.UTF_8);
+                e.getResponseHeaders().set("Content-Type", "application/json");
+                e.sendResponseHeaders(200, body.length); e.getResponseBody().write(body); e.close();
+            });
             server.createContext("/v1/videos/uploads", e -> {
                 authorization.set(e.getRequestHeaders().getFirst("Authorization"));
                 byte[] body = "{\"service\":\"stub-video\"}".getBytes(StandardCharsets.UTF_8);
