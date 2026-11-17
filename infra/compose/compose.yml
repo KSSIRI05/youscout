@@ -225,6 +225,9 @@ services:
       SOCIAL_DB_URL: jdbc:postgresql://social-db:5432/youscout_social
       SOCIAL_DB_USERNAME: youscout_social
       SOCIAL_DB_PASSWORD: ${SOCIAL_DB_PASSWORD:?Run init-env.py --upgrade first}
+      # Les écritures vérifient les publications (profil video) et les blocages ; sans Video elles répondent 503.
+      USER_SERVICE_URL: http://user:8080
+      VIDEO_SERVICE_URL: http://video:8080
       OIDC_ISSUER: http://localhost:8180/realms/youscout
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
     depends_on:

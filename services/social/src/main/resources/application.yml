@@ -16,6 +16,10 @@ spring:
           audiences: youscout-api
 server:
   port: ${SERVER_PORT:8086}
+# Propriétaires des vidéos publiées et des blocages, appelés avec le jeton de l'utilisateur.
+social:
+  user-service-url: ${USER_SERVICE_URL:http://localhost:8081}
+  video-service-url: ${VIDEO_SERVICE_URL:http://localhost:8083}
 management:
   endpoints.web.exposure.include: health
   endpoint.health.show-details: never

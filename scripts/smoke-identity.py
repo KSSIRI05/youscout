@@ -12,6 +12,7 @@ import urllib.parse
 import urllib.request
 from keycloak_admin import KeycloakAdmin, ROOT
 from catalogue_smoke import exercise as exercise_catalogue
+from social_smoke import exercise as exercise_social
 
 ISSUER = "http://localhost:8180/realms/youscout"
 CALLBACK = "http://localhost:7357/auth/callback"
@@ -199,9 +200,11 @@ def main():
         assert status == 200 and "admin" in claims(tokens["access_token"])["realm_access"]["roles"], "Admin role not mapped to token"
         assert api("/v1/users/admin/session", tokens["access_token"])[0] == 200, "Authorized admin denied"
         exercise_catalogue(player_access, tokens["access_token"])
+        print("Checking Social through Video and User...", flush=True)
+        exercise_social(player_access, user_id)
         assert token_request({"client_id": "youscout-mobile", "refresh_token": tokens["refresh_token"]}, "logout")[0] == 204, "Logout failed"
         assert token_request({"grant_type": "refresh_token", "client_id": "youscout-mobile", "refresh_token": tokens["refresh_token"]})[0] == 400, "Logged-out session could refresh"
-        print("PASS: public registration, user default role, login, PKCE, redirect restrictions, refresh rotation, user/admin RBAC and logout.", flush=True)
+        print("PASS: public registration, user default role, login, PKCE, redirect restrictions, refresh rotation, user/admin RBAC, Social validation and logout.", flush=True)
     # Retire le compte de test et son profil même si un contrôle intermédiaire échoue.
     finally:
         if user_id is None:
