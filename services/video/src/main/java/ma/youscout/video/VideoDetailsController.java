@@ -31,6 +31,7 @@ class VideoDetailsController {
                    String publicationStatus, Instant publishedAt) {}
     record Page(List<Details> items, boolean hasMore) {}
     record Playback(String videoUrl, String thumbnailUrl, Instant expiresAt) {}
+    record Publication(UUID id, String ownerSubject, Instant publishedAt) {}
 
     private final MongoTemplate mongo;
     private final S3Presigner presigner;
@@ -72,6 +73,16 @@ class VideoDetailsController {
                 .and("publicationStatus").is("PUBLISHED")), Document.class, "videos");
         if (video == null) throw notFound("Vidéo publiée introuvable.");
         return signedPlayback(id, video);
+    }
+
+    /** Lets other services check that a video is published and find its owner, without media links. */
+    @GetMapping("/{id}/publication")
+    ResponseEntity<Publication> publication(@PathVariable UUID id) {
+        Document video = mongo.findOne(Query.query(Criteria.where("_id").is(id.toString())
+                .and("publicationStatus").is("PUBLISHED")), Document.class, "videos");
+        if (video == null) throw notFound("Vidéo publiée introuvable.");
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new Publication(id,
+                video.getString("ownerSubject"), VideoRepository.instant(video.get("publishedAt"))));
     }
 
     private Document findOwned(UUID id, String owner) {

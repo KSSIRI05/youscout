@@ -97,6 +97,23 @@ class PublicationIntegrationTest {
         assertThat(get(path, oidc.roleToken()).statusCode()).isEqualTo(403);
         assertThat(get(path, oidc.profileToken("alice", null, "alice")).statusCode()).isEqualTo(404);
     }
+    @Test void publicationLookupExposesOwnerOnlyForPublishedVideos() throws Exception {
+        UUID id = create("alice", "UPLOADED", "READY");
+        String path = "/v1/videos/" + id + "/publication";
+        String bob = oidc.profileToken("bob", null, "bob");
+
+        assertThat(get(path, null).statusCode()).isEqualTo(401);
+        assertThat(get(path, oidc.roleToken()).statusCode()).isEqualTo(403);
+        assertThat(get(path, bob).statusCode()).isEqualTo(404);
+        publish(id, oidc.profileToken("alice", null, "alice"), null);
+        var response = get(path, bob);
+        assertThat(response.statusCode()).isEqualTo(200);
+        var body = JsonPath.parse(response.body());
+        assertThat(body.read("$.id", String.class)).isEqualTo(id.toString());
+        assertThat(body.read("$.ownerSubject", String.class)).isEqualTo("alice");
+        assertThat(body.read("$.publishedAt", String.class)).isNotBlank();
+        assertThat(response.body()).doesNotContain("s3", "bucket", "X-Amz");
+    }
     @Test void allUnreadyStatesStayUnpublished() throws Exception {
         String token = oidc.profileToken("alice", null, "alice");
         var ids = new ArrayList<UUID>();

@@ -31,6 +31,29 @@ paths:
         '404': {description: Vidéo non publiée ou inconnue}
         '409': {description: Vidéo publiée mais média indisponible}
         '503': {description: Signature temporairement indisponible}
+  /v1/videos/{id}/publication:
+    get:
+      operationId: getPublishedVideoReference
+      summary: Vérifier qu'une vidéo est publiée et connaître son propriétaire
+      description: Utilisé par Social pour valider likes, commentaires et signalements. Aucun lien média n'est renvoyé.
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Référence publique, Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, ownerSubject, publishedAt]
+                properties:
+                  id: {type: string, format: uuid}
+                  ownerSubject: {type: string}
+                  publishedAt: {type: string, format: date-time}
+        '401': {description: Session absente ou invalide}
+        '403': {description: Rôle insuffisant}
+        '404': {description: Vidéo non publiée ou inconnue}
   /v1/videos/{id}/publish:
     post:
       operationId: publishOwnReadyVideo
