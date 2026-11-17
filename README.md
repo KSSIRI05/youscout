@@ -2,7 +2,7 @@
 
 YouScout est une plateforme de découverte des talents du football. Elle permet de partager des vidéos, de mettre en valeur ses compétences et d'échanger avec la communauté.
 
-**État réel :** Flutter connecté utilise les profils, le catalogue, l'upload, la lecture privée, le fil paginé et les interactions Social persistées. Le backend comprend User, Skill/Hashtag, Video, Feed, Social, Kafka et le worker média. User propage les suivis/blocages via outbox Kafka ; Feed les projette dans Redis et met en cache ses pages. Video utilise désormais MongoDB pour ses documents, métadonnées, traitements et outbox ; Social utilise encore PostgreSQL.
+**État réel :** Flutter connecté utilise les profils, le catalogue, l'upload, la lecture privée, le fil paginé et les interactions Social persistées. Le backend comprend User, Skill/Hashtag, Video, Feed, Social, Kafka et le worker média. User propage les suivis/blocages via outbox Kafka ; Feed les projette dans Redis et met en cache ses pages. Video utilise désormais MongoDB pour ses documents, métadonnées, traitements et outbox ; Social utilise encore PostgreSQL ; ses écritures vérifient auprès de Video que la vidéo est publiée et auprès de User qu'aucun blocage ne s'applique.
 
 ## Lancer le socle backend
 
@@ -53,7 +53,7 @@ User applique alors ses migrations d'outbox et de verrouillage des relations ; F
 | [Sécurité et modération](docs/SECURITE_ET_MODERATION.md) | Authentification, blocage, retrait et fermeture de compte |
 | [Roadmap](docs/ROADMAP.md) | MVP, phases suivantes et critères de démonstration |
 | [Déploiement](docs/DEPLOYMENT.md) | Compose, Kubernetes et cible cloud |
-| [ADRs](docs/adr/README.md) | Dix décisions d'architecture et décisions de stack |
+| [ADRs](docs/adr/README.md) | Onze décisions retenues (ADR-001 à ADR-011), dont la stack de référence |
 | [Contribution](CONTRIBUTING.md) | Organisation et vérifications |
 
 ## Lancer le projet
@@ -74,7 +74,7 @@ flutter test
 flutter build web --release
 ```
 
-La démo couvre le fil, la découverte, les profils, les interactions, la publication et les messages en mémoire. Les données disparaissent au rechargement. La sélection vidéo est locale ; aucun upload, transcodage, serveur, authentification ou envoi de message distant n’est effectué. Voir [le guide mobile](apps/mobile/README.md) et [l’état du frontend](docs/FRONTEND.md).
+L'application a deux modes. Le **mode démo** couvre le fil, la découverte, les profils, les interactions, la publication et les messages en mémoire : les données disparaissent au rechargement et rien n'est envoyé à un serveur. Le **mode connecté** utilise Keycloak et le backend décrit plus haut : profils, catalogue, upload S3, traitement, lecture privée, fil, likes, commentaires avec réponses et messages persistants. Voir [le guide mobile](apps/mobile/README.md) et [l’état du frontend](docs/FRONTEND.md).
 
 La [maquette Figma](https://www.figma.com/design/SZIskR01SeNgOsSrAwiB9p) guide les couleurs, composants et parcours.
 
