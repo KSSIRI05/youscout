@@ -73,9 +73,8 @@ class ProfileService {
     @Transactional
     public BlockResult block(Jwt jwt, String target) {
         String viewer = subject(jwt); validateSubject(target);
-        if (viewer.equals(target)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Self-block is not allowed.");
+        if (viewer.equals(target)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tu ne peux pas te bloquer toi-même.");
         profiles.lockRelationship(viewer, target);
-        if (viewer.equals(target)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tu ne peux pas te bloquer toi-mÃªme.");
         if (profiles.findIfPresent(target) == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Profil introuvable.");
         profiles.block(viewer, target);
         relationEvents.append("BLOCK", viewer, target);
@@ -85,7 +84,7 @@ class ProfileService {
     @Transactional
     public BlockResult unblock(Jwt jwt, String target) {
         String viewer = subject(jwt); validateSubject(target);
-        if (viewer.equals(target)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Self-unblock is not allowed.");
+        if (viewer.equals(target)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tu ne peux pas te débloquer toi-même.");
         profiles.lockRelationship(viewer, target);
         profiles.unblock(viewer, target);
         relationEvents.append("UNBLOCK", viewer, target);
