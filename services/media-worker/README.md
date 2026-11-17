@@ -2,6 +2,14 @@
 
 Ce module consomme `VideoUploaded` sur `video.uploaded.v1` et enregistre des tâches **`QUEUED`** dans sa propre base PostgreSQL. Le profil d'ingestion fonctionne sans AWS. Un profil de traitement optionnel exécute les tâches avec leases, lit S3 avec `If-Match`, génère un MP4 et une miniature avec FFmpeg, puis publie son résultat via sa propre outbox. Voir [le guide du traitement](../../docs/MEDIA_PROCESSING.md). Le worker n'accède jamais à la base Video.
 
+## Suppression des fichiers
+
+Le même consumer lit [`VideoDeleted v1`](../../contracts/events/video-deleted.v1.schema.json) sur `video.deleted.v1`. La suppression est enregistrée dans `video_deletions` avant l'ACK Kafka ; une tâche en attente (ou dont le lease a expiré) est annulée avec `VIDEO_DELETED` et n'est plus jamais réclamée. Un `VideoUploaded` lu après la suppression est annulé dès sa réception.
+
+Avec le profil de traitement, une tâche planifiée supprime ensuite `videos/{videoId}/source` et les fichiers `video.mp4`/`thumbnail.jpg` de **chaque** tentative, mémorisée dans `processing_attempts` (aucun droit de listage S3 n'est nécessaire). Seules ces clés exactes sont acceptées. Si une tentative est en cours, le nettoyage attend sa fin pour ne laisser aucun fichier produit après coup. Un échec S3 est rejoué avec un délai croissant (30 s par tentative, 10 min au plus) jusqu'au succès. Sans profil de traitement, les suppressions attendent dans la table. Le rôle doit disposer de `s3:DeleteObject` (voir [infra/iam/VIDEO.md](../../infra/iam/VIDEO.md)).
+
+Limite connue : si une URL d'upload encore valide est utilisée après le nettoyage d'une vidéo jamais confirmée, l'objet source réapparaît sans être référencé.
+
 ## Traitement d'un message
 
 Le décodeur applique le [contrat VideoUploaded v1](../../contracts/events/video-uploaded.v1.schema.json) : version/producteur attendus, champs exacts, UUID canoniques, clé Kafka égale au `videoId`, type et taille autorisés, clé S3 `videos/{videoId}/source`, ETag opaque et date ISO. Les JSON dépassant 64 Kio, trop imbriqués, contenant des propriétés dupliquées ou des données finales supplémentaires sont refusés.

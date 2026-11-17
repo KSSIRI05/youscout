@@ -29,6 +29,7 @@ services:
     depends_on:
       worker-db: {condition: service_healthy}
       kafka-init: {condition: service_completed_successfully}
+      kafka-deleted-init: {condition: service_completed_successfully}
     # Santé interne uniquement, héritée du Dockerfile ; pas de port ni d'API métier exposés.
 volumes:
   worker-data:

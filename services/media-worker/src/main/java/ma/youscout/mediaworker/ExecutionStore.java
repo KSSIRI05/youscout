@@ -21,11 +21,12 @@ class ExecutionStore {
 
     @Transactional(timeout = 10)
     public Optional<Job> claim() {
-        return jdbc.query("""
+        var job = jdbc.query("""
             WITH candidate AS (
                 SELECT event_id FROM processing_jobs WHERE
-                    (status = 'QUEUED' AND available_at <= clock_timestamp()) OR
-                    (status = 'PROCESSING' AND lease_until < clock_timestamp())
+                    ((status = 'QUEUED' AND available_at <= clock_timestamp()) OR
+                    (status = 'PROCESSING' AND lease_until < clock_timestamp()))
+                    AND NOT EXISTS (SELECT 1 FROM video_deletions d WHERE d.video_id = processing_jobs.video_id)
                 ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED
             ) UPDATE processing_jobs j SET status = 'PROCESSING', attempt_id = ?, attempts = attempts + 1,
                 lease_until = clock_timestamp() + interval '10 minutes', updated_at = clock_timestamp()
@@ -33,6 +34,10 @@ class ExecutionStore {
             """, (r, n) -> new Job(r.getObject("event_id", UUID.class), r.getObject("video_id", UUID.class),
                 r.getObject("attempt_id", UUID.class), r.getInt("attempts"), r.getString("s3_bucket"),
                 r.getString("s3_key"), r.getString("source_etag"), r.getLong("size_bytes")), UUID.randomUUID()).stream().findFirst();
+        // Every attempt is remembered so a later deletion can remove its output folder.
+        job.ifPresent(claimed -> jdbc.update("INSERT INTO processing_attempts(attempt_id, video_id) VALUES (?, ?)",
+                claimed.attemptId(), claimed.videoId()));
+        return job;
     }
 
     @Transactional(timeout = 10)

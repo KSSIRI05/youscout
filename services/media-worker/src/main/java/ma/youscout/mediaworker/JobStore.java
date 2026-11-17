@@ -19,7 +19,11 @@ class JobStore {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING
             """, event.eventId(), event.videoId(), event.fingerprint(), event.bucket(), event.key(), event.etag(),
                 event.contentType(), event.sizeBytes(), Timestamp.from(event.occurredAt()));
-        if (created == 1) return;
+        if (created == 1) {
+            // The deletion may have been read first, since the two topics are consumed independently.
+            jdbc.update(DeletionStore.CANCEL_JOBS, event.videoId());
+            return;
+        }
         var existing = jdbc.queryForList("SELECT fingerprint FROM processing_jobs WHERE event_id = ?", String.class, event.eventId());
         if (!existing.isEmpty() && existing.getFirst().equals(event.fingerprint())) return;
         // Un identifiant réutilisé avec d'autres données n'écrase jamais la source déjà enregistrée.

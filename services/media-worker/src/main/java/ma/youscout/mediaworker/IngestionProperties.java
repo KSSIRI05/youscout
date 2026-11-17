@@ -9,4 +9,5 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties("worker.ingestion")
 public record IngestionProperties(boolean enabled, @NotBlank String bootstrapServers,
         @Pattern(regexp = "[a-zA-Z0-9._-]{1,249}") String topic,
+        @Pattern(regexp = "[a-zA-Z0-9._-]{1,249}") String deletedTopic,
         @Pattern(regexp = "[a-zA-Z0-9._-]{1,200}") String groupId) {}

@@ -6,7 +6,13 @@ Le rôle `arn:aws:iam::014663857971:role/youscout/YouScoutVideo` est distinct de
 
 Il permet seulement `s3:PutObject` et `s3:GetObject` sur `arn:aws:s3:::youscout-014663857971-dev-videos/*`, dans le compte du projet et la région `us-east-1`, via HTTPS. `HeadObject` utilise la permission `GetObject`. Cela prépare les URL présignées PUT et GET et la confirmation de présence d'un objet. L'envoi peut aussi remplacer un objet existant : le futur backend devra générer des clés uniques et vérifier le propriétaire depuis le JWT.
 
-Il ne permet ni la suppression, ni le listing du bucket, ni les changements de politique/ACL, ni l'administration IAM. Les uploads simples n'envoient ni ACL ni tags. Le chiffrement AES256 est fourni par le bucket. La gestion multipart avancée et ses éventuelles permissions supplémentaires seront définies lorsqu'elle sera implémentée.
+Une seconde instruction, `DeleteDeletedVideoMedia`, autorise uniquement `s3:DeleteObject` sous `videos/*` et `processed/*`, avec les mêmes conditions : le worker supprime les fichiers d'une vidéo supprimée par son propriétaire (le code n'accepte que les clés exactes qu'il génère pour cette vidéo). Le bucket n'est pas versionné, la suppression est donc définitive. Après modification du fichier, appliquer la politique avec une identité autorisée à modifier IAM (les profils du projet ne le sont pas) :
+
+```powershell
+aws iam put-role-policy --role-name YouScoutVideo --policy-name YouScoutVideoS3Access --policy-document file://infra/iam/video-s3-policy.json
+```
+
+Il ne permet ni le listing du bucket, ni les changements de politique/ACL, ni l'administration IAM. Les uploads simples n'envoient ni ACL ni tags. Le chiffrement AES256 est fourni par le bucket. La gestion multipart avancée et ses éventuelles permissions supplémentaires seront définies lorsqu'elle sera implémentée.
 
 La [relation de confiance](video-trust-policy.json) autorise uniquement `youscout-developer`, pour les essais locaux. La [politique utilisateur supplémentaire](video-developer-policy.json), nommée `YouScoutVideoDevelopmentAccess`, autorise l'utilisation de ce rôle sans remplacer les droits Terraform existants. Les sessions durent au maximum une heure. Aucun identifiant permanent n'est créé.
 

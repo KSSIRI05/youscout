@@ -60,7 +60,7 @@ class VideoIngestionWorker implements SmartLifecycle {
             try {
                 client = factory.get();
                 consumer = client;
-                client.subscribe(List.of(properties.topic()));
+                client.subscribe(List.of(properties.topic(), properties.deletedTopic()));
                 while (running) {
                     var records = client.poll(Duration.ofMillis(500));
                     for (var record : records) {

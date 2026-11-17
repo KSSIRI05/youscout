@@ -125,7 +125,7 @@ class WorkerIntegrationTest {
     }
 
     private void start() {
-        var properties = new IngestionProperties(true, kafka.getBootstrapServers(), topic, group);
+        var properties = new IngestionProperties(true, kafka.getBootstrapServers(), topic, "video.deleted.v1", group);
         worker = new VideoIngestionWorker(handler, properties, () -> {
             clients.incrementAndGet(); return VideoIngestionWorker.createConsumer(properties);
         });
