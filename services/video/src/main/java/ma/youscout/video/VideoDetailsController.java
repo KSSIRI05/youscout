@@ -46,7 +46,7 @@ class VideoDetailsController {
     @GetMapping
     ResponseEntity<Page> list(@RequestParam(defaultValue = "0") int offset, @AuthenticationPrincipal Jwt jwt) {
         if (offset < 0 || offset > 10000) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Pagination invalide.");
-        Query query = Query.query(Criteria.where("ownerSubject").is(jwt.getSubject()))
+        Query query = Query.query(Criteria.where("ownerSubject").is(jwt.getSubject()).and("deletedAt").is(null))
                 .with(Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("_id"))).skip(offset).limit(21);
         List<Details> rows = mongo.find(query, Document.class, "videos").stream().map(VideoDetailsController::details).toList();
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
@@ -70,7 +70,7 @@ class VideoDetailsController {
     @GetMapping("/{id}/public-playback")
     ResponseEntity<Playback> publicPlayback(@PathVariable UUID id) {
         Document video = mongo.findOne(Query.query(Criteria.where("_id").is(id.toString())
-                .and("publicationStatus").is("PUBLISHED")), Document.class, "videos");
+                .and("publicationStatus").is("PUBLISHED").and("deletedAt").is(null)), Document.class, "videos");
         if (video == null) throw notFound("Vidéo publiée introuvable.");
         return signedPlayback(id, video);
     }
@@ -79,14 +79,14 @@ class VideoDetailsController {
     @GetMapping("/{id}/publication")
     ResponseEntity<Publication> publication(@PathVariable UUID id) {
         Document video = mongo.findOne(Query.query(Criteria.where("_id").is(id.toString())
-                .and("publicationStatus").is("PUBLISHED")), Document.class, "videos");
+                .and("publicationStatus").is("PUBLISHED").and("deletedAt").is(null)), Document.class, "videos");
         if (video == null) throw notFound("Vidéo publiée introuvable.");
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new Publication(id,
                 video.getString("ownerSubject"), VideoRepository.instant(video.get("publishedAt"))));
     }
 
     private Document findOwned(UUID id, String owner) {
-        return mongo.findOne(Query.query(Criteria.where("_id").is(id.toString()).and("ownerSubject").is(owner)),
+        return mongo.findOne(Query.query(Criteria.where("_id").is(id.toString()).and("ownerSubject").is(owner).and("deletedAt").is(null)),
                 Document.class, "videos");
     }
 

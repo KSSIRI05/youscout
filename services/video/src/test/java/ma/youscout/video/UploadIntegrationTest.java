@@ -98,6 +98,19 @@ class UploadIntegrationTest {
         assertThat(count()).isEqualTo(1);
     }
 
+    @Test void retryAfterDeletionCannotMintAnotherUploadUrl() throws Exception {
+        String key = key();
+        String id = JsonPath.parse(post(INPUT, key, "alice").body()).read("$.id", String.class);
+        var deleted = client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v1/videos/" + id))
+                .header("Authorization", "Bearer " + oidc.profileToken("alice", null, "alice")).DELETE().build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(deleted.statusCode()).isEqualTo(204);
+        var retry = post(INPUT, key, "alice");
+        assertThat(retry.statusCode()).isEqualTo(409);
+        assertThat(retry.body()).doesNotContain("X-Amz");
+        assertThat(count()).isEqualTo(1);
+    }
+
     @Test void sameKeyIsScopedToEachVerifiedOwner() throws Exception {
         String key = key();
         assertThat(post(INPUT, key, "alice").statusCode()).isEqualTo(201);

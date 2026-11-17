@@ -84,6 +84,15 @@ class SecurityIntegrationTest {
         }
         client.get().uri(path).headers(h -> h.setBearerAuth(oidc.roleToken("user"))).exchange().expectStatus().isForbidden();
     }
+    @Test void deletionRequiresRoleAndForwardsOnlyAuthenticatedRequests() {
+        String path = "/v1/videos/00000000-0000-0000-0000-000000000001";
+        client.delete().uri(path).exchange().expectStatus().isUnauthorized();
+        client.delete().uri(path).headers(h -> h.setBearerAuth(oidc.roleToken())).exchange().expectStatus().isForbidden();
+        String token = oidc.roleToken("user");
+        client.delete().uri(path).headers(h -> h.setBearerAuth(token)).exchange().expectStatus().isOk();
+        assertThat(oidc.authorization.get()).isEqualTo("Bearer " + token);
+        client.delete().uri("/v1/videos/not-an-id!").headers(h -> h.setBearerAuth(token)).exchange().expectStatus().isForbidden();
+    }
     // Les sondes restent accessibles sans jeton pour permettre la supervision.
     @Test void healthIsPublic() { client.get().uri("/actuator/health").exchange().expectStatus().isOk(); }
     // Une route protégée doit refuser un appel anonyme.

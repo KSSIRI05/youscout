@@ -39,6 +39,10 @@ class VideoRepository {
         return id.toString().equals(video.getString("id"));
     }
 
+    boolean deleted(UUID id) {
+        return mongo.exists(Query.query(Criteria.where("_id").is(id.toString()).and("deletedAt").ne(null)), "videos");
+    }
+
     VideoUpload find(String owner, String idempotencyKey) {
         return Optional.ofNullable(mongo.findOne(Query.query(Criteria.where("ownerSubject").is(owner)
                 .and("idempotencyKey").is(idempotencyKey)), Document.class, "videos"))
@@ -48,7 +52,7 @@ class VideoRepository {
     Optional<VideoUpload> lockOwned(UUID id, String owner) {
         // A Mongo transaction protects the later conditional update; Mongo has no row-level FOR UPDATE lock.
         return Optional.ofNullable(mongo.findOne(Query.query(Criteria.where("_id").is(id.toString())
-                .and("ownerSubject").is(owner)), Document.class, "videos")).map(VideoRepository::toUpload);
+                .and("ownerSubject").is(owner).and("deletedAt").is(null)), Document.class, "videos")).map(VideoRepository::toUpload);
     }
 
     Optional<VideoUpload> claimCompletion(UUID id, String owner, String token) {
@@ -56,7 +60,7 @@ class VideoRepository {
         Criteria available = new Criteria().orOperator(Criteria.where("completionLeaseUntil").is(null),
                 Criteria.where("completionLeaseUntil").lt(date(now)));
         Query pending = Query.query(new Criteria().andOperator(Criteria.where("_id").is(id.toString())
-                .and("ownerSubject").is(owner).and("status").is("PENDING_UPLOAD"), available));
+                .and("ownerSubject").is(owner).and("status").is("PENDING_UPLOAD").and("deletedAt").is(null), available));
         Update lease = new Update().set("completionLeaseToken", token)
                 .set("completionLeaseUntil", date(now.plusSeconds(60)));
         return Optional.ofNullable(mongo.findAndModify(pending, lease, FindAndModifyOptions.options().returnNew(true),
@@ -73,7 +77,7 @@ class VideoRepository {
         Instant now = Instant.now();
         Query pending = Query.query(Criteria.where("_id").is(id.toString())
                 .and("ownerSubject").is(owner).and("status").is("PENDING_UPLOAD")
-                .and("completionLeaseToken").is(leaseToken));
+                .and("completionLeaseToken").is(leaseToken).and("deletedAt").is(null));
         Update update = new Update().set("status", "UPLOADED").set("sourceETag", etag)
                 .set("completedAt", date(now)).set("updatedAt", date(now))
                 .set("processingStatus", "WAITING").set("processingUpdatedAt", date(now))
