@@ -10,7 +10,7 @@ Ce module Spring Boot valide Keycloak et persiste les documents Video et l'outbo
 
 La réponse est `204`, y compris pour un appel répété ou concurrent, et un seul événement est écrit. La vidéo disparaît ensuite de la liste, des détails, de la lecture privée et publique et de `/publication` (Social refuse donc les nouveaux likes et commentaires). Elle ne peut plus être confirmée ni publiée, et réutiliser sa clé d'idempotence renvoie `409` au lieu d'une nouvelle URL d'upload.
 
-Le document est conservé avec sa date de suppression. Feed et le nettoyage S3 consommeront `video.deleted.v1` dans les étapes suivantes ; d'ici là, une vidéo supprimée reste dans les pages du fil déjà projetées, mais sa lecture renvoie `404`.
+Le document est conservé avec sa date de suppression. Feed consomme `video.deleted.v1` et retire la vidéo du fil ; le worker média annule le traitement éventuel et supprime les fichiers S3 (source et fichiers traités).
 
 ## Identité Keycloak
 
