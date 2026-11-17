@@ -198,6 +198,10 @@ class ConnectedSession extends ChangeNotifier {
   Future<Map<String, dynamic>> publishVideo(String id) =>
       videoRequest('/v1/videos/$id/publish');
 
+  /// Le serveur renvoie 204, y compris si la vidéo était déjà supprimée.
+  Future<void> deleteVideo(String id) async =>
+      _request('DELETE', '/v1/videos/${Uri.encodeComponent(id)}');
+
   Future<Map<String, dynamic>> videoRequest(
     String path, {
     Map<String, Object>? body,

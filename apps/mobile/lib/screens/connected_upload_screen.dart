@@ -219,6 +219,13 @@ class _ConnectedUploadScreenState extends State<ConnectedUploadScreen> {
             }
             return widget.session.publishVideo(id);
           },
+          delete: (id) {
+            if (!widget.session.signedIn ||
+                widget.session.profile?.subject != owner) {
+              throw const ApiFailure(401, 'Reconnecte-toi pour continuer.');
+            }
+            return widget.session.deleteVideo(id);
+          },
           request: (path, {query}) {
             if (!widget.session.signedIn ||
                 widget.session.profile?.subject != owner) {
