@@ -51,18 +51,21 @@ class FeedStore {
             mapper.readTree(row.getString(5)), mapper.readTree(row.getString(6)));
     }
 
+    /** Returns true when a visible feed entry was added. */
     @Transactional(timeout = 10)
-    public void accept(PublishedVideo event, String topic, int partition, long offset) {
+    public boolean accept(PublishedVideo event, String topic, int partition, long offset) {
         int inserted = jdbc.update("""
             INSERT INTO feed_event_inbox(event_id, video_id, fingerprint)
             VALUES (?, ?, ?) ON CONFLICT DO NOTHING
             """, event.eventId(), event.videoId(), event.fingerprint());
         if (inserted == 0) {
             List<String> prior = jdbc.queryForList("SELECT fingerprint FROM feed_event_inbox WHERE event_id = ?", String.class, event.eventId());
-            if (!prior.isEmpty() && prior.getFirst().equals(event.fingerprint())) return;
+            if (!prior.isEmpty() && prior.getFirst().equals(event.fingerprint())) return false;
             reject(topic, partition, offset, "EVENT_ID_CONFLICT");
-            return;
+            return false;
         }
+        // The deletion may be read first, since the two topics are consumed independently.
+        if (deleted(event.videoId())) return false;
 
         String skills = mapper.writeValueAsString(event.skills());
         String hashtags = mapper.writeValueAsString(event.hashtags());
@@ -70,7 +73,7 @@ class FeedStore {
             INSERT INTO feed_entries(video_id, source_event_id, owner_subject, title, published_at, skills, hashtags)
             VALUES (?, ?, ?, ?, ?, ?::jsonb, ?::jsonb) ON CONFLICT (video_id) DO NOTHING
             """, event.videoId(), event.eventId(), event.ownerSubject(), event.title(), Timestamp.from(event.publishedAt()), skills, hashtags);
-        if (entry == 1) return;
+        if (entry == 1) return true;
 
         List<Existing> prior = jdbc.query("SELECT owner_subject, title, published_at, skills::text, hashtags::text FROM feed_entries WHERE video_id = ?",
             (row, number) -> new Existing(row.getString(1), row.getString(2), row.getTimestamp(3), row.getString(4), row.getString(5)), event.videoId());
@@ -79,9 +82,41 @@ class FeedStore {
             if (current.ownerSubject().equals(event.ownerSubject()) && current.title().equals(event.title())
                     && current.publishedAt().toInstant().equals(event.publishedAt())
                     && mapper.readTree(current.skills()).equals(mapper.readTree(skills))
-                    && mapper.readTree(current.hashtags()).equals(mapper.readTree(hashtags))) return;
+                    && mapper.readTree(current.hashtags()).equals(mapper.readTree(hashtags))) return false;
         }
         reject(topic, partition, offset, "VIDEO_EVENT_CONFLICT");
+        return false;
+    }
+
+    /** Removes the entry and records the deletion; returns true when a visible entry was removed. */
+    @Transactional(timeout = 10)
+    public boolean acceptDeletion(DeletedVideo event, String topic, int partition, long offset) {
+        List<String> recorded = jdbc.queryForList("SELECT owner_subject FROM feed_deleted_videos WHERE video_id = ?",
+            String.class, event.videoId());
+        if (!recorded.isEmpty()) {
+            if (!recorded.getFirst().equals(event.ownerSubject())) reject(topic, partition, offset, "VIDEO_EVENT_CONFLICT");
+            return false;
+        }
+        List<String> owner = jdbc.queryForList("SELECT owner_subject FROM feed_entries WHERE video_id = ? FOR UPDATE",
+            String.class, event.videoId());
+        if (!owner.isEmpty() && !owner.getFirst().equals(event.ownerSubject())) {
+            reject(topic, partition, offset, "VIDEO_EVENT_CONFLICT");
+            return false;
+        }
+        int inserted = jdbc.update("""
+            INSERT INTO feed_deleted_videos(video_id, event_id, owner_subject, deleted_at)
+            VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING
+            """, event.videoId(), event.eventId(), event.ownerSubject(), Timestamp.from(event.deletedAt()));
+        if (inserted == 0) {
+            reject(topic, partition, offset, "EVENT_ID_CONFLICT");
+            return false;
+        }
+        return jdbc.update("DELETE FROM feed_entries WHERE video_id = ?", event.videoId()) == 1;
+    }
+
+    private boolean deleted(UUID videoId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM feed_deleted_videos WHERE video_id = ?)", Boolean.class, videoId));
     }
 
     @Transactional(timeout = 10)

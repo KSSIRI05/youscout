@@ -32,6 +32,7 @@ feed:
     enabled: ${FEED_INGESTION_ENABLED:true}
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     topic: ${VIDEO_PUBLISHED_TOPIC:video.published.v2}
+    deleted-topic: ${VIDEO_DELETED_TOPIC:video.deleted.v1}
     group-id: ${FEED_GROUP_ID:youscout-feed-v2}
   relations:
     enabled: ${FEED_RELATIONS_ENABLED:true}
