@@ -8,7 +8,7 @@ L'architecture cible reste celle de [ARCHITECTURE.md](ARCHITECTURE.md). Ce table
 | --- | --- | --- |
 | Auth, Gateway, User | Keycloak, JWT, Gateway, profils, suivis, blocages persistants et outbox Kafka de relations ; blocage applique par Feed et Social | Durcissement multi-replicas de l'ordre de relais et fermeture de compte |
 | Skill/Hashtag | Catalogue, recherche, suivi de hashtags | Outbox/evenements catalogue et interface admin |
-| Video et media-worker | MongoDB en replica set pour metadonnees, etats et outbox (tests d'integration sur replica set Testcontainers) ; upload S3 prive, traitement FFmpeg, publication | Suppression de video (U09) et de ses artefacts, HLS, CDN prive, reconciliation |
+| Video et media-worker | MongoDB en replica set pour metadonnees, etats et outbox (tests d'integration sur replica set Testcontainers) ; upload S3 prive, traitement FFmpeg, publication, suppression par le proprietaire avec `VideoDeleted` | Consommation de `VideoDeleted` par Feed et nettoyage S3 des artefacts, HLS, CDN prive, reconciliation |
 | Feed | Projection VideoPublished, projection Redis des suivis/blocages, cache de pages versionne | Fan-out des publications par utilisateur, retrait de contenus, reconstruction automatisee de Redis |
 | Interaction, Chat, Moderation | Social agrege likes, commentaires avec reponses, signalements et messages persistants ; ecritures verifiees aupres de Video (publication) et User (blocages), suppression par le proprietaire de la video (U13), pagination par curseur | Frontieres separees, migration MongoDB, moderation admin et chat WebSocket |
 | Rating | Absent | Service, regles de notation et persistance PostgreSQL |
