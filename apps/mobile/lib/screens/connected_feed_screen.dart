@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../backend/api.dart';
 import '../backend/connected_session.dart';
 import '../backend/private_video.dart';
 import '../core/theme.dart';
@@ -96,9 +97,13 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
 
   Future<void> _comments(FeedVideo video) async {
     final input = TextEditingController();
+    final me = widget.session.profile?.subject;
     List<Map<String, dynamic>> items = [];
+    var hasOlder = false;
+    Map<String, dynamic>? replyTo;
     try {
       items = await widget.session.socialList('videos/${video.id}/comments');
+      hasOlder = items.length >= commentPageSize;
     } catch (_) {
       _message('Impossible de charger les commentaires.');
       input.dispose();
@@ -112,80 +117,170 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
       context: context,
       isScrollControlled: true,
       builder: (sheetContext) => StatefulBuilder(
-        builder: (context, refresh) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            20,
-            20,
-            MediaQuery.viewInsetsOf(context).bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Commentaires',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 260,
-                child: items.isEmpty
-                    ? const Center(
-                        child: Text('Aucun commentaire pour le moment.'),
-                      )
-                    : ListView(
-                        children: [
-                          for (final item in items)
-                            ListTile(
-                              leading: const CircleAvatar(
-                                child: Icon(Icons.person),
-                              ),
-                              title: Text(item['body'] as String),
-                              subtitle: Text(
-                                (item['authorSubject'] as String).substring(
-                                  0,
-                                  8,
+        builder: (context, refresh) {
+          Future<void> loadOlder() async {
+            try {
+              final older = await widget.session.socialList(
+                'videos/${video.id}/comments',
+                query: {'before': items.first['id'] as String},
+              );
+              refresh(() {
+                items = [...older, ...items];
+                hasOlder = older.length >= commentPageSize;
+              });
+            } catch (_) {
+              _message('Impossible de charger les commentaires plus anciens.');
+            }
+          }
+
+          Future<void> delete(Map<String, dynamic> comment) async {
+            try {
+              await widget.session.socialDelete('comments/${comment['id']}');
+              refresh(
+                () => items = items
+                    .where((item) => item['id'] != comment['id'])
+                    .toList(),
+              );
+            } catch (_) {
+              _message('Le commentaire n’a pas pu être supprimé.');
+            }
+          }
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              20,
+              20,
+              MediaQuery.viewInsetsOf(context).bottom + 20,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Commentaires',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 260,
+                  child: items.isEmpty
+                      ? const Center(
+                          child: Text('Aucun commentaire pour le moment.'),
+                        )
+                      : ListView(
+                          children: [
+                            if (hasOlder)
+                              Center(
+                                child: TextButton(
+                                  onPressed: loadOlder,
+                                  child: const Text(
+                                    'Commentaires plus anciens',
+                                  ),
                                 ),
                               ),
-                            ),
-                        ],
+                            for (final entry in threadComments(items))
+                              ListTile(
+                                contentPadding: EdgeInsets.only(
+                                  left: entry.reply ? 40 : 0,
+                                ),
+                                leading: CircleAvatar(
+                                  radius: entry.reply ? 14 : 20,
+                                  child: const Icon(Icons.person),
+                                ),
+                                title: Text(entry.comment['body'] as String),
+                                subtitle: Text(
+                                  shortSubject(
+                                    entry.comment['authorSubject'] as String,
+                                  ),
+                                ),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (!entry.reply)
+                                      IconButton(
+                                        tooltip: 'Répondre',
+                                        icon: const Icon(Icons.reply),
+                                        onPressed: () => refresh(
+                                          () => replyTo = entry.comment,
+                                        ),
+                                      ),
+                                    // Auteur ou propriétaire de la vidéo (U13).
+                                    if (me != null &&
+                                        (entry.comment['authorSubject'] == me ||
+                                            video.ownerSubject == me))
+                                      IconButton(
+                                        tooltip: 'Supprimer',
+                                        icon: const Icon(Icons.delete_outline),
+                                        onPressed: () => delete(entry.comment),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                ),
+                if (replyTo != null)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Réponse à ${shortSubject(replyTo!['authorSubject'] as String)}',
+                          style: const TextStyle(color: ScoutColors.muted),
+                        ),
                       ),
-              ),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: input,
-                      maxLength: 1000,
-                      decoration: const InputDecoration(
-                        hintText: 'Écrire un commentaire',
+                      IconButton(
+                        tooltip: 'Annuler la réponse',
+                        icon: const Icon(Icons.close),
+                        onPressed: () => refresh(() => replyTo = null),
+                      ),
+                    ],
+                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: input,
+                        maxLength: 1000,
+                        decoration: const InputDecoration(
+                          hintText: 'Écrire un commentaire',
+                        ),
                       ),
                     ),
-                  ),
-                  IconButton.filled(
-                    onPressed: () async {
-                      if (input.text.trim().isEmpty) return;
-                      try {
-                        final item = await widget.session.socialPost(
-                          'videos/${video.id}/comments',
-                          {'body': input.text.trim()},
-                        );
-                        refresh(() {
-                          items = [...items, item];
-                          input.clear();
-                        });
-                      } catch (_) {
-                        _message('Le commentaire n’a pas pu être envoyé.');
-                      }
-                    },
-                    icon: const Icon(Icons.send),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
+                    IconButton.filled(
+                      onPressed: () async {
+                        if (input.text.trim().isEmpty) return;
+                        try {
+                          final parent = replyTo;
+                          final item = await widget.session
+                              .socialPost('videos/${video.id}/comments', {
+                                'body': input.text.trim(),
+                                if (parent != null)
+                                  'parentId': parent['id'] as String,
+                              });
+                          refresh(() {
+                            items = [...items, item];
+                            input.clear();
+                            replyTo = null;
+                          });
+                        } on ApiFailure catch (failure) {
+                          _message(
+                            failure.status == 403
+                                ? 'Un blocage empêche ce commentaire.'
+                                : 'Le commentaire n’a pas pu être envoyé.',
+                          );
+                        } catch (_) {
+                          _message('Le commentaire n’a pas pu être envoyé.');
+                        }
+                      },
+                      icon: const Icon(Icons.send),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
     input.dispose();
@@ -488,3 +583,28 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
     ),
   );
 }
+
+/// Taille de page par défaut de Social ; une page pleine signale un historique plus ancien.
+const commentPageSize = 50;
+
+/// Place chaque réponse sous son commentaire principal ; une réponse dont le parent
+/// n'est pas chargé (supprimé, bloqué ou plus ancien) reste visible en fin de liste.
+List<({Map<String, dynamic> comment, bool reply})> threadComments(
+  List<Map<String, dynamic>> items,
+) {
+  final roots = items.where((item) => item['parentId'] == null).toList();
+  final rootIds = {for (final root in roots) root['id']};
+  return [
+    for (final root in roots) ...[
+      (comment: root, reply: false),
+      for (final item in items)
+        if (item['parentId'] == root['id']) (comment: item, reply: true),
+    ],
+    for (final item in items)
+      if (item['parentId'] != null && !rootIds.contains(item['parentId']))
+        (comment: item, reply: true),
+  ];
+}
+
+String shortSubject(String subject) =>
+    subject.length <= 8 ? subject : subject.substring(0, 8);

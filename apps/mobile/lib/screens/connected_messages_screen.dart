@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../backend/api.dart';
 import '../backend/connected_session.dart';
 import '../core/theme.dart';
 
@@ -19,8 +20,10 @@ class ConnectedMessagesScreen extends StatefulWidget {
 class _ConnectedMessagesScreenState extends State<ConnectedMessagesScreen> {
   final recipient = TextEditingController();
   final message = TextEditingController();
+  // Taille de page par défaut de Social ; une page pleine signale des messages plus anciens.
+  static const pageSize = 100;
   List<Map<String, dynamic>> items = [];
-  bool loading = false;
+  bool loading = false, hasOlder = false;
   String? activeRecipient;
 
   @override
@@ -45,7 +48,12 @@ class _ConnectedMessagesScreenState extends State<ConnectedMessagesScreen> {
         'messages',
         query: {'with': target},
       );
-      if (mounted) setState(() => items = result);
+      if (mounted) {
+        setState(() {
+          items = result;
+          hasOlder = result.length >= pageSize;
+        });
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -58,6 +66,28 @@ class _ConnectedMessagesScreenState extends State<ConnectedMessagesScreen> {
       }
     } finally {
       if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> loadOlder() async {
+    final target = activeRecipient;
+    if (target == null || items.isEmpty) return;
+    try {
+      final older = await widget.session.socialList(
+        'messages',
+        query: {'with': target, 'before': items.first['id'] as String},
+      );
+      if (!mounted || activeRecipient != target) return;
+      setState(() {
+        items = [...older, ...items];
+        hasOlder = older.length >= pageSize;
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Historique indisponible.')),
+        );
+      }
     }
   }
 
@@ -75,6 +105,18 @@ class _ConnectedMessagesScreenState extends State<ConnectedMessagesScreen> {
         items = [...items, sent];
         message.clear();
       });
+    } on ApiFailure catch (failure) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              failure.status == 403
+                  ? 'Un blocage empêche cet échange.'
+                  : 'Message non envoyé.',
+            ),
+          ),
+        );
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -128,6 +170,13 @@ class _ConnectedMessagesScreenState extends State<ConnectedMessagesScreen> {
                 )
               : ListView(
                   children: [
+                    if (hasOlder)
+                      Center(
+                        child: TextButton(
+                          onPressed: loadOlder,
+                          child: const Text('Messages plus anciens'),
+                        ),
+                      ),
                     for (final item in items)
                       Align(
                         alignment:
