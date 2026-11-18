@@ -46,7 +46,8 @@ class SecurityConfig {
     // Autorise uniquement les origines de la démo Flutter web locale, pas toutes les origines.
     @Bean UrlBasedCorsConfigurationSource corsConfigurationSource() {
         var cors = new CorsConfiguration();
-        cors.setAllowedOrigins(List.of("http://localhost:7357", "http://127.0.0.1:7357"));
+        cors.setAllowedOrigins(List.of("http://localhost:7357", "http://127.0.0.1:7357",
+            "http://localhost:7358", "http://127.0.0.1:7358"));
         cors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         cors.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-Id", "Idempotency-Key"));
         cors.setExposedHeaders(List.of("X-Request-Id"));

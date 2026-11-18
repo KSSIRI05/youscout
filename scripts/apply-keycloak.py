@@ -26,6 +26,10 @@ def main():
     for configured in desired["clients"]:
         client = copy.deepcopy(configured)
         existing = admin.request("GET", base + "/clients?" + "clientId=" + quote(client["clientId"]))
+        if not existing and client.get("publicClient"):
+            # Un client public ajouté après l'import initial (ex. youscout-admin) est créé ; il n'a pas de secret.
+            admin.request("POST", base + "/clients", client)
+            existing = admin.request("GET", base + "/clients?" + "clientId=" + quote(client["clientId"]))
         assert len(existing) == 1, "Expected existing YouScout client; import the realm on first startup"
         client_id = existing[0]["id"]
         # Le client existe déjà : son secret courant ne doit pas être remplacé par celui de l’import.
@@ -37,11 +41,12 @@ def main():
         for name in client.get("defaultClientScopes", []):
             assert name in client_scopes, "Required built-in client scope missing: " + name
             admin.request("PUT", base + "/clients/" + client_id + "/default-client-scopes/" + client_scopes[name])
-        # Le mobile peut porter les rôles applicatifs ; le client de test technique reste limité à user.
-        allowed = [roles["user"], roles["admin"]] if client["clientId"] == "youscout-mobile" else [roles["user"]]
+        # Le mobile et l'admin peuvent porter les rôles applicatifs ; le client de test technique reste limité à user.
+        carries_admin = client["clientId"] in ("youscout-mobile", "youscout-admin")
+        allowed = [roles["user"], roles["admin"]] if carries_admin else [roles["user"]]
         scope_path = base + "/clients/" + client_id + "/scope-mappings/realm"
         existing_scopes = admin.request("GET", scope_path)
-        unwanted = [role for role in existing_scopes if role["name"] == "admin" and client["clientId"] != "youscout-mobile"]
+        unwanted = [role for role in existing_scopes if role["name"] == "admin" and not carries_admin]
         if unwanted:
             admin.request("DELETE", scope_path, unwanted)
         admin.request("POST", scope_path, allowed)

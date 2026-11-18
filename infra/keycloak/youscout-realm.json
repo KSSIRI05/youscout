@@ -74,7 +74,63 @@
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-          "post.logout.redirect.uris": "http://localhost:7357/##http://127.0.0.1:7357/##ma.youscout://oauth/callback"
+        "post.logout.redirect.uris": "http://localhost:7357/##http://127.0.0.1:7357/##ma.youscout://oauth/callback"
+      },
+      "defaultClientScopes": [
+        "basic",
+        "profile",
+        "email"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "protocol": "openid-connect",
+      "enabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "youscout-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "youscout-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "application-realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ],
+      "clientId": "youscout-admin",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:7358/callback",
+        "http://127.0.0.1:7358/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:7358",
+        "http://127.0.0.1:7358"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:7358/##http://127.0.0.1:7358/"
       },
       "defaultClientScopes": [
         "basic",
@@ -149,6 +205,13 @@
   "scopeMappings": [
     {
       "client": "youscout-mobile",
+      "roles": [
+        "user",
+        "admin"
+      ]
+    },
+    {
+      "client": "youscout-admin",
       "roles": [
         "user",
         "admin"
