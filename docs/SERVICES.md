@@ -10,7 +10,7 @@ Ces services constituent la cible. La Gateway et les profils personnels persista
 | Interaction | `/v1/videos/{id}/comments`, réponses, likes et annulation | MongoDB `interaction`, Redis dédié aux compteurs | CommentCreated, CommentDeleted, LikeChanged |
 | Rating | `/v1/ratings/videos/{id}`, création/modification/retrait de notes par compétence | PostgreSQL `rating` | RatingChanged (à venir) |
 | Feed | `/v1/feed`, vue de lecture classée et paginée | Redis `feed`, projections reconstruisibles | Consomme publications, relations, retraits et interactions |
-| Chat | `/v1/conversations`, historique via Gateway ; connexion WSS dédiée | MongoDB `chat` | MessageAccepted, MessageDelivered si accusé reçu |
+| Chat | `/v1/conversations`, historique et envoi de secours ; WebSocket `/v1/chat/ws` via la Gateway ([détails](../services/chat/README.md)) | MongoDB `chat`, Redis Pub/Sub entre instances | MessageAccepted, MessageDelivered (à venir) |
 | Skill/Hashtag | `/v1/skills`, `/v1/hashtags`, catalogue et abonnements hashtags | PostgreSQL `skill` | SkillChanged, HashtagFollowed, HashtagDisabled |
 | Moderation | `/v1/reports`, décisions admin, suivi d'application | PostgreSQL `moderation`, journal de décisions | ModerationActionRequested, ModerationActionApplied |
 | Notification | Envoi push et gestion des appareils | PostgreSQL `notification`, jetons chiffrés/accès restreint | Consomme événements autorisés ; conserve statut de livraison |

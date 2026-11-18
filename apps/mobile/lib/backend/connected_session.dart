@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'api.dart';
 import 'auth.dart';
+import 'chat_connection.dart';
 
 /// État du compte réel, indépendant du store de démonstration.
 class ConnectedSession extends ChangeNotifier {
@@ -194,6 +195,56 @@ class ConnectedSession extends ChangeNotifier {
     Map<String, String>? query,
   }) async => (await _request('GET', '/v1/social/$path', query: query) as List)
       .cast<Map<String, dynamic>>();
+
+  /// Jeton valable au moins une minute : la connexion Chat le renvoie avant son expiration.
+  Future<ChatToken> chatToken() async {
+    var tokens = _tokens;
+    if (tokens == null) {
+      throw const AuthFailure('Reconnecte-toi pour continuer.', expired: true);
+    }
+    if (!tokens.expiresAt.isAfter(
+      DateTime.now().add(const Duration(seconds: 60)),
+    )) {
+      tokens = await _refresh();
+    }
+    return (access: tokens.access, expiresAt: tokens.expiresAt);
+  }
+
+  /// Même hôte que l'API ; `wss` dès que l'API est servie en HTTPS.
+  Uri get chatSocketUri {
+    final uri = Uri.parse('${api.config.api}/v1/chat/ws');
+    return uri.replace(scheme: uri.scheme == 'https' ? 'wss' : 'ws');
+  }
+
+  /// U21 : conversations récentes de l'appelant.
+  Future<List<Map<String, dynamic>>> chatConversations() async =>
+      (await _request('GET', '/v1/conversations') as List)
+          .cast<Map<String, dynamic>>();
+
+  /// Page de la conversation ; `afterSeq` reprend après une reconnexion, `beforeSeq` remonte.
+  Future<Map<String, dynamic>> chatHistory(
+    String peer, {
+    int? afterSeq,
+    int? beforeSeq,
+  }) => _object(
+    'GET',
+    '/v1/conversations/${Uri.encodeComponent(peer)}/messages',
+    query: {
+      'afterSeq': ?afterSeq?.toString(),
+      'beforeSeq': ?beforeSeq?.toString(),
+    },
+  );
+
+  /// Envoi REST de secours ; idempotent pour un même `clientMessageId`.
+  Future<Map<String, dynamic>> chatSend(
+    String peer,
+    String clientMessageId,
+    String body,
+  ) => _object(
+    'POST',
+    '/v1/conversations/${Uri.encodeComponent(peer)}/messages',
+    body: {'clientMessageId': clientMessageId, 'body': body},
+  );
 
   /// U15 : moyennes par compétence et note de l'appelant pour une vidéo.
   Future<Map<String, dynamic>> videoRatings(String videoId) =>

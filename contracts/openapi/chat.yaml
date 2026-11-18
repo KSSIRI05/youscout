@@ -1,0 +1,169 @@
+openapi: 3.0.3
+info:
+  title: YouScout Chat API
+  version: 0.1.0
+  description: |-
+    Direct messages between two accounts (U21). A message is stored before it is acknowledged. Each
+    conversation numbers its messages with `seq` (1, 2, 3… without gaps). The sender picks a
+    `clientMessageId`, so a resend after a reconnect returns the original message instead of a duplicate.
+    Sending checks with User that the recipient has an active profile and that no block exists in either
+    direction (fail-closed 503 if User is unavailable). Errors use application/problem+json.
+
+    Real-time delivery uses the WebSocket `GET /v1/chat/ws` (through the Gateway, no Bearer on the
+    handshake). Every frame is a JSON object with a `type`.
+
+    Client → server:
+    - `{"type":"auth","token":"<access token>"}` must be the first frame, within 10 seconds. Send it again
+      with a fresh token before expiry to keep the connection; the account must stay the same.
+    - `{"type":"send","to":"<subject>","clientMessageId":"<1-64 of A-Z a-z 0-9 _ ->","body":"<1-2000 chars>"}`
+    - `{"type":"delivered","peer":"<subject>","seq":<n>}`: the caller received the conversation up to `seq`.
+    - `{"type":"ping"}`: keeps the connection open (idle timeout 120 s).
+
+    Server → client:
+    - `ready` (`subject`, `expiresAt`) after each valid `auth`.
+    - `accepted` (`clientMessageId`, `created`, `message`) answers a `send`; `created` is false for a resend.
+    - `message` (`message`) to the recipient's connections and the sender's other connections.
+    - `delivered` (`conversationId`, `peerSubject`, `seq`) when the peer acknowledged up to `seq`.
+    - `error` (`clientMessageId`, `status`, `error`) with the same status codes as the REST API.
+    - `pong`.
+
+    Close codes: 4401 missing, invalid or expired token; 4403 no user/admin role, or a different account
+    on re-authentication. After a reconnect, the client reads `GET …/messages?afterSeq=<last seq>`.
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerAuth: []
+paths:
+  /v1/conversations:
+    get:
+      summary: The caller's conversations, most recent first
+      parameters:
+        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+      responses:
+        '200':
+          description: Conversations with at least one message; Cache-Control no-store
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/Conversation'}}
+        '401': {description: Missing or invalid token}
+        '403': {description: Role user or admin required}
+  /v1/conversations/{peer}/messages:
+    parameters:
+      - $ref: '#/components/parameters/peer'
+    get:
+      summary: A page of the conversation with `peer`, oldest first
+      description: >-
+        Without cursor: the latest page. `afterSeq` reads forward (catch-up after a reconnect);
+        `beforeSeq` reads older messages. Use one cursor at most.
+      parameters:
+        - {in: query, name: afterSeq, schema: {type: integer, minimum: 0}}
+        - {in: query, name: beforeSeq, schema: {type: integer, minimum: 1}}
+        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
+      responses:
+        '200':
+          description: Messages in ascending `seq`; empty when the conversation does not exist
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/History'}
+        '400': {description: Invalid page size or both cursors}
+    post:
+      summary: Send a message without WebSocket (also relayed to live connections)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [clientMessageId, body]
+              properties:
+                clientMessageId: {type: string, pattern: '^[A-Za-z0-9_-]{1,64}$'}
+                body: {type: string, minLength: 1, maxLength: 2000}
+      responses:
+        '201':
+          description: Message stored
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Message'}
+        '200':
+          description: Resend of the same `clientMessageId`; the original message
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Message'}
+        '400': {description: Invalid body, identifier, extra field or message to self}
+        '403': {description: A block exists between sender and recipient}
+        '404': {description: Recipient profile unknown or deactivated}
+        '409': {description: The `clientMessageId` was already used for a different message}
+        '503': {description: User or the database unavailable}
+  /v1/conversations/{peer}/delivered:
+    parameters:
+      - $ref: '#/components/parameters/peer'
+    post:
+      summary: Acknowledge reception of the conversation up to `seq` (only increases)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seq]
+              properties:
+                seq: {type: integer, minimum: 1}
+      responses:
+        '200':
+          description: Acknowledgement recorded; `changed` is false if it was already at or past `seq`
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [conversationId, deliveredSeq, changed]
+                properties:
+                  conversationId: {type: string, format: uuid}
+                  deliveredSeq: {type: integer}
+                  changed: {type: boolean}
+        '400': {description: '`seq` is not a positive integer, or beyond the last message'}
+        '404': {description: No conversation with `peer`}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  parameters:
+    peer: {in: path, name: peer, required: true, schema: {type: string, maxLength: 255}, description: The other account's subject}
+  schemas:
+    Message:
+      type: object
+      required: [id, conversationId, seq, senderSubject, recipientSubject, clientMessageId, body, acceptedAt]
+      properties:
+        id: {type: string, format: uuid}
+        conversationId: {type: string, format: uuid}
+        seq: {type: integer, minimum: 1}
+        senderSubject: {type: string}
+        recipientSubject: {type: string}
+        clientMessageId: {type: string}
+        body: {type: string}
+        acceptedAt: {type: string, format: date-time}
+    History:
+      type: object
+      required: [conversationId, peerSubject, lastSeq, peerDeliveredSeq, messages]
+      properties:
+        conversationId: {type: string, format: uuid}
+        peerSubject: {type: string}
+        lastSeq: {type: integer, minimum: 0}
+        peerDeliveredSeq: {type: integer, minimum: 0, description: The caller's messages up to this seq were delivered}
+        messages: {type: array, items: {$ref: '#/components/schemas/Message'}}
+    Conversation:
+      type: object
+      required: [conversationId, peerSubject, lastSeq, myDeliveredSeq, peerDeliveredSeq, lastMessage]
+      properties:
+        conversationId: {type: string, format: uuid}
+        peerSubject: {type: string}
+        lastSeq: {type: integer, minimum: 1}
+        myDeliveredSeq: {type: integer, minimum: 0}
+        peerDeliveredSeq: {type: integer, minimum: 0}
+        lastMessage:
+          type: object
+          required: [senderSubject, body, seq, acceptedAt]
+          properties:
+            senderSubject: {type: string}
+            body: {type: string}
+            seq: {type: integer}
+            acceptedAt: {type: string, format: date-time}

@@ -29,6 +29,7 @@ class SecurityIntegrationTest {
         r.add("FEED_SERVICE_URL", oidc::base);
         r.add("SOCIAL_SERVICE_URL", oidc::base);
         r.add("RATING_SERVICE_URL", oidc::base);
+        r.add("CHAT_SERVICE_URL", oidc::base);
     }
     @Test void uploadPostRequiresRoleAndAllowsIdempotencyCorsHeader() {
         client.post().uri("/v1/videos/uploads").exchange().expectStatus().isUnauthorized();
@@ -157,6 +158,18 @@ class SecurityIntegrationTest {
         client.put().uri(path).headers(h -> h.setBearerAuth(user)).exchange().expectStatus().isOk();
         assertThat(oidc.authorization.get()).isEqualTo("Bearer " + user);
         client.get().uri("/v1/ratings/other").headers(h -> h.setBearerAuth(user)).exchange().expectStatus().isForbidden();
+    }
+    @Test void conversationRoutesRequireAnApplicationRoleAndForwardTheToken() {
+        String path = "/v1/conversations/someone/messages";
+        client.post().uri(path).exchange().expectStatus().isUnauthorized();
+        client.post().uri(path).headers(h -> h.setBearerAuth(oidc.roleToken())).exchange().expectStatus().isForbidden();
+        String user = oidc.roleToken("user");
+        client.get().uri("/v1/conversations").headers(h -> h.setBearerAuth(user)).exchange().expectStatus().isOk();
+        client.post().uri(path).headers(h -> h.setBearerAuth(user)).exchange().expectStatus().isOk();
+        assertThat(oidc.authorization.get()).isEqualTo("Bearer " + user);
+        // Seule la poignée de main GET est ouverte sans jeton.
+        client.post().uri("/v1/chat/ws").exchange().expectStatus().isUnauthorized();
+        client.post().uri("/v1/chat/ws").headers(h -> h.setBearerAuth(user)).exchange().expectStatus().isForbidden();
     }
     // La console d'administration a sa propre origine et modifie le catalogue par PATCH.
     @Test void corsPreflightAllowsTheAdminConsole() {

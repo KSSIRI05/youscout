@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: chat-service
+  mongodb:
+    uri: ${CHAT_MONGODB_URI:mongodb://localhost:27018/youscout_chat?replicaSet=rs0}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6380}
+      timeout: 2s
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER:http://localhost:8180/realms/youscout}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:http://localhost:8180/realms/youscout/protocol/openid-connect/certs}
+          audiences: youscout-api
+server:
+  port: ${SERVER_PORT:8088}
+# User confirme le destinataire et fournit les blocages ; les origines web sont celles admises par la Gateway.
+chat:
+  user-service-url: ${USER_SERVICE_URL:http://localhost:8081}
+  allowed-origins: ${CHAT_ALLOWED_ORIGINS:http://localhost:7357,http://127.0.0.1:7357,http://localhost:7358,http://127.0.0.1:7358}
+management:
+  endpoints.web.exposure.include: health
+  endpoint.health.show-details: never
+  endpoint.health.probes.enabled: true
+  # Sans Redis, Chat reste prêt : les messages sont acceptés et livrés aux connexions locales,
+  # les autres clients les récupèrent depuis MongoDB à la reconnexion.
+  health.redis.enabled: false
+  endpoint.health.group.readiness.include: readinessState,mongo

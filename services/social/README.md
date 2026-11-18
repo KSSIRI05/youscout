@@ -6,7 +6,6 @@ Service de persistance des interactions communautaires. Les requêtes nécessite
 - `GET`, `POST /v1/social/videos/{videoId}/comments` : consulter et créer un commentaire ou une réponse (`parentId`).
 - `DELETE /v1/social/comments/{commentId}` : supprimer son commentaire, ou un commentaire publié sur sa propre vidéo (U13).
 - `POST /v1/social/videos/{videoId}/reports` : créer un signalement (un par compte et par vidéo).
-- `GET /v1/social/messages?with={subject}`, `POST /v1/social/messages` : consulter et envoyer les messages persistés d'une conversation.
 - `POST /v1/social/comments/{commentId}/reports` : signaler un commentaire visible (U17), un par compte.
 
 ### Modération (rôle `admin`, contrôlé par la Gateway et par Social)
@@ -22,14 +21,13 @@ Le contrat complet est [social.yaml](../../contracts/openapi/social.yaml).
 ## Règles appliquées
 
 - **Vidéo publiée** : liker, commenter et signaler exigent que Video confirme la publication via `GET /v1/videos/{id}/publication` (404 sinon). Le propriétaire renvoyé est copié dans le commentaire pour la règle U13.
-- **Blocage** : User fournit `GET /v1/users/me/feed-relations`. Un blocage, dans un sens ou dans l'autre, interdit like, commentaire, réponse et message (403) et masque les commentaires de ces comptes pour l'appelant. Retirer un like et signaler restent possibles.
-- **Destinataire existant** : un message exige un profil User existant (404 sinon).
+- **Blocage** : User fournit `GET /v1/users/me/feed-relations`. Un blocage, dans un sens ou dans l'autre, interdit like, commentaire et réponse (403) et masque les commentaires de ces comptes pour l'appelant. Retirer un like et signaler restent possibles.
 - **Réponses** : un seul niveau ; le parent doit être un commentaire principal, non supprimé, de la même vidéo.
-- **Pagination** : commentaires (50 par défaut, 100 max) et messages (100 par défaut, 200 max) renvoient la page la plus récente en ordre chronologique. `before={id}` remonte l'historique ; pour les messages, le curseur doit appartenir à la conversation.
+- **Pagination** : les commentaires (50 par défaut, 100 max) renvoient la page la plus récente en ordre chronologique. `before={id}` remonte l'historique.
 
 Ces appels transmettent le jeton de l'utilisateur, avec un délai de 3 secondes. Si Video ou User est indisponible, l'écriture est refusée (503) au lieu d'être acceptée sans contrôle. Dans Compose, Video n'existe qu'avec le profil `video` : sans lui, les lectures fonctionnent mais les écritures vérifiées répondent 503.
 
-Le service possède sa base PostgreSQL `youscout_social` et ne lit pas les bases User ou Video. La messagerie fonctionne par requêtes HTTP ; notifications temps réel, WebSocket et console de modération restent à construire.
+Le service possède sa base PostgreSQL `youscout_social` et ne lit pas les bases User ou Video. Les messages directs appartiennent désormais au [service Chat](../chat/README.md) ; l'ancienne table `direct_messages` reste en place mais n'est plus utilisée.
 
 ## Tests
 

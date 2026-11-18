@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * API persistante des likes, commentaires, signalements et messages directs.
+ * API persistante des likes, commentaires et signalements ; les messages directs appartiennent à Chat.
  * Les écritures vérifient auprès de Video que la vidéo est publiée et auprès de User qu'aucun blocage ne s'applique.
  */
 @RestController
@@ -24,15 +24,11 @@ import org.springframework.web.server.ResponseStatusException;
 class SocialController {
     record LikeState(long count, boolean liked) {}
     record Comment(UUID id, UUID videoId, UUID parentId, String authorSubject, String body, Instant createdAt) {}
-    record Message(UUID id, String senderSubject, String recipientSubject, String body, Instant createdAt) {}
     private record Parent(UUID videoId, UUID parentId, String authorSubject, boolean deleted) {}
 
     private static final String COMMENT_COLUMNS = "id, video_id, parent_id, author_subject, body, created_at";
-    private static final String MESSAGE_COLUMNS = "id, sender_subject, recipient_subject, body, created_at";
     private static final RowMapper<Comment> COMMENT = (r, n) -> new Comment(r.getObject(1, UUID.class),
         r.getObject(2, UUID.class), r.getObject(3, UUID.class), r.getString(4), r.getString(5), r.getTimestamp(6).toInstant());
-    private static final RowMapper<Message> MESSAGE = (r, n) -> new Message(r.getObject(1, UUID.class),
-        r.getString(2), r.getString(3), r.getString(4), r.getTimestamp(5).toInstant());
     private final JdbcTemplate jdbc;
     private final SocialReferences references;
 
@@ -124,40 +120,6 @@ class SocialController {
         jdbc.update("INSERT INTO video_reports(id, video_id, reporter_subject, reason) VALUES (?, ?, ?, ?) ON CONFLICT (video_id, reporter_subject) DO NOTHING",
             UUID.randomUUID(), videoId, reporter, reason);
         return ResponseEntity.accepted().build();
-    }
-
-    /** Page la plus récente de la conversation, en ordre chronologique ; {@code before} remonte l'historique. */
-    @GetMapping("/messages")
-    ResponseEntity<List<Message>> messages(@AuthenticationPrincipal Jwt jwt, @RequestParam String with,
-                                           @RequestParam(required = false) UUID before,
-                                           @RequestParam(defaultValue = "100") int limit) {
-        String me = subject(jwt); validateSubject(with);
-        validateLimit(limit, 200);
-        String conversation = "((sender_subject = ? AND recipient_subject = ?) OR (sender_subject = ? AND recipient_subject = ?))";
-        if (before == null) {
-            return noStore(jdbc.query("SELECT " + MESSAGE_COLUMNS + " FROM direct_messages WHERE " + conversation
-                + " ORDER BY created_at DESC, id DESC LIMIT ?", MESSAGE, me, with, with, me, limit).reversed());
-        }
-        // Le curseur doit appartenir à cette conversation pour ne rien révéler des autres échanges.
-        if (!exists("SELECT EXISTS(SELECT 1 FROM direct_messages WHERE id = ? AND " + conversation + ")", before, me, with, with, me))
-            throw bad("Curseur invalide.");
-        return noStore(jdbc.query("SELECT " + MESSAGE_COLUMNS + " FROM direct_messages WHERE " + conversation
-            + " AND (created_at, id) < (SELECT created_at, id FROM direct_messages WHERE id = ?)"
-            + " ORDER BY created_at DESC, id DESC LIMIT ?", MESSAGE, me, with, with, me, before, limit).reversed());
-    }
-
-    @PostMapping("/messages")
-    ResponseEntity<Message> sendMessage(@AuthenticationPrincipal Jwt jwt, @RequestBody Map<String, Object> body) {
-        String sender = subject(jwt);
-        String recipient = body.get("recipientSubject") instanceof String value ? value : "";
-        String text = body.get("body") instanceof String value ? value.strip() : "";
-        validateSubject(recipient);
-        if (sender.equals(recipient)) throw bad("Tu ne peux pas t'envoyer un message.");
-        if (text.isBlank() || text.length() > 2000 || text.indexOf('\0') >= 0) throw bad("Le message doit contenir de 1 à 2000 caractères.");
-        references.requireProfile(recipient, jwt.getTokenValue());
-        requireNotBlocked(recipient, jwt);
-        return noStore(jdbc.queryForObject("INSERT INTO direct_messages(id, sender_subject, recipient_subject, body) VALUES (?, ?, ?, ?) RETURNING " + MESSAGE_COLUMNS,
-            MESSAGE, UUID.randomUUID(), sender, recipient, text));
     }
 
     private void requireNotBlocked(String other, Jwt jwt) {

@@ -86,6 +86,7 @@ class _ConnectedScreenState extends State<ConnectedScreen> {
                       ? const SizedBox.shrink()
                       : ConnectedMessagesScreen(
                           key: ValueKey(messageRecipient ?? 'messages'),
+                          active: tab == 4,
                           session: session,
                           initialRecipient: messageRecipient,
                         ),
