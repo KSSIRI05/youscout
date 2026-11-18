@@ -53,3 +53,13 @@ it("signs out through Keycloak and returns to the login screen", async () => {
   expect(logout).toHaveBeenCalled();
   expect(await screen.findByRole("button", { name: "Se connecter avec Keycloak" })).toBeInTheDocument();
 });
+
+it("lets an admin switch between the catalogue and the moderation queue", async () => {
+  render(<App deps={deps("/callback?code=abc&state=xyz", vi.fn(async () => session(["admin"])))} />);
+  await screen.findByText("Ajouter une compétence");
+  await userEvent.click(screen.getByRole("button", { name: "Signalements" }));
+  expect(await screen.findByRole("heading", { name: "Signalements" })).toBeInTheDocument();
+  expect(screen.queryByText("Ajouter une compétence")).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Compétences" }));
+  expect(await screen.findByText("Ajouter une compétence")).toBeInTheDocument();
+});

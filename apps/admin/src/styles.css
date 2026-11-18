@@ -74,6 +74,17 @@ tr.inactive td:first-child { color: var(--muted); }
 .notice { background: var(--notice-bg); }
 .error { background: var(--error-bg); color: var(--danger); }
 
+nav { display: flex; gap: 0.4rem; }
+select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 0.35rem; }
+label.inline { display: flex; align-items: center; gap: 0.5rem; }
+.tabs { display: flex; gap: 0.4rem; }
+.report { border: 1px solid var(--line); border-radius: 8px; padding: 0.75rem; display: grid; gap: 0.4rem; }
+.report header { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.report ul { margin: 0; padding-left: 1.2rem; }
+.report p { margin: 0; }
+.report .actions { flex-wrap: wrap; justify-content: flex-start; white-space: normal; }
+.report .actions input { flex: 1 1 14rem; width: auto; }
+
 @media (max-width: 720px) {
   .create { grid-template-columns: 1fr; }
   table, thead, tbody, tr, td { display: block; }

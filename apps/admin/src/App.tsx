@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AdminApi } from "./api";
 import { AuthError, Session, completeLogin, loginUrl } from "./auth";
+import { ModerationPage } from "./ModerationPage";
 import { SkillsPage } from "./SkillsPage";
 
 type State =
@@ -24,6 +25,7 @@ const browser: AppDeps = {
 
 export function App({ deps = browser }: { deps?: AppDeps }) {
   const [state, setState] = useState<State>({ kind: "loading" });
+  const [page, setPage] = useState<"skills" | "moderation">("skills");
 
   useEffect(() => {
     if (deps.location.pathname !== "/callback") { setState({ kind: "signedOut" }); return; }
@@ -78,10 +80,18 @@ export function App({ deps = browser }: { deps?: AppDeps }) {
     <>
       <header className="bar">
         <h1>YouScout Admin</h1>
+        {session.isAdmin && (
+          <nav aria-label="Sections">
+            <button className={page === "skills" ? undefined : "secondary"} aria-current={page === "skills" ? "page" : undefined}
+                    onClick={() => setPage("skills")}>Compétences</button>
+            <button className={page === "moderation" ? undefined : "secondary"} aria-current={page === "moderation" ? "page" : undefined}
+                    onClick={() => setPage("moderation")}>Signalements</button>
+          </nav>
+        )}
         <span className="muted">{session.displayName}</span>
         <button className="secondary" onClick={() => logout(session)}>Se déconnecter</button>
       </header>
-      {session.isAdmin && api ? <SkillsPage api={api} /> : (
+      {session.isAdmin && api ? (page === "skills" ? <SkillsPage api={api} /> : <ModerationPage api={api} />) : (
         <main className="center">
           <div className="panel login">
             <h2>Accès refusé</h2>
