@@ -43,13 +43,6 @@ class SocialReferences {
         return owner;
     }
 
-    /** Vérifie que le profil existe auprès de User. */
-    void requireProfile(String subject, String token) {
-        call(() -> users.get().uri("/v1/users/{subject}", subject)
-                .headers(headers -> headers.setBearerAuth(token)).retrieve().toBodilessEntity(),
-            "Profil introuvable.", "Le service utilisateur est momentanément indisponible.");
-    }
-
     /** Comptes bloqués par l'appelant ou qui l'ont bloqué. */
     Set<String> blockedEitherWay(String token) {
         Map<?, ?> data = call(() -> users.get().uri("/v1/users/me/feed-relations")

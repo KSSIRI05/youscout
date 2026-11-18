@@ -12,9 +12,6 @@ def exercise(player_token, player_subject):
     status, _ = request("POST", f"/v1/social/videos/{video}/comments", player_token, {"body": "Smoke"})
     assert status == 404, f"Comment on an unpublished video was not rejected by Video (HTTP {status})"
     assert request("PUT", f"/v1/social/videos/{video}/likes", player_token)[0] == 404, "Like on an unpublished video accepted"
-    status, _ = request("POST", "/v1/social/messages", player_token, {"recipientSubject": "missing-" + uuid.uuid4().hex, "body": "Smoke"})
-    assert status == 404, f"Message to an unknown profile was not rejected by User (HTTP {status})"
-    assert request("POST", "/v1/social/messages", player_token, {"recipientSubject": player_subject, "body": "Smoke"})[0] == 400, "Self-message accepted"
     # Rating : lecture vide, note invalide refusée avant tout appel, vidéo inconnue refusée par Video.
     status, ratings = request("GET", f"/v1/ratings/videos/{video}", player_token)
     assert status == 200 and ratings == {"videoId": video, "skills": []}, f"Rating read failed (HTTP {status})"

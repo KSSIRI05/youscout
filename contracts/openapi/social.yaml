@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
   title: YouScout Social API
-  version: 0.2.0
+  version: 0.3.0
   description: >-
-    Likes, comments, reports, and persistent direct messages. Writes check with Video that the
+    Likes, comments and reports; direct messages moved to Chat (chat.yaml). Writes check with Video that the
     video is published and with User that no block exists between the caller and the other
     account, forwarding the caller's JWT. Errors use application/problem+json.
 servers:
@@ -101,40 +101,6 @@ paths:
       responses:
         '202': {description: Report persisted for moderation; allowed even when a block exists}
         '404': {description: Video unknown or not published}
-  /v1/social/messages:
-    get:
-      summary: Read the most recent messages exchanged with a single subject
-      description: >-
-        Returns the newest page in chronological order. `before` must be a message of this
-        conversation.
-      parameters:
-        - in: query
-          name: with
-          required: true
-          schema: {type: string, maxLength: 255}
-        - {in: query, name: before, required: false, schema: {type: string, format: uuid}}
-        - {in: query, name: limit, required: false, schema: {type: integer, minimum: 1, maximum: 200, default: 100}}
-      responses:
-        '200': {description: Conversation messages visible to the caller}
-        '400': {description: Invalid cursor or page size}
-    post:
-      summary: Send a persistent direct message
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [recipientSubject, body]
-              properties:
-                recipientSubject: {type: string, maxLength: 255}
-                body: {type: string, minLength: 1, maxLength: 2000}
-      responses:
-        '200': {description: Persisted message}
-        '400': {description: Invalid body or message to self}
-        '403': {description: A block exists between sender and recipient}
-        '404': {description: Recipient profile unknown}
-        '503': {description: User unavailable}
   /v1/social/comments/{commentId}/reports:
     post:
       summary: Report a visible comment (U17), once per account

@@ -37,7 +37,7 @@ class SocialIntegrationTest {
     }
     @BeforeEach void clear() {
         oidc.reset();
-        jdbc.update("TRUNCATE moderation_decisions, comment_reports, video_likes, video_comments, video_reports, direct_messages");
+        jdbc.update("TRUNCATE moderation_decisions, comment_reports, video_likes, video_comments, video_reports");
     }
     @AfterAll static void cleanup() { client.close(); oidc.server.stop(0); }
 
@@ -45,7 +45,9 @@ class SocialIntegrationTest {
         var anonymous = send("GET", "/v1/social/videos/" + UUID.randomUUID() + "/likes", null, null);
         assertThat(anonymous.statusCode()).isEqualTo(401);
         assertThat(anonymous.headers().firstValue("Content-Type").orElse("")).contains("application/problem+json");
-        assertThat(send("GET", "/v1/social/messages?with=bob", oidc.token("alice", "offline_access"), null).statusCode()).isEqualTo(403);
+        assertThat(send("GET", "/v1/social/videos/" + UUID.randomUUID() + "/likes", oidc.token("alice", "offline_access"), null).statusCode()).isEqualTo(403);
+        // Les messages directs ont migré vers Chat : l'ancienne route n'existe plus.
+        assertThat(send("GET", "/v1/social/messages?with=bob", oidc.token("alice"), null).statusCode()).isEqualTo(404);
     }
 
     @Test void likesRequireAPublishedVideoAndAreIdempotent() throws Exception {
@@ -83,13 +85,10 @@ class SocialIntegrationTest {
 
         assertThat(send("PUT", likes(video), alice, null).statusCode()).isEqualTo(403);
         assertThat(send("POST", comments(video), alice, "{\"body\":\"Salut\"}").statusCode()).isEqualTo(403);
-        assertThat(send("POST", "/v1/social/messages", alice, "{\"recipientSubject\":\"bob\",\"body\":\"Salut\"}").statusCode()).isEqualTo(403);
-        assertThat(send("POST", "/v1/social/messages", oidc.token("bob"), "{\"recipientSubject\":\"alice\",\"body\":\"Salut\"}").statusCode()).isEqualTo(403);
         assertThat(send("POST", "/v1/social/videos/" + video + "/reports", alice, "{\"reason\":\"Contenu trompeur\"}").statusCode()).isEqualTo(202);
         // Les commentaires d'un compte bloqué disparaissent pour l'appelant, mais pas pour les autres.
         assertThat(send("GET", comments(video), alice, null).body()).doesNotContain(carolComment);
         assertThat(send("GET", comments(video), oidc.token("dave"), null).body()).contains(carolComment);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM direct_messages", Integer.class)).isZero();
     }
 
     @Test void commentsReturnTheLatestPageAndPageBackwardsWithACursor() throws Exception {
@@ -138,30 +137,10 @@ class SocialIntegrationTest {
         assertThat(send("GET", comments(video), oidc.token("dave"), null).body()).isEqualTo("[]");
     }
 
-    @Test void reportsAndMessagesRequireExistingTargets() throws Exception {
+    @Test void reportsRequireAPublishedVideo() throws Exception {
         String alice = oidc.token("alice");
         assertThat(send("POST", "/v1/social/videos/" + UUID.randomUUID() + "/reports", alice, "{\"reason\":\"Spam\"}").statusCode()).isEqualTo(404);
-        assertThat(send("POST", "/v1/social/messages", alice, "{\"recipientSubject\":\"ghost\",\"body\":\"Salut\"}").statusCode()).isEqualTo(404);
-        assertThat(send("POST", "/v1/social/messages", alice, "{\"recipientSubject\":\"alice\",\"body\":\"Salut\"}").statusCode()).isEqualTo(400);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM video_reports", Integer.class)).isZero();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM direct_messages", Integer.class)).isZero();
-    }
-
-    @Test void messagesReturnTheLatestPageAndRejectCursorsFromOtherConversations() throws Exception {
-        for (int n = 0; n < 250; n++)
-            jdbc.update("INSERT INTO direct_messages(id, sender_subject, recipient_subject, body, created_at) VALUES (?, ?, ?, ?, timestamptz '2026-01-01T00:00:00Z' + ? * interval '1 second')",
-                UUID.randomUUID(), n % 2 == 0 ? "alice" : "bob", n % 2 == 0 ? "bob" : "alice", "m" + n, n);
-        UUID foreign = UUID.randomUUID();
-        jdbc.update("INSERT INTO direct_messages(id, sender_subject, recipient_subject, body) VALUES (?, 'carol', 'dave', 'secret')", foreign);
-        String alice = oidc.token("alice");
-
-        var latest = JsonPath.parse(send("GET", "/v1/social/messages?with=bob", alice, null).body());
-        List<String> bodies = latest.read("$[*].body");
-        assertThat(bodies).hasSize(100).startsWith("m150").endsWith("m249");
-        List<String> older = JsonPath.parse(send("GET", "/v1/social/messages?with=bob&limit=200&before=" + latest.read("$[0].id"), alice, null).body()).read("$[*].body");
-        assertThat(older).hasSize(150).startsWith("m0").endsWith("m149");
-        assertThat(send("GET", "/v1/social/messages?with=bob&before=" + foreign, alice, null).statusCode()).isEqualTo(400);
-        assertThat(send("GET", "/v1/social/messages?with=bob&limit=201", alice, null).statusCode()).isEqualTo(400);
     }
 
     static String likes(UUID video) { return "/v1/social/videos/" + video + "/likes"; }

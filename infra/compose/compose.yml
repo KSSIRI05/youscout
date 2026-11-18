@@ -183,6 +183,32 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+  # Historique de Chat : replica set mono-nœud pour les transactions séquence + message.
+  chat-mongo:
+    image: mongo:7.0
+    command: [mongod, --replSet, rs0, --bind_ip_all]
+    volumes: [chat-mongo-data:/data/db]
+    healthcheck:
+      test: [CMD, mongosh, --quiet, --eval, "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  chat-mongo-init:
+    image: mongo:7.0
+    depends_on:
+      chat-mongo: {condition: service_healthy}
+    entrypoint: [mongosh, 'mongodb://chat-mongo:27017/admin', --quiet, --eval]
+    command: ["try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'chat-mongo:27017'}]}) }"]
+    restart: 'no'
+  # Relais Pub/Sub entre instances Chat ; aucune donnée durable, d'où l'absence de volume.
+  chat-redis:
+    image: redis:7.4-alpine
+    command: [redis-server, --save, '', --appendonly, 'no']
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20
   # Video identifie le joueur, persiste les métadonnées et signe les demandes PUT.
   video:
     profiles: [video]
@@ -269,6 +295,24 @@ services:
     depends_on:
       rating-db: {condition: service_healthy}
       keycloak: {condition: service_healthy}
+  # Messagerie instantanée (U21) : WebSocket et historique ; les envois vérifient profils et blocages auprès de User.
+  chat:
+    build:
+      context: ../..
+      dockerfile: infra/docker/service.Dockerfile
+      args: {MODULE: chat}
+    environment:
+      SERVER_PORT: '8080'
+      CHAT_MONGODB_URI: mongodb://chat-mongo:27017/youscout_chat?replicaSet=rs0
+      REDIS_HOST: chat-redis
+      REDIS_PORT: '6379'
+      USER_SERVICE_URL: http://user:8080
+      OIDC_ISSUER: http://localhost:8180/realms/youscout
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
+    depends_on:
+      chat-mongo-init: {condition: service_completed_successfully}
+      chat-redis: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
   # Point d’entrée des API sur localhost ; attend que les services dépendants soient sains.
   gateway:
     build:
@@ -282,6 +326,7 @@ services:
       FEED_SERVICE_URL: http://feed:8080
       SOCIAL_SERVICE_URL: http://social:8080
       RATING_SERVICE_URL: http://rating:8080
+      CHAT_SERVICE_URL: http://chat:8080
       OIDC_ISSUER: http://localhost:8180/realms/youscout
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
     ports: ['127.0.0.1:8080:8080']
@@ -290,6 +335,7 @@ services:
       skill: {condition: service_healthy}
       social: {condition: service_healthy}
       rating: {condition: service_healthy}
+      chat: {condition: service_healthy}
       keycloak: {condition: service_healthy}
 # Les volumes survivent aux redémarrages et à docker compose down sans option -v.
 volumes:
@@ -302,3 +348,4 @@ volumes:
   feed-redis-data:
   social-data:
   rating-data:
+  chat-mongo-data:

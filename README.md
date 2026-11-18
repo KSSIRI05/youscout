@@ -2,7 +2,7 @@
 
 YouScout est une plateforme de découverte des talents du football. Elle permet de partager des vidéos, de mettre en valeur ses compétences et d'échanger avec la communauté.
 
-**État réel :** Flutter connecté utilise les profils, le catalogue, l'upload, la lecture privée, le fil paginé et les interactions Social persistées. Le backend comprend User, Skill/Hashtag, Video, Feed, Social, Rating, Kafka et le worker média. User propage les suivis/blocages via outbox Kafka ; Feed les projette dans Redis et met en cache ses pages. Video utilise désormais MongoDB pour ses documents, métadonnées, traitements et outbox ; Social utilise encore PostgreSQL ; ses écritures vérifient auprès de Video que la vidéo est publiée et auprès de User qu'aucun blocage ne s'applique.
+**État réel :** Flutter connecté utilise les profils, le catalogue, l'upload, la lecture privée, le fil paginé et les interactions Social persistées. Le backend comprend User, Skill/Hashtag, Video, Feed, Social, Rating, Chat, Kafka et le worker média. User propage les suivis/blocages via outbox Kafka ; Feed les projette dans Redis et met en cache ses pages. Video utilise désormais MongoDB pour ses documents, métadonnées, traitements et outbox ; Social utilise encore PostgreSQL ; ses écritures vérifient auprès de Video que la vidéo est publiée et auprès de User qu'aucun blocage ne s'applique.
 
 ## Lancer le socle backend
 
@@ -75,7 +75,7 @@ flutter test
 flutter build web --release
 ```
 
-L'application a deux modes. Le **mode démo** couvre le fil, la découverte, les profils, les interactions, la publication et les messages en mémoire : les données disparaissent au rechargement et rien n'est envoyé à un serveur. Le **mode connecté** utilise Keycloak et le backend décrit plus haut : profils, catalogue, upload S3, traitement, lecture privée, fil, likes, commentaires avec réponses et messages persistants. Voir [le guide mobile](apps/mobile/README.md) et [l’état du frontend](docs/FRONTEND.md).
+L'application a deux modes. Le **mode démo** couvre le fil, la découverte, les profils, les interactions, la publication et les messages en mémoire : les données disparaissent au rechargement et rien n'est envoyé à un serveur. Le **mode connecté** utilise Keycloak et le backend décrit plus haut : profils, catalogue, upload S3, traitement, lecture privée, fil, likes, commentaires avec réponses, notes et messagerie instantanée. Voir [le guide mobile](apps/mobile/README.md) et [l’état du frontend](docs/FRONTEND.md).
 
 La [maquette Figma](https://www.figma.com/design/SZIskR01SeNgOsSrAwiB9p) guide les couleurs, composants et parcours.
 
