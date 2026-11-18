@@ -55,6 +55,7 @@ def outbox_event(event_id, video_id, event_type, version, data):
 
 def main():
     video_id, published_id, deleted_id = (str(uuid.uuid4()) for _ in range(3))
+    moderated_ids = []
     owner = "deletion-smoke"
     try:
         published = outbox_event(published_id, video_id, "VideoPublished", 2,
@@ -64,6 +65,17 @@ def main():
         wait_for(lambda: feed_sql(f"SELECT count(*) FROM feed_entries WHERE video_id = '{video_id}'") == "1",
                  "Feed did not project the synthetic VideoPublished event.")
         print("PASS: Feed projected the synthetic publication.", flush=True)
+
+        # Retrait par la modération : la vidéo est masquée sans être supprimée, puis rétablie.
+        for version, action, expected in ((1, "REMOVED", "t"), (2, "ACTIVE", "f")):
+            moderated_id = str(uuid.uuid4())
+            moderated_ids.append(moderated_id)
+            event = outbox_event(moderated_id, video_id, "VideoModerated", 1,
+                f'{{ videoId: "{video_id}", ownerSubject: "{owner}", action: "{action}", version: NumberLong("{version}"), moderatedAt: at }}')
+            assert mongo_eval(f'const at = new Date().toISOString(); {event} print("ok");') == "ok"
+            wait_for(lambda: feed_sql(f"SELECT removed FROM feed_moderation WHERE video_id = '{video_id}' AND version = {version}") == expected,
+                     f"Feed did not apply VideoModerated {action}; check the video.moderation.v1 topic routing.")
+        print("PASS: VideoModerated reached Feed through video.moderation.v1 (takedown, then restore).", flush=True)
 
         deleted = outbox_event(deleted_id, video_id, "VideoDeleted", 1,
             f'{{ videoId: "{video_id}", ownerSubject: "{owner}", deletedAt: at, wasPublished: true }}')
@@ -76,10 +88,11 @@ def main():
                  "Feed did not remove the entry after VideoDeleted.")
         print("PASS: VideoDeleted reached Feed through video.deleted.v1 and removed the entry.", flush=True)
     finally:
-        mongo_eval(f'''db.video_outbox.deleteMany({{_id: {{$in: ["{published_id}", "{deleted_id}"]}}, aggregateId: "{video_id}"}});
+        all_ids = ", ".join(f'"{event}"' for event in [published_id, deleted_id, *moderated_ids])
+        mongo_eval(f'''db.video_outbox.deleteMany({{_id: {{$in: [{all_ids}]}}, aggregateId: "{video_id}"}});
                       print("removed");''')
         feed_sql(f"DELETE FROM feed_entries WHERE video_id = '{video_id}'; "
-                 f"DELETE FROM feed_deleted_videos WHERE video_id = '{video_id}'; "
+                 f"DELETE FROM feed_deleted_videos WHERE video_id = '{video_id}'; DELETE FROM feed_moderation WHERE video_id = '{video_id}'; "
                  f"DELETE FROM feed_event_inbox WHERE video_id = '{video_id}';")
         print("Synthetic outbox and Feed fixtures removed; Kafka keeps its records until retention expires.", flush=True)
 

@@ -30,6 +30,8 @@ class PublicationService {
     public Publication publish(UUID id, String owner) {
         Document current = findOwned(id, owner);
         if (current == null) throw notFound();
+        if (ModerationService.REMOVED.equals(ModerationService.status(current)))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Vidéo retirée par la modération.");
         if ("PUBLISHED".equals(current.getString("publicationStatus"))) return publication(current);
         if (!"UPLOADED".equals(current.getString("status")) || !"READY".equals(current.getString("processingStatus")))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Seule une vidéo prête peut être publiée.");
@@ -37,7 +39,7 @@ class PublicationService {
         Instant now = Instant.now();
         Query unpublished = Query.query(Criteria.where("_id").is(id.toString()).and("ownerSubject").is(owner)
                 .and("status").is("UPLOADED").and("processingStatus").is("READY")
-                .and("publicationStatus").is("UNPUBLISHED").and("deletedAt").is(null));
+                .and("publicationStatus").is("UNPUBLISHED").and("deletedAt").is(null).and("moderationStatus").ne("REMOVED"));
         Document published = mongo.findAndModify(unpublished,
                 new Update().set("publicationStatus", "PUBLISHED").set("publishedAt", Date.from(now)),
                 FindAndModifyOptions.options().returnNew(true), Document.class, "videos");

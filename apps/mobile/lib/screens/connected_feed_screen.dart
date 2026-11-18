@@ -205,6 +205,16 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
                                           () => replyTo = entry.comment,
                                         ),
                                       ),
+                                    if (me != null &&
+                                        entry.comment['authorSubject'] != me)
+                                      IconButton(
+                                        tooltip: 'Signaler',
+                                        icon: const Icon(Icons.flag_outlined),
+                                        onPressed: () => _report(
+                                          'comments/${entry.comment['id']}/reports',
+                                          'Signaler ce commentaire',
+                                        ),
+                                      ),
                                     // Auteur ou propriétaire de la vidéo (U13).
                                     if (me != null &&
                                         (entry.comment['authorSubject'] == me ||
@@ -347,12 +357,13 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
     }
   }
 
-  Future<void> _report(FeedVideo video) async {
+  /// Signale une vidéo (U16) ou un commentaire (U17) ; Social ignore un second signalement du même compte.
+  Future<void> _report(String path, String title) async {
     final reason = TextEditingController();
     final submitted = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Signaler cette vidéo'),
+        title: Text(title),
         content: TextField(
           controller: reason,
           maxLength: 500,
@@ -375,9 +386,7 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
     );
     if (submitted == true && reason.text.trim().isNotEmpty) {
       try {
-        await widget.session.socialPost('videos/${video.id}/reports', {
-          'reason': reason.text.trim(),
-        });
+        await widget.session.socialPost(path, {'reason': reason.text.trim()});
         _message('Signalement transmis.');
       } catch (_) {
         _message('Impossible de transmettre le signalement.');
@@ -552,7 +561,10 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
                   label: const Text('Commenter'),
                 ),
                 PopupMenuButton<String>(
-                  onSelected: (_) => _report(video),
+                  onSelected: (_) => _report(
+                    'videos/${video.id}/reports',
+                    'Signaler cette vidéo',
+                  ),
                   itemBuilder: (_) => const [
                     PopupMenuItem(value: 'report', child: Text('Signaler')),
                   ],

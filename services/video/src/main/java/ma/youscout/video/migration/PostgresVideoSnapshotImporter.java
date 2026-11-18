@@ -141,7 +141,8 @@ public class PostgresVideoSnapshotImporter {
         mongo.getCollection("videos").createIndex(new Document("s3Bucket", 1).append("s3Key", 1),
                 new IndexOptions().unique(true).name("video_s3_object_unique"));
         mongo.getCollection("video_outbox").createIndex(new Document("aggregateId", 1).append("eventType", 1),
-                new IndexOptions().unique(true).name("video_outbox_aggregate_type_unique"));
+                new IndexOptions().unique(true).name("video_outbox_once_per_video_unique").partialFilterExpression(
+                        new Document("eventType", new Document("$in", List.of("VideoUploaded", "VideoPublished", "VideoDeleted")))));
         mongo.getCollection("video_outbox").createIndex(new Document("publishedAt", 1)
                 .append("nextAttemptAt", 1).append("createdAt", 1), new IndexOptions().name("video_outbox_pending"));
     }

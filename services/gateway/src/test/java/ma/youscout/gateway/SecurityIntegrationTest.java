@@ -27,6 +27,7 @@ class SecurityIntegrationTest {
         r.add("SKILL_SERVICE_URL", oidc::base);
         r.add("VIDEO_SERVICE_URL", oidc::base);
         r.add("FEED_SERVICE_URL", oidc::base);
+        r.add("SOCIAL_SERVICE_URL", oidc::base);
     }
     @Test void uploadPostRequiresRoleAndAllowsIdempotencyCorsHeader() {
         client.post().uri("/v1/videos/uploads").exchange().expectStatus().isUnauthorized();
@@ -128,6 +129,24 @@ class SecurityIntegrationTest {
             .exchange().expectStatus().isOk().expectHeader().valueEquals("Access-Control-Allow-Origin", "http://localhost:7357");
         client.options().uri("/v1/users/session").header("Origin", "https://untrusted.example")
             .header("Access-Control-Request-Method", "GET").exchange().expectStatus().isForbidden();
+    }
+    // La file de modération est réservée au rôle admin dès la Gateway ; les routes joueur restent ouvertes au rôle user.
+    @Test void moderationRoutesRequireAdminAtTheGateway() {
+        client.get().uri("/v1/social/admin/reports").exchange().expectStatus().isUnauthorized();
+        client.get().uri("/v1/social/admin/reports").headers(h -> h.setBearerAuth(oidc.roleToken("user"))).exchange().expectStatus().isForbidden();
+        String admin = oidc.roleToken("admin");
+        client.get().uri("/v1/social/admin/reports").headers(h -> h.setBearerAuth(admin)).exchange().expectStatus().isOk();
+        assertThat(oidc.authorization.get()).isEqualTo("Bearer " + admin);
+        client.post().uri("/v1/social/comments/00000000-0000-0000-0000-000000000001/reports")
+            .headers(h -> h.setBearerAuth(oidc.roleToken("user"))).exchange().expectStatus().isOk();
+    }
+    @Test void videoModerationRoutesRequireAdminAtTheGateway() {
+        String path = "/v1/videos/admin/00000000-0000-0000-0000-000000000001/takedown";
+        client.post().uri(path).exchange().expectStatus().isUnauthorized();
+        client.post().uri(path).headers(h -> h.setBearerAuth(oidc.roleToken("user"))).exchange().expectStatus().isForbidden();
+        String admin = oidc.roleToken("admin");
+        client.post().uri(path).headers(h -> h.setBearerAuth(admin)).exchange().expectStatus().isOk();
+        assertThat(oidc.authorization.get()).isEqualTo("Bearer " + admin);
     }
     // La console d'administration a sa propre origine et modifie le catalogue par PATCH.
     @Test void corsPreflightAllowsTheAdminConsole() {

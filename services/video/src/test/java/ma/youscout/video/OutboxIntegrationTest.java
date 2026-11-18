@@ -51,7 +51,7 @@ class OutboxIntegrationTest {
         try (var admin = Admin.create(Map.of("bootstrap.servers", kafka.getBootstrapServers()))) {
             admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).all().get(15, TimeUnit.SECONDS);
         }
-        publisher = new KafkaOutboxConfiguration().eventPublisher(kafka.getBootstrapServers(), topic, topic, topic);
+        publisher = new KafkaOutboxConfiguration().eventPublisher(kafka.getBootstrapServers(), topic, topic, topic, topic);
     }
     @AfterEach void cleanup() { publisher.close(); }
 
@@ -140,7 +140,8 @@ class OutboxIntegrationTest {
 
     @Test void mongoIndexesAreInstalledAndEnforceEventDeduplication() {
         assertThat(mongo.indexOps("video_outbox").getIndexInfo()).extracting("name")
-                .contains("video_outbox_aggregate_type_unique", "video_outbox_pending");
+                .contains("video_outbox_once_per_video_unique", "video_outbox_pending")
+                .doesNotContain("video_outbox_aggregate_type_unique");
         UUID id = enqueue();
         assertThatThrownBy(() -> new TransactionTemplate(manager).executeWithoutResult(tx -> outbox.enqueue(id)))
                 .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);

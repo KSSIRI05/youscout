@@ -26,9 +26,11 @@ class FeedStore {
 
     List<Entry> page(int limit, int offset, List<String> owners, List<String> excludedOwners) {
         if (owners != null && owners.isEmpty()) return List.of();
-        StringBuilder sql = new StringBuilder("SELECT video_id, title, published_at, owner_subject, skills::text, hashtags::text FROM feed_entries");
+        // Une vidéo retirée par la modération reste projetée mais n'est plus servie.
+        StringBuilder sql = new StringBuilder("SELECT video_id, title, published_at, owner_subject, skills::text, hashtags::text FROM feed_entries"
+            + " WHERE NOT EXISTS (SELECT 1 FROM feed_moderation m WHERE m.video_id = feed_entries.video_id AND m.removed)");
         var args = new java.util.ArrayList<Object>();
-        boolean hasPredicate = false;
+        boolean hasPredicate = true;
         if (owners != null) {
             appendSubjectsPredicate(sql, args, "owner_subject IN", owners, hasPredicate);
             hasPredicate = true;
@@ -73,7 +75,9 @@ class FeedStore {
             INSERT INTO feed_entries(video_id, source_event_id, owner_subject, title, published_at, skills, hashtags)
             VALUES (?, ?, ?, ?, ?, ?::jsonb, ?::jsonb) ON CONFLICT (video_id) DO NOTHING
             """, event.videoId(), event.eventId(), event.ownerSubject(), event.title(), Timestamp.from(event.publishedAt()), skills, hashtags);
-        if (entry == 1) return true;
+        // Stored but hidden when a takedown was read first: the visible feed is unchanged.
+        if (entry == 1) return !Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM feed_moderation WHERE video_id = ? AND removed)", Boolean.class, event.videoId()));
 
         List<Existing> prior = jdbc.query("SELECT owner_subject, title, published_at, skills::text, hashtags::text FROM feed_entries WHERE video_id = ?",
             (row, number) -> new Existing(row.getString(1), row.getString(2), row.getTimestamp(3), row.getString(4), row.getString(5)), event.videoId());
@@ -112,6 +116,26 @@ class FeedStore {
             return false;
         }
         return jdbc.update("DELETE FROM feed_entries WHERE video_id = ?", event.videoId()) == 1;
+    }
+
+    /** Applies a moderation change if it is newer; returns true when a visible feed entry appeared or disappeared. */
+    @Transactional(timeout = 10)
+    public boolean acceptModeration(ModeratedVideo event, String topic, int partition, long offset) {
+        List<String> owner = jdbc.queryForList("SELECT owner_subject FROM feed_entries WHERE video_id = ?", String.class, event.videoId());
+        List<String> known = jdbc.queryForList("SELECT owner_subject FROM feed_moderation WHERE video_id = ?", String.class, event.videoId());
+        if ((!owner.isEmpty() && !owner.getFirst().equals(event.ownerSubject()))
+                || (!known.isEmpty() && !known.getFirst().equals(event.ownerSubject()))) {
+            reject(topic, partition, offset, "VIDEO_EVENT_CONFLICT");
+            return false;
+        }
+        // Une version plus ancienne ou rejouée ne remplace jamais une décision plus récente.
+        int applied = jdbc.update("""
+            INSERT INTO feed_moderation(video_id, owner_subject, version, removed, event_id) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (video_id) DO UPDATE SET version = EXCLUDED.version, removed = EXCLUDED.removed,
+                event_id = EXCLUDED.event_id, updated_at = clock_timestamp()
+            WHERE feed_moderation.version < EXCLUDED.version
+            """, event.videoId(), event.ownerSubject(), event.version(), event.removed(), event.eventId());
+        return applied == 1 && !owner.isEmpty();
     }
 
     private boolean deleted(UUID videoId) {

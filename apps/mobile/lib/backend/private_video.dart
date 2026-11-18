@@ -12,20 +12,28 @@ class PrivateVideo {
       title = json['title'] as String,
       uploadStatus = json['uploadStatus'] as String,
       processingStatus = json['processingStatus'] as String?,
-      publicationStatus = json['publicationStatus'] as String? ?? 'UNPUBLISHED';
+      publicationStatus = json['publicationStatus'] as String? ?? 'UNPUBLISHED',
+      removed = json['moderationStatus'] == 'REMOVED';
   final String id, title, uploadStatus;
   final String? processingStatus, publicationStatus;
+
+  /// Retirée par la modération : visible du propriétaire, mais ni lisible ni publiable.
+  final bool removed;
   bool get ready => uploadStatus == 'UPLOADED' && processingStatus == 'READY';
   bool get published => publicationStatus == 'PUBLISHED';
   bool get waiting =>
       uploadStatus == 'UPLOADED' &&
       (processingStatus == null || processingStatus == 'WAITING');
-  String get label => switch (processingStatus) {
-    'READY' => 'Prête à regarder',
-    'FAILED' => 'Traitement échoué. Essaie un autre clip.',
-    _ =>
-      uploadStatus == 'UPLOADED' ? 'Traitement en cours…' : 'Envoi à terminer',
-  };
+  String get label => removed
+      ? 'Retirée par la modération'
+      : switch (processingStatus) {
+          'READY' => 'Prête à regarder',
+          'FAILED' => 'Traitement échoué. Essaie un autre clip.',
+          _ =>
+            uploadStatus == 'UPLOADED'
+                ? 'Traitement en cours…'
+                : 'Envoi à terminer',
+        };
 }
 
 /// Ces liens restent en mémoire et ne sont jamais inclus dans les diagnostics.

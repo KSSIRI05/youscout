@@ -28,7 +28,7 @@ Ce MVP sert à valider le socle ; il ne couvre pas encore tout le périmètre pr
 ## Phase 2 : complétude fonctionnelle et modération
 
 - [ ] Rating : U15, unicité et modification de note.
-- [ ] Moderation : U16/U17, A03/A04, état d'application et retrait média/CDN.
+- [ ] Moderation : U16/U17, A03/A04, état d'application et retrait média/CDN. Livré : signalement des vidéos et commentaires, file d'administration, retrait/rétablissement des vidéos (Video, Feed) et retrait des commentaires, décisions journalisées. Reste : désactivation des comptes et hashtags, service Moderation dédié.
 - [ ] User/Chat : U18, blocage effectivement appliqué ; U21, persistance, reconnexion et déduplication.
 - [ ] U22 : fermeture de compte orchestrée avec confirmations et rétention définie.
 - [ ] Notification : push optionnel, distinct de la livraison des messages.

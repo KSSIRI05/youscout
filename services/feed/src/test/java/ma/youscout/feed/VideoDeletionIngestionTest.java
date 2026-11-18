@@ -18,7 +18,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @Testcontainers
 class VideoDeletionIngestionTest {
     @Container static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17.11-alpine");
-    static final String PUBLISHED = "video.published.v2", DELETED = "video.deleted.v1";
+    static final String PUBLISHED = "video.published.v2", DELETED = "video.deleted.v1", MODERATED = "video.moderation.v1";
     static JdbcTemplate jdbc;
     final FeedRelationsProjection projection = mock(FeedRelationsProjection.class);
     PublishedVideoHandler handler;
@@ -32,10 +32,10 @@ class VideoDeletionIngestionTest {
         jdbc = new JdbcTemplate(source);
     }
     @BeforeEach void setup() {
-        jdbc.update("TRUNCATE feed_entries, feed_event_inbox, feed_deleted_videos, feed_rejected_messages");
+        jdbc.update("TRUNCATE feed_entries, feed_event_inbox, feed_deleted_videos, feed_moderation, feed_rejected_messages");
         store = new FeedStore(jdbc);
-        handler = new PublishedVideoHandler(new PublishedVideoDecoder(), new DeletedVideoDecoder(), store, projection,
-            new FeedIngestionProperties(true, "unused", PUBLISHED, DELETED, "test"));
+        handler = new PublishedVideoHandler(new PublishedVideoDecoder(), new DeletedVideoDecoder(), new ModeratedVideoDecoder(),
+            store, projection, new FeedIngestionProperties(true, "unused", PUBLISHED, DELETED, MODERATED, "test"));
     }
 
     @Test void deletionRemovesTheEntryAndInvalidatesCachedPagesOnce() {
@@ -106,6 +106,55 @@ class VideoDeletionIngestionTest {
             deleted(video, "alice").replace("\"wasPublished\":true", "\"wasPublished\":true,\"s3Key\":\"x\""),
             published(video, "alice") })
             assertThatThrownBy(() -> decoder.decode(video.toString(), invalid)).isInstanceOf(PublishedVideoDecoder.InvalidEvent.class);
+    }
+
+    @Test void takedownHidesTheEntryAndRestoreShowsItAgain() {
+        UUID video = UUID.randomUUID(), other = UUID.randomUUID();
+        handle(PUBLISHED, video, published(video, "alice"));
+        handle(PUBLISHED, other, published(other, "bob"));
+        reset(projection);
+        handle(MODERATED, video, moderated(video, "alice", "REMOVED", 1));
+        assertThat(store.page(20, 0)).extracting(FeedStore.Entry::videoId).containsExactly(other);
+        assertThat(count("feed_entries")).isEqualTo(2);
+        handle(MODERATED, video, moderated(video, "alice", "ACTIVE", 2));
+        assertThat(store.page(20, 0)).extracting(FeedStore.Entry::videoId).containsExactlyInAnyOrder(video, other);
+        verify(projection, times(2)).videosChanged();
+    }
+
+    @Test void olderOrReplayedModerationNeverOverridesANewerDecision() {
+        UUID video = UUID.randomUUID();
+        handle(PUBLISHED, video, published(video, "alice"));
+        handle(MODERATED, video, moderated(video, "alice", "REMOVED", 3));
+        handle(MODERATED, video, moderated(video, "alice", "ACTIVE", 2));
+        handle(MODERATED, video, moderated(video, "alice", "REMOVED", 3));
+        assertThat(store.page(20, 0)).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT version FROM feed_moderation", Long.class)).isEqualTo(3L);
+    }
+
+    @Test void takedownReadBeforePublicationKeepsTheVideoHidden() {
+        UUID video = UUID.randomUUID();
+        handle(MODERATED, video, moderated(video, "alice", "REMOVED", 1));
+        handle(PUBLISHED, video, published(video, "alice"));
+        assertThat(store.page(20, 0)).isEmpty();
+        verify(projection, never()).videosChanged();
+    }
+
+    @Test void moderationEventsWithAnotherOwnerOrBadFieldsAreQuarantined() {
+        UUID video = UUID.randomUUID();
+        handle(PUBLISHED, video, published(video, "alice"));
+        handle(MODERATED, video, moderated(video, "mallory", "REMOVED", 1));
+        handle(MODERATED, video, moderated(video, "alice", "BANNED", 1));
+        handle(MODERATED, video, moderated(video, "alice", "REMOVED", 0));
+        assertThat(store.page(20, 0)).hasSize(1);
+        assertThat(jdbc.queryForList("SELECT reason FROM feed_rejected_messages ORDER BY record_offset", String.class))
+            .containsExactly("VIDEO_EVENT_CONFLICT", "INVALID_ENVELOPE", "INVALID_ENVELOPE");
+    }
+
+    static String moderated(UUID video, String owner, String action, long version) {
+        return """
+            {"eventId":"%s","eventType":"VideoModerated","eventVersion":1,"occurredAt":"2026-01-03T12:00:00Z","producer":"video-service",
+             "data":{"videoId":"%s","ownerSubject":"%s","action":"%s","version":%d,"moderatedAt":"2026-01-03T12:00:00Z"}}
+            """.formatted(UUID.randomUUID(), video, owner, action, version);
     }
 
     void handle(String topic, UUID key, String value) { handler.handle(new ConsumerRecord<>(topic, 0, offset++, key.toString(), value)); }

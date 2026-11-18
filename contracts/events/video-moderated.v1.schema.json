@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:youscout:event:video-moderated:v1",
+  "title": "VideoModerated v1",
+  "description": "Topic video.moderation.v1, clé Kafka videoId. Livraison au moins une fois ; dédupliquer par eventId. version augmente à chaque retrait ou rétablissement : un consommateur n'applique jamais une version inférieure ou égale à la dernière connue. Ni note, ni administrateur, ni clé S3 ne sont diffusés.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "eventType", "eventVersion", "occurredAt", "producer", "data"],
+  "properties": {
+    "eventId": {"type": "string", "format": "uuid"},
+    "eventType": {"const": "VideoModerated"},
+    "eventVersion": {"const": 1},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "producer": {"const": "video-service"},
+    "data": {
+      "type": "object", "additionalProperties": false,
+      "required": ["videoId", "ownerSubject", "action", "version", "moderatedAt"],
+      "properties": {
+        "videoId": {"type": "string", "format": "uuid"},
+        "ownerSubject": {"type": "string", "minLength": 1},
+        "action": {"enum": ["REMOVED", "ACTIVE"]},
+        "version": {"type": "integer", "minimum": 1},
+        "moderatedAt": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

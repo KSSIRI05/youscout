@@ -2,6 +2,8 @@
 
 Console web React + TypeScript (ADR-011) pour l'exigence **A05** : ajouter, modifier, désactiver et réactiver les compétences du catalogue. Elle n'utilise que les endpoints `/v1/skills/admin` de la Gateway, qui exigent le rôle `admin` ; le service Skill vérifie lui-même le jeton et le rôle.
 
+La page **Signalements** couvre **A03/A04** : vidéos et commentaires signalés, regroupés par contenu avec le nombre de signalements et les derniers motifs, filtrés par état (à traiter, action prise, classés sans suite). Pour une vidéo : la regarder (lien temporaire), la retirer (Video la masque partout, Social ferme les signalements) ou la rétablir ; pour un commentaire : le retirer. Chaque décision peut porter une note et est journalisée côté serveur avec l'administrateur.
+
 ## Connexion
 
 - Client Keycloak public `youscout-admin`, Authorization Code + PKCE S256, sans mot de passe direct ni flux implicite. Redirection autorisée : `http://localhost:7358/callback`.

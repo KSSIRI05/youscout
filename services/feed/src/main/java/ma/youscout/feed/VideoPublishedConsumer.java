@@ -54,7 +54,7 @@ class VideoPublishedConsumer implements SmartLifecycle {
             try {
                 client = createConsumer();
                 consumer = client;
-                client.subscribe(List.of(properties.topic(), properties.deletedTopic()));
+                client.subscribe(List.of(properties.topic(), properties.deletedTopic(), properties.moderatedTopic()));
                 while (running) {
                     for (var record : client.poll(Duration.ofMillis(500))) {
                         if (!running) break;
