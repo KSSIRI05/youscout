@@ -75,6 +75,7 @@ tr.inactive td:first-child { color: var(--muted); }
 .error { background: var(--error-bg); color: var(--danger); }
 
 nav { display: flex; gap: 0.4rem; }
+button.link { margin-left: 0.5rem; padding: 0.1rem 0.5rem; font-size: 0.85rem; }
 select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 0.35rem; }
 label.inline { display: flex; align-items: center; gap: 0.5rem; }
 .tabs { display: flex; gap: 0.4rem; }

@@ -14,6 +14,16 @@ export type SkillPage = { items: Skill[]; hasMore: boolean };
 export type Hashtag = { id: string; name: string; active: boolean; createdAt: string; updatedAt: string };
 export type HashtagPage = { items: Hashtag[]; hasMore: boolean };
 
+export type Account = {
+  subject: string;
+  displayName: string;
+  status: "ACTIVE" | "DEACTIVATED";
+  statusChangedAt: string | null;
+  statusChangedBy: string | null;
+  statusNote: string | null;
+  createdAt: string;
+};
+
 export type ReportType = "VIDEO" | "COMMENT";
 export type ReportStatus = "OPEN" | "REVIEWED" | "DISMISSED";
 export type Report = { reporterSubject: string; reason: string; createdAt: string };
@@ -79,6 +89,18 @@ export class AdminApi {
 
   setHashtagActive(id: string, active: boolean): Promise<Hashtag> {
     return this.request("PATCH", `/v1/hashtags/admin/${encodeURIComponent(id)}`, { active });
+  }
+
+  getAccount(subject: string): Promise<Account> {
+    return this.request("GET", `/v1/users/admin/accounts/${encodeURIComponent(subject)}`);
+  }
+
+  deactivateAccount(subject: string, note: string): Promise<Account> {
+    return this.request("POST", `/v1/users/admin/accounts/${encodeURIComponent(subject)}/deactivate`, withNote({}, note));
+  }
+
+  reactivateAccount(subject: string, note: string): Promise<Account> {
+    return this.request("POST", `/v1/users/admin/accounts/${encodeURIComponent(subject)}/reactivate`, withNote({}, note));
   }
 
   // Modération : file de Social, actions sur les vidéos dans Video.
