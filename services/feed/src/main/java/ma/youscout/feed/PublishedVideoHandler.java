@@ -7,18 +7,26 @@ import org.springframework.stereotype.Component;
 @Component
 class PublishedVideoHandler {
     private final PublishedVideoDecoder decoder;
+    private final DeletedVideoDecoder deletions;
     private final FeedStore store;
     private final FeedRelationsProjection projection;
-    PublishedVideoHandler(PublishedVideoDecoder decoder, FeedStore store, FeedRelationsProjection projection) {
+    private final FeedIngestionProperties properties;
+    PublishedVideoHandler(PublishedVideoDecoder decoder, DeletedVideoDecoder deletions, FeedStore store,
+                          FeedRelationsProjection projection, FeedIngestionProperties properties) {
         this.decoder = decoder;
+        this.deletions = deletions;
         this.store = store;
         this.projection = projection;
+        this.properties = properties;
     }
 
     void handle(ConsumerRecord<String, String> record) {
         try {
-            store.accept(decoder.decode(record.key(), record.value()), record.topic(), record.partition(), record.offset());
-            projection.videoPublished();
+            boolean changed = properties.deletedTopic().equals(record.topic())
+                ? store.acceptDeletion(deletions.decode(record.key(), record.value()), record.topic(), record.partition(), record.offset())
+                : store.accept(decoder.decode(record.key(), record.value()), record.topic(), record.partition(), record.offset());
+            // Invalidates every cached page only when the visible feed actually changed.
+            if (changed) projection.videosChanged();
         } catch (PublishedVideoDecoder.InvalidEvent invalid) {
             store.reject(record.topic(), record.partition(), record.offset(), invalid.getMessage());
         }

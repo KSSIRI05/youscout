@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:youscout:event:video-deleted:v1",
+  "title": "VideoDeleted v1",
+  "description": "Topic video.deleted.v1, clé Kafka videoId. Livraison au moins une fois; dédupliquer par eventId. Aucune clé S3 ni URL signée : chaque consommateur retrouve ses propres données par videoId. wasPublished indique si la vidéo figurait dans le fil.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "eventType", "eventVersion", "occurredAt", "producer", "data"],
+  "properties": {
+    "eventId": {"type": "string", "format": "uuid"},
+    "eventType": {"const": "VideoDeleted"},
+    "eventVersion": {"const": 1},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "producer": {"const": "video-service"},
+    "data": {
+      "type": "object", "additionalProperties": false,
+      "required": ["videoId", "ownerSubject", "deletedAt", "wasPublished"],
+      "properties": {
+        "videoId": {"type": "string", "format": "uuid"},
+        "ownerSubject": {"type": "string", "minLength": 1},
+        "deletedAt": {"type": "string", "format": "date-time"},
+        "wasPublished": {"type": "boolean"}
+      }
+    }
+  }
+}

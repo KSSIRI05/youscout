@@ -2,7 +2,7 @@ spring:
   task:
     scheduling:
       pool:
-        size: 2
+        size: 3
   application:
     name: media-worker
   datasource:
@@ -32,6 +32,7 @@ worker:
     enabled: ${MEDIA_WORKER_INGESTION_ENABLED:true}
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     topic: video.uploaded.v1
+    deleted-topic: video.deleted.v1
     group-id: ${MEDIA_WORKER_GROUP_ID:youscout-media-worker-v1}
 management:
   endpoints:

@@ -54,6 +54,10 @@ class UploadService {
         else if (!metadata.matches(video.id(), input.skillIds(), input.hashtagIds())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cette clé d'idempotence correspond à un autre envoi.");
         }
+        // Retrying with the key of a deleted upload must not hand out a new upload URL.
+        if (videos.deleted(video.id())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cet envoi a été supprimé.");
+        }
         if (!video.status().equals("PENDING_UPLOAD")) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cet envoi n'est plus en attente.");
         }

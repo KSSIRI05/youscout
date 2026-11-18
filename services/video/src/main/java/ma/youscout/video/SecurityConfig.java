@@ -27,6 +27,7 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/v1/videos/uploads").hasAnyRole("user", "admin")
                         .requestMatchers(HttpMethod.POST, "/v1/videos/*/complete").hasAnyRole("user", "admin")
                         .requestMatchers(HttpMethod.POST, "/v1/videos/{id:[0-9a-fA-F-]+}/publish").hasAnyRole("user", "admin")
+                        .requestMatchers(HttpMethod.DELETE, "/v1/videos/{id:[0-9a-fA-F-]+}").hasAnyRole("user", "admin")
                         .anyRequest().denyAll())
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint((request, response, error) -> ApiSecurityErrors.unauthorized(response, error))

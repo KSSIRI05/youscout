@@ -23,7 +23,8 @@ class KafkaOutboxConfiguration {
     KafkaEventPublisher eventPublisher(
             @Value("${youscout.outbox.bootstrap-servers}") String bootstrap,
             @Value("${youscout.outbox.uploaded-topic}") String uploadedTopic,
-            @Value("${youscout.outbox.published-topic}") String publishedTopic) {
+            @Value("${youscout.outbox.published-topic}") String publishedTopic,
+            @Value("${youscout.outbox.deleted-topic}") String deletedTopic) {
         var producer = new KafkaProducer<String, String>(Map.ofEntries(
             Map.entry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap),
             Map.entry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class),
@@ -35,22 +36,26 @@ class KafkaOutboxConfiguration {
             Map.entry(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 4000),
             Map.entry(ProducerConfig.MAX_BLOCK_MS_CONFIG, 2000),
             Map.entry(ProducerConfig.LINGER_MS_CONFIG, 0)));
-        return new KafkaEventPublisher(producer, uploadedTopic, publishedTopic);
+        return new KafkaEventPublisher(producer, uploadedTopic, publishedTopic, deletedTopic);
     }
 
     static class KafkaEventPublisher implements EventPublisher, AutoCloseable {
         private final KafkaProducer<String, String> producer;
         private final String uploadedTopic;
         private final String publishedTopic;
-        KafkaEventPublisher(KafkaProducer<String, String> producer, String uploadedTopic, String publishedTopic) {
+        private final String deletedTopic;
+        KafkaEventPublisher(KafkaProducer<String, String> producer, String uploadedTopic, String publishedTopic,
+                            String deletedTopic) {
             this.producer = producer; this.uploadedTopic = uploadedTopic; this.publishedTopic = publishedTopic;
+            this.deletedTopic = deletedTopic;
         }
-        KafkaEventPublisher(KafkaProducer<String, String> producer, String topic) { this(producer, topic, topic); }
+        KafkaEventPublisher(KafkaProducer<String, String> producer, String topic) { this(producer, topic, topic, topic); }
         @Override public void publish(UUID videoId, String eventType, String payload) throws Exception {
             // Clé stable pour le partitionnement ; l'eventId du JSON déduplique les reprises après crash.
             String topic = switch (eventType) {
                 case "VideoUploaded" -> uploadedTopic;
                 case "VideoPublished" -> publishedTopic;
+                case "VideoDeleted" -> deletedTopic;
                 default -> throw new IllegalArgumentException("Unsupported outbox event type.");
             };
             producer.send(new ProducerRecord<>(topic, videoId.toString(), payload)).get(5, TimeUnit.SECONDS);

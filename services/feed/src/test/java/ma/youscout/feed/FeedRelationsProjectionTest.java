@@ -76,7 +76,7 @@ class FeedRelationsProjectionTest {
 
     @Test void publishingAVideoInvalidatesEveryCachedPageVersion() {
         assertThat(projection.videoVersion()).isEqualTo("0");
-        projection.videoPublished();
+        projection.videosChanged();
         assertThat(projection.videoVersion()).isEqualTo("1");
     }
 

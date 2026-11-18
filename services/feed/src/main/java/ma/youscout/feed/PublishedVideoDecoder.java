@@ -23,8 +23,8 @@ class PublishedVideoDecoder {
     static class InvalidEvent extends RuntimeException {
         InvalidEvent(String code) { super(code); }
     }
-    private static final int MAX_EVENT_BYTES = 65536;
-    private final JsonMapper mapper = JsonMapper.builder(JsonFactory.builder()
+    static final int MAX_EVENT_BYTES = 65536;
+    static final JsonMapper MAPPER = JsonMapper.builder(JsonFactory.builder()
             .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
             .streamReadConstraints(StreamReadConstraints.builder().maxNestingDepth(8).maxStringLength(MAX_EVENT_BYTES).build()).build())
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
@@ -32,7 +32,7 @@ class PublishedVideoDecoder {
     PublishedVideo decode(String kafkaKey, String raw) {
         if (raw == null || raw.getBytes(StandardCharsets.UTF_8).length > MAX_EVENT_BYTES) invalid();
         try {
-            Map<?, ?> root = mapper.readValue(raw, Map.class);
+            Map<?, ?> root = MAPPER.readValue(raw, Map.class);
             if (root == null || !root.keySet().equals(Set.of("eventId", "eventType", "eventVersion", "occurredAt", "producer", "data"))) invalid();
             if (!"VideoPublished".equals(root.get("eventType")) || !"video-service".equals(root.get("producer"))) invalid();
             if (!(root.get("eventVersion") instanceof Integer version) || version != 2) invalid();
@@ -77,26 +77,26 @@ class PublishedVideoDecoder {
         return List.copyOf(result);
     }
 
-    private static String text(Object value, int maxLength) {
+    static String text(Object value, int maxLength) {
         if (!(value instanceof String text) || text.isBlank() || text.length() > maxLength
                 || text.chars().anyMatch(Character::isISOControl)) throw new InvalidEvent("INVALID_ENVELOPE");
         return text;
     }
-    private static UUID uuid(Object value) {
+    static UUID uuid(Object value) {
         String raw = text(value, 36);
         UUID id = UUID.fromString(raw);
         if (!id.toString().equals(raw)) invalid();
         return id;
     }
-    private static Instant timestamp(Object value) {
+    static Instant timestamp(Object value) {
         Instant instant = OffsetDateTime.parse(text(value, 80)).toInstant();
         int year = instant.atOffset(java.time.ZoneOffset.UTC).getYear();
         if (year < 1970 || year > 9999) invalid();
         return instant;
     }
-    private static String fingerprint(String raw) {
+    static String fingerprint(String raw) {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(raw.getBytes(StandardCharsets.UTF_8))); }
         catch (NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
     }
-    private static void invalid() { throw new InvalidEvent("INVALID_ENVELOPE"); }
+    static void invalid() { throw new InvalidEvent("INVALID_ENVELOPE"); }
 }

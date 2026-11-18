@@ -54,6 +54,19 @@ class OutboxRepository {
                 Instant.now());
     }
 
+    /** Carries no S3 key or signed URL; consumers find their own copies of the media by videoId. */
+    @Transactional(transactionManager = "mongoTransactionManager", propagation = Propagation.MANDATORY)
+    public void enqueueDeleted(UUID videoId, String owner) {
+        Document video = mongo.findById(videoId.toString(), Document.class, "videos");
+        if (video == null || !owner.equals(video.getString("ownerSubject")) || video.get("deletedAt") == null)
+            throw new IllegalStateException("Deleted video required for outbox.");
+        Instant deletedAt = VideoRepository.instant(video.get("deletedAt"));
+        Document data = new Document("videoId", videoId.toString()).append("ownerSubject", owner)
+                .append("deletedAt", deletedAt.toString())
+                .append("wasPublished", "PUBLISHED".equals(video.getString("publicationStatus")));
+        insert(videoId, "VideoDeleted", envelope(UUID.randomUUID(), "VideoDeleted", 1, deletedAt, data), Instant.now());
+    }
+
     private Document envelope(UUID eventId, String type, int version, Instant occurredAt, Document data) {
         return new Document("eventId", eventId.toString()).append("eventType", type)
                 .append("eventVersion", version).append("occurredAt", occurredAt.toString())

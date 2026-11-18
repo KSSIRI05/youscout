@@ -18,7 +18,7 @@ class EventDecoder {
     static class InvalidEvent extends RuntimeException {
         InvalidEvent(String code) { super(code); }
     }
-    private final JsonMapper mapper = JsonMapper.builder(JsonFactory.builder()
+    static final JsonMapper MAPPER = JsonMapper.builder(JsonFactory.builder()
             .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
             .streamReadConstraints(StreamReadConstraints.builder().maxNestingDepth(8).maxStringLength(65536).build()).build())
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
@@ -26,7 +26,7 @@ class EventDecoder {
     VideoUploaded decode(String kafkaKey, String raw) {
         if (raw == null || raw.getBytes(StandardCharsets.UTF_8).length > 65536) throw new InvalidEvent("INVALID_ENVELOPE");
         try {
-            Map<?, ?> root = mapper.readValue(raw, Map.class);
+            Map<?, ?> root = MAPPER.readValue(raw, Map.class);
             if (root == null || !root.keySet().equals(Set.of("eventId", "eventType", "eventVersion", "occurredAt", "producer", "data"))) invalid();
             if (!"VideoUploaded".equals(root.get("eventType")) || !"video-service".equals(root.get("producer"))) invalid();
             if (!(root.get("eventVersion") instanceof Integer version) || version != 1) invalid();
@@ -49,16 +49,16 @@ class EventDecoder {
         } catch (InvalidEvent error) { throw error; }
         catch (RuntimeException error) { throw new InvalidEvent("INVALID_ENVELOPE"); }
     }
-    private static String text(Object value, int max) {
+    static String text(Object value, int max) {
         if (!(value instanceof String text) || text.isBlank() || text.length() > max
                 || text.chars().anyMatch(Character::isISOControl)) throw new InvalidEvent("INVALID_ENVELOPE");
         return (String) value;
     }
-    private static UUID uuid(Object value) {
+    static UUID uuid(Object value) {
         String text = text(value, 36);
         UUID id = UUID.fromString(text);
         if (!id.toString().equals(text)) invalid();
         return id;
     }
-    private static void invalid() { throw new InvalidEvent("INVALID_ENVELOPE"); }
+    static void invalid() { throw new InvalidEvent("INVALID_ENVELOPE"); }
 }

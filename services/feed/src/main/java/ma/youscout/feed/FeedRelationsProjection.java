@@ -80,7 +80,7 @@ class FeedRelationsProjection {
 
     String videoVersion() { return value(PREFIX + "video-version"); }
 
-    void videoPublished() {
+    void videosChanged() {
         redis.opsForValue().increment(PREFIX + "video-version");
     }
 

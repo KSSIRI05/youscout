@@ -276,4 +276,72 @@ void main() {
     expect(find.textContaining('signature='), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('deletion asks for confirmation, then removes the video', (
+    tester,
+  ) async {
+    final deleted = <String>[];
+    var failNext = false;
+    Map<String, dynamic> item(String id, String title) => {
+      'id': id,
+      'title': title,
+      'uploadStatus': 'UPLOADED',
+      'processingStatus': 'READY',
+      'publicationStatus': 'PUBLISHED',
+    };
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: PrivateVideoLibrary(
+              request: (path, {query}) async => {
+                'hasMore': false,
+                'items': [
+                  for (final video in [
+                    item('one', 'Mon clip'),
+                    item('two', 'Autre clip'),
+                  ])
+                    if (!deleted.contains(video['id'])) video,
+                ],
+              },
+              delete: (id) async {
+                if (failNext) {
+                  failNext = false;
+                  throw const ApiFailure(503, 'indisponible');
+                }
+                deleted.add(id);
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('delete-one')));
+    await tester.pumpAndSettle();
+    expect(find.text('Supprimer « Mon clip » ?'), findsOneWidget);
+    await tester.tap(find.text('Annuler'));
+    await tester.pumpAndSettle();
+    expect(deleted, isEmpty);
+    expect(find.text('Mon clip'), findsOneWidget);
+
+    failNext = true;
+    await tester.tap(find.byKey(const Key('delete-one')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Supprimer'));
+    await tester.pumpAndSettle();
+    expect(find.text('Suppression impossible. Réessaie.'), findsOneWidget);
+    expect(find.text('Mon clip'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('delete-one')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Supprimer'));
+    await tester.pumpAndSettle();
+    expect(deleted, ['one']);
+    expect(find.text('Vidéo supprimée.'), findsOneWidget);
+    expect(find.text('Mon clip'), findsNothing);
+    expect(find.text('Autre clip'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
 }

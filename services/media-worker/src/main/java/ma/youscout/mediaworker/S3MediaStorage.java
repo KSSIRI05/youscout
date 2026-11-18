@@ -46,6 +46,20 @@ class S3MediaStorage implements MediaStorage {
         } catch (IOException error) { throw new ProcessingFailure("LOCAL_IO", true); }
         catch (RuntimeException error) { throw classify(error); }
     }
+    public void delete(java.util.UUID videoId, java.util.List<String> keys) {
+        // Only the exact keys this domain generates for this video can be deleted.
+        String source = "videos/" + videoId + "/source";
+        String output = "processed/" + videoId + "/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/(video\\.mp4|thumbnail\\.jpg)";
+        for (String key : keys) {
+            if (!key.equals(source) && !key.matches(output)) throw new ProcessingFailure("INVALID_KEY", false);
+        }
+        for (String key : keys) {
+            try { s3.deleteObject(DeleteObjectRequest.builder().bucket(properties.bucket()).key(key).build()); }
+            catch (S3Exception error) {
+                if (error.statusCode() != 404) throw new ProcessingFailure("STORAGE_UNAVAILABLE", true);
+            } catch (RuntimeException error) { throw new ProcessingFailure("STORAGE_UNAVAILABLE", true); }
+        }
+    }
     private ProcessingFailure classify(RuntimeException error) {
         for (Throwable cause = error; cause != null; cause = cause.getCause()) {
             if (cause instanceof ProcessingFailure failure) return failure;

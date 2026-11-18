@@ -51,7 +51,7 @@ class OutboxIntegrationTest {
         try (var admin = Admin.create(Map.of("bootstrap.servers", kafka.getBootstrapServers()))) {
             admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).all().get(15, TimeUnit.SECONDS);
         }
-        publisher = new KafkaOutboxConfiguration().eventPublisher(kafka.getBootstrapServers(), topic, topic);
+        publisher = new KafkaOutboxConfiguration().eventPublisher(kafka.getBootstrapServers(), topic, topic, topic);
     }
     @AfterEach void cleanup() { publisher.close(); }
 

@@ -16,7 +16,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.stereotype.Component;
 
-/** Un seul thread possède le consumer Kafka ; PostgreSQL commit précède chaque commit d'offset. */
+/** Un seul thread possède le consumer Kafka (publications et suppressions) ; PostgreSQL commit précède chaque commit d'offset. */
 @Component
 @ConditionalOnProperty(name = "feed.ingestion.enabled", havingValue = "true")
 class VideoPublishedConsumer implements SmartLifecycle {
@@ -54,7 +54,7 @@ class VideoPublishedConsumer implements SmartLifecycle {
             try {
                 client = createConsumer();
                 consumer = client;
-                client.subscribe(List.of(properties.topic()));
+                client.subscribe(List.of(properties.topic(), properties.deletedTopic()));
                 while (running) {
                     for (var record : client.poll(Duration.ofMillis(500))) {
                         if (!running) break;

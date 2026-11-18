@@ -37,7 +37,7 @@ class PublicationService {
         Instant now = Instant.now();
         Query unpublished = Query.query(Criteria.where("_id").is(id.toString()).and("ownerSubject").is(owner)
                 .and("status").is("UPLOADED").and("processingStatus").is("READY")
-                .and("publicationStatus").is("UNPUBLISHED"));
+                .and("publicationStatus").is("UNPUBLISHED").and("deletedAt").is(null));
         Document published = mongo.findAndModify(unpublished,
                 new Update().set("publicationStatus", "PUBLISHED").set("publishedAt", Date.from(now)),
                 FindAndModifyOptions.options().returnNew(true), Document.class, "videos");
@@ -52,7 +52,7 @@ class PublicationService {
     }
 
     private Document findOwned(UUID id, String owner) {
-        return mongo.findOne(Query.query(Criteria.where("_id").is(id.toString()).and("ownerSubject").is(owner)),
+        return mongo.findOne(Query.query(Criteria.where("_id").is(id.toString()).and("ownerSubject").is(owner).and("deletedAt").is(null)),
                 Document.class, "videos");
     }
 

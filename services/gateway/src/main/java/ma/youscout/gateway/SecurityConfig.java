@@ -35,6 +35,7 @@ class SecurityConfig {
                 .pathMatchers(org.springframework.http.HttpMethod.POST, "/v1/videos/uploads").hasAnyRole("user", "admin")
                 .pathMatchers(org.springframework.http.HttpMethod.POST, "/v1/videos/*/complete").hasAnyRole("user", "admin")
                 .pathMatchers(org.springframework.http.HttpMethod.POST, "/v1/videos/{id:[0-9a-fA-F-]+}/publish").hasAnyRole("user", "admin")
+                .pathMatchers(org.springframework.http.HttpMethod.DELETE, "/v1/videos/{id:[0-9a-fA-F-]+}").hasAnyRole("user", "admin")
                 .anyExchange().denyAll())
             .exceptionHandling(e -> e.authenticationEntryPoint(ApiSecurityErrors::unauthorized)
                 .accessDeniedHandler((exchange, error) -> ApiSecurityErrors.forbidden(exchange)))

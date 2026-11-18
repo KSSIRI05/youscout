@@ -114,6 +114,65 @@ class PublicationIntegrationTest {
         assertThat(body.read("$.publishedAt", String.class)).isNotBlank();
         assertThat(response.body()).doesNotContain("s3", "bucket", "X-Amz");
     }
+    @Test void deletionHidesTheVideoAndRecordsOneEventEvenWhenRepeated() throws Exception {
+        UUID id = create("alice", "UPLOADED", "READY");
+        String alice = oidc.profileToken("alice", null, "alice");
+        publish(id, alice, null);
+
+        for (int attempt = 0; attempt < 2; attempt++) {
+            var deleted = delete(id, alice);
+            assertThat(deleted.statusCode()).isEqualTo(204);
+            assertThat(deleted.headers().firstValue("Cache-Control").orElse("")).contains("no-store");
+        }
+        assertThat(video(id).get("deletedAt")).isNotNull();
+        assertThat(video(id).getString("publicationStatus")).isEqualTo("PUBLISHED");
+        var events = mongo.find(Query.query(Criteria.where("aggregateId").is(id.toString())
+                .and("eventType").is("VideoDeleted")), Document.class, "video_outbox");
+        assertThat(events).hasSize(1);
+        Document data = events.getFirst().get("payload", Document.class).get("data", Document.class);
+        assertThat(data.getString("ownerSubject")).isEqualTo("alice");
+        assertThat(data.getBoolean("wasPublished")).isTrue();
+        assertThat(data.keySet()).containsExactlyInAnyOrder("videoId", "ownerSubject", "deletedAt", "wasPublished");
+
+        String bob = oidc.profileToken("bob", null, "bob");
+        assertThat(get("/v1/videos/" + id, alice).statusCode()).isEqualTo(404);
+        assertThat(get("/v1/videos/" + id + "/playback", alice).statusCode()).isEqualTo(404);
+        assertThat(get("/v1/videos/" + id + "/public-playback", bob).statusCode()).isEqualTo(404);
+        assertThat(get("/v1/videos/" + id + "/publication", bob).statusCode()).isEqualTo(404);
+        assertThat(get("/v1/videos", alice).body()).doesNotContain(id.toString());
+    }
+    @Test void deletedVideosCannotBePublishedOrConfirmed() throws Exception {
+        String alice = oidc.profileToken("alice", null, "alice");
+        UUID ready = create("alice", "UPLOADED", "READY");
+        UUID pending = create("alice", "PENDING_UPLOAD", null);
+        for (UUID id : List.of(ready, pending)) assertThat(delete(id, alice).statusCode()).isEqualTo(204);
+        assertThat(publish(ready, alice, null).statusCode()).isEqualTo(404);
+        assertThat(video(ready).getString("publicationStatus")).isEqualTo("UNPUBLISHED");
+        assertThat(post("/v1/videos/" + pending + "/complete", alice, null).statusCode()).isEqualTo(404);
+        assertThat(video(pending).getString("status")).isEqualTo("PENDING_UPLOAD");
+        var unpublished = mongo.findOne(Query.query(Criteria.where("aggregateId").is(ready.toString())
+                .and("eventType").is("VideoDeleted")), Document.class, "video_outbox");
+        assertThat(unpublished.get("payload", Document.class).get("data", Document.class).getBoolean("wasPublished")).isFalse();
+        assertThat(mongo.count(Query.query(Criteria.where("eventType").is("VideoPublished")), "video_outbox")).isZero();
+    }
+    @Test void onlyTheOwnerCanDeleteAndConcurrentCallsRecordOneEvent() throws Exception {
+        UUID id = create("alice", "UPLOADED", "READY");
+        for (String token : List.of(oidc.profileToken("bob", null, "bob"), oidc.roleToken("admin")))
+            assertThat(delete(id, token).statusCode()).isEqualTo(404);
+        assertThat(delete(id, null).statusCode()).isEqualTo(401);
+        assertThat(delete(id, oidc.roleToken()).statusCode()).isEqualTo(403);
+        assertThat(delete(UUID.randomUUID(), oidc.profileToken("alice", null, "alice")).statusCode()).isEqualTo(404);
+        assertThat(video(id).get("deletedAt")).isNull();
+
+        String alice = oidc.profileToken("alice", null, "alice");
+        var futures = java.util.stream.IntStream.range(0, 6).mapToObj(n -> CompletableFuture.supplyAsync(() -> {
+            try { return delete(id, alice).statusCode(); }
+            catch (Exception error) { throw new RuntimeException(error); }
+        })).toList();
+        for (var future : futures) assertThat(future.join()).isEqualTo(204);
+        assertThat(mongo.count(Query.query(Criteria.where("aggregateId").is(id.toString())
+                .and("eventType").is("VideoDeleted")), "video_outbox")).isEqualTo(1);
+    }
     @Test void allUnreadyStatesStayUnpublished() throws Exception {
         String token = oidc.profileToken("alice", null, "alice");
         var ids = new ArrayList<UUID>();
@@ -173,6 +232,11 @@ class PublicationIntegrationTest {
         if (token != null) builder.header("Authorization", "Bearer " + token);
         if (body != null) builder.header("Content-Type", "application/json");
         return client.send(builder.POST(body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
+    }
+    HttpResponse<String> delete(UUID id, String token) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v1/videos/" + id));
+        if (token != null) request.header("Authorization", "Bearer " + token);
+        return client.send(request.DELETE().build(), HttpResponse.BodyHandlers.ofString());
     }
     HttpResponse<String> get(String path, String token) throws Exception {
         var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path));

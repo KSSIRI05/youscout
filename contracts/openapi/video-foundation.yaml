@@ -182,6 +182,24 @@ paths:
                   publishedAt: {type: string, format: date-time, nullable: true}
         '401': {description: Session absente ou invalide}
         '403': {description: Rôle insuffisant}
+        '404': {description: Vidéo inconnue, supprimée ou appartenant à un autre joueur}
+        '503': {description: Base temporairement indisponible}
+    delete:
+      operationId: deleteOwnVideo
+      summary: Supprimer sa vidéo
+      description: |
+        Exige user ou admin et le sub propriétaire, sans exception pour admin.
+        Marque la vidéo supprimée et écrit VideoDeleted dans l'outbox dans la même transaction MongoDB ;
+        le relais publie ensuite vers video.deleted.v1. La vidéo disparaît de la liste, des détails,
+        de la lecture privée et publique, et ne peut plus être confirmée ni publiée.
+        Un nouvel appel renvoie 204 sans nouvel événement.
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '204': {description: Vidéo supprimée (ou déjà supprimée), Cache-Control no-store}
+        '401': {description: Session absente ou invalide}
+        '403': {description: Rôle insuffisant}
         '404': {description: Vidéo inconnue ou appartenant à un autre joueur}
         '503': {description: Base temporairement indisponible}
   /v1/videos/{id}/complete:

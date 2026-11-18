@@ -4,6 +4,14 @@
 
 Ce module Spring Boot valide Keycloak et persiste les documents Video et l'outbox transactionnelle dans MongoDB. PostgreSQL reste réservé à l'import ponctuel et à la conservation de la sauvegarde source. Le service prépare les uploads S3, confirme les fichiers reçus et publie les événements dans Kafka. La Gateway expose `GET /v1/videos/session`, `POST /v1/videos/uploads` et `POST /v1/videos/{id}/complete`. Le profil de traitement du worker valide le média et publie son résultat ; voir [le guide FFmpeg](../../docs/MEDIA_PROCESSING.md) et [le guide Kafka/outbox](../../docs/VIDEO_OUTBOX.md).
 
+## Supprimer une vidéo
+
+`DELETE /v1/videos/{id}` permet au propriétaire, et à lui seul (même un admin ne supprime pas la vidéo d'un autre compte), de supprimer sa vidéo, quel que soit son état. Une transaction MongoDB pose `deletedAt` et écrit `VideoDeleted v1` dans l'outbox ; le relais l'envoie vers `video.deleted.v1` ([schéma](../../contracts/events/video-deleted.v1.schema.json)). L'événement ne contient ni clé S3 ni URL : `videoId`, `ownerSubject`, `deletedAt` et `wasPublished`.
+
+La réponse est `204`, y compris pour un appel répété ou concurrent, et un seul événement est écrit. La vidéo disparaît ensuite de la liste, des détails, de la lecture privée et publique et de `/publication` (Social refuse donc les nouveaux likes et commentaires). Elle ne peut plus être confirmée ni publiée, et réutiliser sa clé d'idempotence renvoie `409` au lieu d'une nouvelle URL d'upload.
+
+Le document est conservé avec sa date de suppression. Feed consomme `video.deleted.v1` et retire la vidéo du fil ; le worker média annule le traitement éventuel et supprime les fichiers S3 (source et fichiers traités).
+
 ## Identité Keycloak
 
 La Gateway puis Video vérifient indépendamment le Bearer. Video accepte uniquement RS256, vérifie issuer, audience `youscout-api`, dates, présence de l'expiration et `sub` non vide. La tolérance temporelle standard est de 60 secondes. L'issuer est configuré par `OIDC_ISSUER` (défaut `http://localhost:8180/realms/youscout`) et les clés publiques par `OIDC_JWK_SET_URI` (défaut sous cet issuer local). Dans Compose, le téléchargement des clés utilise `http://keycloak:8080`, mais l'issuer attendu reste celui vu par le navigateur.

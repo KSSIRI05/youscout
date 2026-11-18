@@ -4,17 +4,20 @@ import '../backend/private_video.dart';
 import 'private_video_player.dart';
 
 typedef VideoPublish = Future<Map<String, dynamic>> Function(String id);
+typedef VideoDelete = Future<void> Function(String id);
 
 class PrivateVideoLibrary extends StatefulWidget {
   const PrivateVideoLibrary({
     required this.request,
     this.publish,
+    this.delete,
     this.refreshKey,
     this.active = true,
     super.key,
   });
   final VideoRead request;
   final VideoPublish? publish;
+  final VideoDelete? delete;
   final String? refreshKey;
   final bool active;
   @override
@@ -27,6 +30,7 @@ class _PrivateVideoLibraryState extends State<PrivateVideoLibrary> {
   String? selected;
   bool loading = false, failed = false, more = false;
   final Set<String> publishing = {};
+  final Set<String> deleting = {};
   String? publicationMessage;
   int offset = 0, generation = 0;
   @override
@@ -105,6 +109,74 @@ class _PrivateVideoLibraryState extends State<PrivateVideoLibrary> {
     }
   }
 
+  Future<void> delete(PrivateVideo video) async {
+    final action = widget.delete;
+    if (action == null || !widget.active || deleting.contains(video.id)) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Supprimer « ${video.title} » ?'),
+        content: const Text(
+          'La vidéo sera retirée de ta bibliothèque et du fil, et ses fichiers seront effacés. Cette action est définitive.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      deleting.add(video.id);
+      publicationMessage = null;
+    });
+    try {
+      await action(video.id);
+      if (!mounted) return;
+      setState(() {
+        videos = videos.where((item) => item.id != video.id).toList();
+        if (selected == video.id) selected = null;
+        publicationMessage = 'Vidéo supprimée.';
+      });
+      await load();
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => publicationMessage = 'Suppression impossible. Réessaie.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => deleting.remove(video.id));
+    }
+  }
+
+  Widget? status(PrivateVideo video) => video.ready
+      ? video.published
+            ? const Chip(label: Text('Publié'))
+            : widget.publish == null
+            ? const Icon(Icons.chevron_right)
+            : OutlinedButton(
+                onPressed: publishing.contains(video.id)
+                    ? null
+                    : () => publish(video),
+                child: publishing.contains(video.id)
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Publier'),
+              )
+      : null;
+
   @override
   void dispose() {
     generation++;
@@ -170,26 +242,22 @@ class _PrivateVideoLibraryState extends State<PrivateVideoLibrary> {
                   ? Icons.error_outline
                   : Icons.schedule,
             ),
-            trailing: video.ready
-                ? video.published
-                      ? const Chip(label: Text('Publié'))
-                      : widget.publish == null
-                      ? const Icon(Icons.chevron_right)
-                      : OutlinedButton(
-                          onPressed: publishing.contains(video.id)
-                              ? null
-                              : () => publish(video),
-                          child: publishing.contains(video.id)
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Text('Publier'),
-                        )
-                : null,
+            trailing: widget.delete == null
+                ? status(video)
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ?status(video),
+                      IconButton(
+                        key: Key('delete-${video.id}'),
+                        tooltip: 'Supprimer la vidéo',
+                        onPressed: deleting.contains(video.id)
+                            ? null
+                            : () => delete(video),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
+                  ),
             onTap: video.ready
                 ? () => setState(() => selected = video.id)
                 : null,
