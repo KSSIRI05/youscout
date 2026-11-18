@@ -1,4 +1,4 @@
-"""Exercise Social through the Gateway and its calls to Video and User; nothing is written."""
+"""Exercise Social and Rating through the Gateway and their calls to Video and User; nothing is written."""
 import uuid
 from catalogue_smoke import request
 
@@ -15,3 +15,11 @@ def exercise(player_token, player_subject):
     status, _ = request("POST", "/v1/social/messages", player_token, {"recipientSubject": "missing-" + uuid.uuid4().hex, "body": "Smoke"})
     assert status == 404, f"Message to an unknown profile was not rejected by User (HTTP {status})"
     assert request("POST", "/v1/social/messages", player_token, {"recipientSubject": player_subject, "body": "Smoke"})[0] == 400, "Self-message accepted"
+    # Rating : lecture vide, note invalide refusée avant tout appel, vidéo inconnue refusée par Video.
+    status, ratings = request("GET", f"/v1/ratings/videos/{video}", player_token)
+    assert status == 200 and ratings == {"videoId": video, "skills": []}, f"Rating read failed (HTTP {status})"
+    skill = str(uuid.uuid4())
+    assert request("PUT", f"/v1/ratings/videos/{video}/skills/{skill}", player_token, {"score": 6})[0] == 400, "Out-of-range score accepted"
+    status, _ = request("PUT", f"/v1/ratings/videos/{video}/skills/{skill}", player_token, {"score": 4})
+    assert status == 404, f"Rating of an unpublished video was not rejected by Video (HTTP {status})"
+    assert request("DELETE", f"/v1/ratings/videos/{video}/skills/{skill}", player_token)[0] == 200, "Rating removal failed"

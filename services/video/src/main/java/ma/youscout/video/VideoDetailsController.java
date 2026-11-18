@@ -31,7 +31,7 @@ class VideoDetailsController {
                    String publicationStatus, Instant publishedAt, String moderationStatus) {}
     record Page(List<Details> items, boolean hasMore) {}
     record Playback(String videoUrl, String thumbnailUrl, Instant expiresAt) {}
-    record Publication(UUID id, String ownerSubject, Instant publishedAt) {}
+    record Publication(UUID id, String ownerSubject, Instant publishedAt, List<UUID> skillIds) {}
 
     private final MongoTemplate mongo;
     private final S3Presigner presigner;
@@ -78,14 +78,20 @@ class VideoDetailsController {
         return signedPlayback(id, video);
     }
 
-    /** Lets other services check that a video is published and find its owner, without media links. */
+    /** Lets other services check that a video is published and find its owner and skills, without media links. */
     @GetMapping("/{id}/publication")
     ResponseEntity<Publication> publication(@PathVariable UUID id) {
         Document video = mongo.findOne(Query.query(Criteria.where("_id").is(id.toString())
                 .and("publicationStatus").is("PUBLISHED").and("deletedAt").is(null).and("moderationStatus").ne("REMOVED")), Document.class, "videos");
         if (video == null) throw notFound("Vidéo publiée introuvable.");
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new Publication(id,
-                video.getString("ownerSubject"), VideoRepository.instant(video.get("publishedAt"))));
+                video.getString("ownerSubject"), VideoRepository.instant(video.get("publishedAt")), skillIds(video)));
+    }
+
+    // Rating n'accepte une note que pour une compétence associée à la vidéo.
+    private static List<UUID> skillIds(Document video) {
+        return video.get("skills") instanceof List<?> skills ? skills.stream().filter(Document.class::isInstance)
+                .map(skill -> UUID.fromString(((Document) skill).getString("id"))).toList() : List.of();
     }
 
     private Document findOwned(UUID id, String owner) {

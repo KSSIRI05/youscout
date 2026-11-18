@@ -2,7 +2,7 @@
 
 YouScout est une plateforme de découverte des talents du football. Elle permet de partager des vidéos, de mettre en valeur ses compétences et d'échanger avec la communauté.
 
-**État réel :** Flutter connecté utilise les profils, le catalogue, l'upload, la lecture privée, le fil paginé et les interactions Social persistées. Le backend comprend User, Skill/Hashtag, Video, Feed, Social, Kafka et le worker média. User propage les suivis/blocages via outbox Kafka ; Feed les projette dans Redis et met en cache ses pages. Video utilise désormais MongoDB pour ses documents, métadonnées, traitements et outbox ; Social utilise encore PostgreSQL ; ses écritures vérifient auprès de Video que la vidéo est publiée et auprès de User qu'aucun blocage ne s'applique.
+**État réel :** Flutter connecté utilise les profils, le catalogue, l'upload, la lecture privée, le fil paginé et les interactions Social persistées. Le backend comprend User, Skill/Hashtag, Video, Feed, Social, Rating, Kafka et le worker média. User propage les suivis/blocages via outbox Kafka ; Feed les projette dans Redis et met en cache ses pages. Video utilise désormais MongoDB pour ses documents, métadonnées, traitements et outbox ; Social utilise encore PostgreSQL ; ses écritures vérifient auprès de Video que la vidéo est publiée et auprès de User qu'aucun blocage ne s'applique.
 
 ## Lancer le socle backend
 

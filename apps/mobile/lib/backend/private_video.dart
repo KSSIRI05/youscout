@@ -65,21 +65,49 @@ class FeedVideo {
     this.ownerSubject, [
     this.skills = const [],
     this.hashtags = const [],
+    this.skillIds = const [],
   ]);
   factory FeedVideo.fromJson(Map<String, dynamic> json) {
-    List<String> names(Object? value) => (value as List<dynamic>? ?? const [])
-        .map((item) => (item as Map<String, dynamic>)['name'] as String)
-        .toList(growable: false);
+    List<String> field(Object? value, String key) =>
+        (value as List<dynamic>? ?? const [])
+            .map((item) => (item as Map<String, dynamic>)[key] as String)
+            .toList(growable: false);
     return FeedVideo(
       json['videoId'] as String,
       json['title'] as String,
       DateTime.parse(json['publishedAt'] as String),
       json['ownerSubject'] as String,
-      names(json['skills']),
-      names(json['hashtags']),
+      field(json['skills'], 'name'),
+      field(json['hashtags'], 'name'),
+      field(json['skills'], 'id'),
     );
   }
   final String id, title, ownerSubject;
   final DateTime publishedAt;
   final List<String> skills, hashtags;
+
+  /// Identifiants des compétences, dans le même ordre que [skills], pour la notation.
+  final List<String> skillIds;
+}
+
+/// Résumé Rating d'une compétence : moyenne, nombre de notes et note de l'appelant.
+class SkillRating {
+  const SkillRating({this.count = 0, this.average, this.myScore});
+  final int count;
+  final double? average;
+  final int? myScore;
+
+  /// Indexe la réponse de Rating par compétence ; une compétence absente n'est pas encore notée.
+  static Map<String, SkillRating> bySkill(Map<String, dynamic> json) => {
+    for (final item in (json['skills'] as List<dynamic>? ?? const []))
+      (item as Map<String, dynamic>)['skillId'] as String: SkillRating(
+        count: (item['count'] as num).toInt(),
+        average: (item['average'] as num?)?.toDouble(),
+        myScore: (item['myScore'] as num?)?.toInt(),
+      ),
+  };
+
+  String get label => count == 0
+      ? 'Pas encore notée'
+      : '${average!.toStringAsFixed(1)} / 5 · $count note${count > 1 ? 's' : ''}';
 }

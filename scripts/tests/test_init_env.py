@@ -25,7 +25,7 @@ class InitEnvironmentTest(unittest.TestCase):
                 once = env.read_text(encoding="utf-8")
                 self.assertTrue(once.startswith(old + "\n"))
                 additions = once[len(old) + 1:].splitlines()
-                self.assertEqual({"SKILL_DB_PASSWORD", "VIDEO_DB_PASSWORD", "MEDIA_WORKER_DB_PASSWORD", "FEED_DB_PASSWORD", "SOCIAL_DB_PASSWORD", "USER_ADMIN_CLIENT_SECRET"}, {line.split("=", 1)[0] for line in additions})
+                self.assertEqual({"SKILL_DB_PASSWORD", "VIDEO_DB_PASSWORD", "MEDIA_WORKER_DB_PASSWORD", "FEED_DB_PASSWORD", "SOCIAL_DB_PASSWORD", "USER_ADMIN_CLIENT_SECRET", "RATING_DB_PASSWORD"}, {line.split("=", 1)[0] for line in additions})
                 self.assertTrue(all(len(line.split("=", 1)[1]) >= 32 for line in additions))
                 subprocess.run([sys.executable, str(script), "--upgrade"], check=True, capture_output=True)
                 self.assertEqual(once, env.read_text(encoding="utf-8"))
@@ -59,7 +59,7 @@ class InitEnvironmentTest(unittest.TestCase):
             subprocess.run([sys.executable, str(script), "--upgrade"], check=True, capture_output=True)
             names = [line.split("=", 1)[0] for line in env.read_text(encoding="utf-8-sig").splitlines() if "=" in line]
             self.assertEqual(1, names.count("KEYCLOAK_DB_PASSWORD"))
-            self.assertEqual(10, len(set(names)))
+            self.assertEqual(11, len(set(names)))
 
     def test_new_environment_contains_all_credentials(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -68,5 +68,5 @@ class InitEnvironmentTest(unittest.TestCase):
             shutil.copyfile(pathlib.Path(__file__).resolve().parents[2] / "infra/compose/init-env.py", script)
             subprocess.run([sys.executable, str(script)], check=True, capture_output=True)
             values = dict(line.split("=", 1) for line in (root / ".env").read_text().splitlines())
-            self.assertEqual(10, len(values))
+            self.assertEqual(11, len(values))
             self.assertTrue(all(len(value) >= 32 for value in values.values()))

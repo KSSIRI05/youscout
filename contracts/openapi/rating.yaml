@@ -1,0 +1,82 @@
+openapi: 3.0.3
+info:
+  title: YouScout Rating API
+  version: 0.1.0
+  description: >-
+    Skill ratings (U15). A player rates each skill of a published video from 1 to 5, and can
+    change or remove that rating. One rating per rater, video and skill. Writes check with Video
+    that the video is published and has the skill, and with User that no block exists with the
+    owner, forwarding the caller's JWT. Errors use application/problem+json.
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerAuth: []
+paths:
+  /v1/ratings/videos/{videoId}:
+    parameters:
+      - $ref: '#/components/parameters/videoId'
+    get:
+      summary: Read rating aggregates per skill and the caller's own ratings
+      responses:
+        '200':
+          description: Rated skills only, ordered by skill id; Cache-Control no-store
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VideoRatings'}
+        '401': {description: Missing or invalid token}
+        '403': {description: Role user or admin required}
+  /v1/ratings/videos/{videoId}/skills/{skillId}:
+    parameters:
+      - $ref: '#/components/parameters/videoId'
+      - {in: path, name: skillId, required: true, schema: {type: string, format: uuid}}
+    put:
+      summary: Create or change the caller's rating (idempotent)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [score]
+              properties:
+                score: {type: integer, minimum: 1, maximum: 5}
+      responses:
+        '200':
+          description: Updated aggregates for the video
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VideoRatings'}
+        '400': {description: Score is not an integer from 1 to 5, or extra fields}
+        '403': {description: Caller owns the video, or a block exists with the owner}
+        '404': {description: Video unknown or not published, or skill not attached to the video}
+        '503': {description: Video, User or the database unavailable}
+    delete:
+      summary: Remove the caller's rating (always allowed, idempotent)
+      responses:
+        '200':
+          description: Updated aggregates for the video
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VideoRatings'}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  parameters:
+    videoId: {in: path, name: videoId, required: true, schema: {type: string, format: uuid}}
+  schemas:
+    VideoRatings:
+      type: object
+      required: [videoId, skills]
+      properties:
+        videoId: {type: string, format: uuid}
+        skills:
+          type: array
+          items:
+            type: object
+            required: [skillId, count, average, myScore]
+            properties:
+              skillId: {type: string, format: uuid}
+              count: {type: integer, minimum: 1}
+              average: {type: number, minimum: 1, maximum: 5, description: Rounded to 2 decimals}
+              myScore: {type: integer, minimum: 1, maximum: 5, nullable: true}

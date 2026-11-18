@@ -296,6 +296,107 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
     input.dispose();
   }
 
+  /// U15 : moyenne par compétence ; les autres joueurs notent de 1 à 5, modifient ou retirent leur note.
+  Future<void> _ratings(FeedVideo video) async {
+    final mine = video.ownerSubject == widget.session.profile?.subject;
+    Map<String, SkillRating> ratings;
+    try {
+      ratings = SkillRating.bySkill(
+        await widget.session.videoRatings(video.id),
+      );
+    } catch (_) {
+      _message('Impossible de charger les notes.');
+      return;
+    }
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, refresh) {
+          Future<void> rate(String skillId, int? score) async {
+            try {
+              final updated = SkillRating.bySkill(
+                await widget.session.rateSkill(video.id, skillId, score),
+              );
+              refresh(() => ratings = updated);
+            } on ApiFailure catch (failure) {
+              _message(
+                failure.status == 403
+                    ? 'Un blocage empêche cette note.'
+                    : 'La note n’a pas pu être enregistrée.',
+              );
+            } catch (_) {
+              _message('La note n’a pas pu être enregistrée.');
+            }
+          }
+
+          return Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Notes des compétences',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                if (mine)
+                  const Text(
+                    'Tu ne peux pas noter ta propre vidéo.',
+                    style: TextStyle(color: ScoutColors.muted),
+                  ),
+                const SizedBox(height: 8),
+                for (var i = 0; i < video.skillIds.length; i++)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(video.skills[i]),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          (ratings[video.skillIds[i]] ?? const SkillRating())
+                              .label,
+                        ),
+                        if (!mine)
+                          Wrap(
+                            children: [
+                              for (var score = 1; score <= 5; score++)
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  tooltip: '$score sur 5',
+                                  icon: Icon(
+                                    score <=
+                                            (ratings[video.skillIds[i]]
+                                                    ?.myScore ??
+                                                0)
+                                        ? Icons.star
+                                        : Icons.star_border,
+                                    color: ScoutColors.brand,
+                                  ),
+                                  onPressed: () =>
+                                      rate(video.skillIds[i], score),
+                                ),
+                              if (ratings[video.skillIds[i]]?.myScore != null)
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  tooltip: 'Retirer ma note',
+                                  icon: const Icon(Icons.close),
+                                  onPressed: () =>
+                                      rate(video.skillIds[i], null),
+                                ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _profile(FeedVideo video) async {
     try {
       final profile = await widget.session.publicProfile(video.ownerSubject);
@@ -560,6 +661,12 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
                   icon: const Icon(Icons.mode_comment_outlined),
                   label: const Text('Commenter'),
                 ),
+                if (video.skillIds.isNotEmpty)
+                  IconButton(
+                    tooltip: 'Noter les compétences',
+                    onPressed: () => _ratings(video),
+                    icon: const Icon(Icons.star_outline),
+                  ),
                 PopupMenuButton<String>(
                   onSelected: (_) => _report(
                     'videos/${video.id}/reports',

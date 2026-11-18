@@ -2,7 +2,7 @@
 
 Un frontend Flutter de démonstration locale existe désormais (voir [FRONTEND.md](FRONTEND.md)). Un [socle backend local](BACKEND.md) existe aussi : Gateway, profils personnels persistants, inscription/connexion Keycloak, rôles user/admin, catalogue Skill/Hashtag, abonnements hashtags, bases séparées, migrations et CI. Les cases ci-dessous portent sur la livraison intégrée complète et restent ouvertes. La cible de onze services est retenue ; l'ordre de livraison réduit le travail simultané sans fusionner les domaines.
 
-Implementation status (2026-11-02): the connected Flutter feed reads Feed pages and persists likes/comments through Social. User now writes follow/block changes to an ordered Kafka outbox; Feed projects those relationships into Redis and caches versioned pages. Video now uses MongoDB transactions for documents and outbox; Social still uses PostgreSQL. Missing Rating, Notification, Moderation and Admin/Analytics domains remain roadmap work.
+Implementation status (2026-11-02): the connected Flutter feed reads Feed pages and persists likes/comments through Social. User now writes follow/block changes to an ordered Kafka outbox; Feed projects those relationships into Redis and caches versioned pages. Video now uses MongoDB transactions for documents and outbox; Social still uses PostgreSQL. Rating (U15) now has its own service and PostgreSQL database. Missing Notification and Analytics domains remain roadmap work.
 
 ## Phase 0 : valider le socle
 
@@ -27,7 +27,7 @@ Ce MVP sert à valider le socle ; il ne couvre pas encore tout le périmètre pr
 
 ## Phase 2 : complétude fonctionnelle et modération
 
-- [ ] Rating : U15, unicité et modification de note.
+- [x] Rating : U15, note de 1 à 5 par compétence, unique par évaluateur, modifiable et retirable ([service](../services/rating/README.md)). `RatingChanged` reste à émettre quand un consommateur existera.
 - [ ] Moderation : U16/U17, A03/A04, état d'application et retrait média/CDN. Livré : signalement des vidéos et commentaires, file d'administration, retrait/rétablissement des vidéos (Video, Feed) et retrait des commentaires, décisions journalisées. Désactivation des comptes (Keycloak, profil, fil) et des hashtags livrée. Reste : service Moderation dédié, masquage des commentaires d'un compte désactivé.
 - [ ] User/Chat : U18, blocage effectivement appliqué ; U21, persistance, reconnexion et déduplication.
 - [ ] U22 : fermeture de compte orchestrée avec confirmations et rétention définie.

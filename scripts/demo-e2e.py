@@ -130,6 +130,10 @@ def main():
     assert status == 200, "Profile unavailable"
     ok(f"token issued by Keycloak; profile {profile['subject'][:8]}… created or read through the Gateway.")
 
+    status, skills = http("GET", "/v1/skills?limit=1", token)
+    assert status == 200 and skills["items"], "No active skill in the catalogue"
+    skill_id = skills["items"][0]["id"]
+
     try:
         step("2. Upload d'un clip vers le bucket S3 privé")
         with tempfile.TemporaryDirectory(prefix="youscout-demo-") as directory:
@@ -137,7 +141,7 @@ def main():
             run([shutil.which("ffmpeg") or "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
                  "testsrc2=size=320x240:rate=24", "-t", "3", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-y", str(clip)])
             status, ticket = http("POST", "/v1/videos/uploads", token,
-                                  {"title": "Démo YouScout", "contentType": "video/mp4", "sizeBytes": clip.stat().st_size},
+                                  {"title": "Démo YouScout", "contentType": "video/mp4", "sizeBytes": clip.stat().st_size, "skillIds": [skill_id]},
                                   {"Idempotency-Key": idempotency})
             assert status == 201, f"Upload ticket refused ({status})"
             video_id = str(uuid.UUID(ticket["id"]))
@@ -176,6 +180,13 @@ def main():
         status, comments = http("GET", f"/v1/social/videos/{video_id}/comments", token)
         assert [c["id"] for c in comments] == [comment["id"]]
         ok("like counted once and comment stored by Social (video checked with Video).")
+        # Rating lit les compétences de la vidéo dans Video : la compétence associée passe ce contrôle,
+        # puis le propriétaire est refusé (403) ; une compétence absente de la vidéo donne 404.
+        assert http("PUT", f"/v1/ratings/videos/{video_id}/skills/{skill_id}", token, {"score": 4})[0] == 403
+        assert http("PUT", f"/v1/ratings/videos/{video_id}/skills/{uuid.uuid4()}", token, {"score": 4})[0] == 404
+        status, ratings = http("GET", f"/v1/ratings/videos/{video_id}", token)
+        assert status == 200 and ratings["skills"] == []
+        ok("Rating checks the video's skills with Video and refuses a rating of one's own video.")
 
         step("6. Robustesse : arrêt du worker, rejeu des événements, aucun doublon")
         uploaded = kafka_records("video.uploaded.v1", video_id)

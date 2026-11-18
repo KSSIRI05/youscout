@@ -171,6 +171,18 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+  rating-db:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: youscout_rating
+      POSTGRES_USER: youscout_rating
+      POSTGRES_PASSWORD: ${RATING_DB_PASSWORD:?Run init-env.py --upgrade first}
+    volumes: [rating-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U youscout_rating -d youscout_rating']
+      interval: 5s
+      timeout: 3s
+      retries: 20
   # Video identifie le joueur, persiste les métadonnées et signe les demandes PUT.
   video:
     profiles: [video]
@@ -239,6 +251,24 @@ services:
     depends_on:
       social-db: {condition: service_healthy}
       keycloak: {condition: service_healthy}
+  # Notes de compétences (U15) ; comme Social, les écritures exigent Video (profil video) et User.
+  rating:
+    build:
+      context: ../..
+      dockerfile: infra/docker/service.Dockerfile
+      args: {MODULE: rating}
+    environment:
+      SERVER_PORT: '8080'
+      RATING_DB_URL: jdbc:postgresql://rating-db:5432/youscout_rating
+      RATING_DB_USERNAME: youscout_rating
+      RATING_DB_PASSWORD: ${RATING_DB_PASSWORD:?Run init-env.py --upgrade first}
+      USER_SERVICE_URL: http://user:8080
+      VIDEO_SERVICE_URL: http://video:8080
+      OIDC_ISSUER: http://localhost:8180/realms/youscout
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
+    depends_on:
+      rating-db: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
   # Point d’entrée des API sur localhost ; attend que les services dépendants soient sains.
   gateway:
     build:
@@ -251,6 +281,7 @@ services:
       VIDEO_SERVICE_URL: http://video:8080
       FEED_SERVICE_URL: http://feed:8080
       SOCIAL_SERVICE_URL: http://social:8080
+      RATING_SERVICE_URL: http://rating:8080
       OIDC_ISSUER: http://localhost:8180/realms/youscout
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
     ports: ['127.0.0.1:8080:8080']
@@ -258,6 +289,7 @@ services:
       user: {condition: service_healthy}
       skill: {condition: service_healthy}
       social: {condition: service_healthy}
+      rating: {condition: service_healthy}
       keycloak: {condition: service_healthy}
 # Les volumes survivent aux redémarrages et à docker compose down sans option -v.
 volumes:
@@ -269,3 +301,4 @@ volumes:
   feed-data:
   feed-redis-data:
   social-data:
+  rating-data:

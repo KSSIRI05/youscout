@@ -105,6 +105,9 @@ class PublicationIntegrationTest {
         assertThat(get(path, null).statusCode()).isEqualTo(401);
         assertThat(get(path, oidc.roleToken()).statusCode()).isEqualTo(403);
         assertThat(get(path, bob).statusCode()).isEqualTo(404);
+        UUID skill = UUID.randomUUID();
+        mongo.updateFirst(Query.query(Criteria.where("_id").is(id.toString())), new org.springframework.data.mongodb.core.query.Update()
+            .set("skills", List.of(new Document("id", skill.toString()).append("name", "Dribble").append("position", 0))), "videos");
         publish(id, oidc.profileToken("alice", null, "alice"), null);
         var response = get(path, bob);
         assertThat(response.statusCode()).isEqualTo(200);
@@ -112,6 +115,7 @@ class PublicationIntegrationTest {
         assertThat(body.read("$.id", String.class)).isEqualTo(id.toString());
         assertThat(body.read("$.ownerSubject", String.class)).isEqualTo("alice");
         assertThat(body.read("$.publishedAt", String.class)).isNotBlank();
+        assertThat(body.read("$.skillIds", List.class)).containsExactly(skill.toString());
         assertThat(response.body()).doesNotContain("s3", "bucket", "X-Amz");
     }
     @Test void deletionHidesTheVideoAndRecordsOneEventEvenWhenRepeated() throws Exception {
