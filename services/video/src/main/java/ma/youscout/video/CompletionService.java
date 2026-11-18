@@ -26,10 +26,10 @@ class CompletionService {
 
     public Confirmation complete(UUID id, String owner) {
         VideoUpload video = videos.lockOwned(id, owner).orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Vid?o introuvable."));
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Vidéo introuvable."));
         if (video.status().equals("UPLOADED")) return response(video);
         if (!video.status().equals("PENDING_UPLOAD")) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cette vid?o ne peut pas ?tre confirm?e.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cette vidéo ne peut pas être confirmée.");
         }
 
         String leaseToken = null;
@@ -43,13 +43,13 @@ class CompletionService {
                 break;
             }
             video = videos.lockOwned(id, owner).orElseThrow(() ->
-                    new ResponseStatusException(HttpStatus.NOT_FOUND, "Vid?o introuvable."));
+                    new ResponseStatusException(HttpStatus.NOT_FOUND, "Vidéo introuvable."));
             if (video.status().equals("UPLOADED")) return response(video);
             if (!video.status().equals("PENDING_UPLOAD")) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Cette vid?o ne peut pas ?tre confirm?e.");
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Cette vidéo ne peut pas être confirmée.");
             }
             if (System.nanoTime() >= deadline) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "La confirmation de cette vid?o est toujours en cours.");
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "La confirmation de cette vidéo est toujours en cours.");
             }
             try {
                 Thread.sleep(25);
@@ -63,10 +63,10 @@ class CompletionService {
             var object = inspect(video);
             if (object.contentLength() == null || object.contentLength() != video.sizeBytes()
                     || !video.contentType().equals(object.contentType())) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Taille ou type d?clar? du fichier incorrect.");
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Taille ou type déclaré du fichier incorrect.");
             }
             if (object.eTag() == null || object.eTag().isBlank()) {
-                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "M?tadonn?es S3 temporairement indisponibles.");
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Métadonnées S3 temporairement indisponibles.");
             }
             return completionTransaction.confirm(video.id(), owner, object.eTag(), leaseToken);
         } finally {
