@@ -135,6 +135,99 @@ paths:
         '403': {description: A block exists between sender and recipient}
         '404': {description: Recipient profile unknown}
         '503': {description: User unavailable}
+  /v1/social/comments/{commentId}/reports:
+    post:
+      summary: Report a visible comment (U17), once per account
+      parameters:
+        - {in: path, name: commentId, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: {type: string, minLength: 1, maxLength: 500}
+      responses:
+        '202': {description: Report stored (a repeated report by the same account is ignored)}
+        '404': {description: Comment unknown or already removed}
+  /v1/social/admin/reports:
+    get:
+      summary: Moderation queue grouped by target (A03); requires role admin
+      parameters:
+        - {in: query, name: type, schema: {type: string, enum: [VIDEO, COMMENT], default: VIDEO}}
+        - {in: query, name: status, schema: {type: string, enum: [OPEN, REVIEWED, DISMISSED], default: OPEN}}
+        - {in: query, name: offset, schema: {type: integer, minimum: 0, maximum: 10000, default: 0}}
+      responses:
+        '200':
+          description: Up to 20 targets, most recently reported first, each with its report count and 5 latest reasons
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hasMore]
+                properties:
+                  hasMore: {type: boolean}
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [type, targetId, videoId, reportCount, firstReportedAt, lastReportedAt, reports]
+                      properties:
+                        type: {type: string, enum: [VIDEO, COMMENT]}
+                        targetId: {type: string, format: uuid}
+                        videoId: {type: string, format: uuid}
+                        commentBody: {type: string, nullable: true}
+                        commentAuthor: {type: string, nullable: true}
+                        commentRemoved: {type: boolean}
+                        reportCount: {type: integer, minimum: 1}
+                        firstReportedAt: {type: string, format: date-time}
+                        lastReportedAt: {type: string, format: date-time}
+                        reports:
+                          type: array
+                          maxItems: 5
+                          items:
+                            type: object
+                            properties:
+                              reporterSubject: {type: string}
+                              reason: {type: string}
+                              createdAt: {type: string, format: date-time}
+        '403': {description: Role admin required}
+  /v1/social/admin/reports/{type}/{targetId}/decision:
+    post:
+      summary: Close every open report of a target as DISMISSED or ACTION_TAKEN (A04); audited
+      parameters:
+        - {in: path, name: type, required: true, schema: {type: string, enum: [VIDEO, COMMENT]}}
+        - {in: path, name: targetId, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: {type: string, enum: [DISMISSED, ACTION_TAKEN]}
+                note: {type: string, maxLength: 500}
+      responses:
+        '200': {description: 'Decision recorded: targetType, targetId, decision, reportsClosed'}
+        '404': {description: No open report for this target}
+  /v1/social/admin/comments/{commentId}/remove:
+    post:
+      summary: Remove a comment from every read and close its open reports (A04); idempotent and audited
+      parameters:
+        - {in: path, name: commentId, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: {type: string, maxLength: 500}
+      responses:
+        '200': {description: 'Comment removed: targetType, targetId, decision COMMENT_REMOVED, reportsClosed'}
+        '404': {description: Comment unknown}
 components:
   parameters:
     videoId:

@@ -37,7 +37,7 @@ class SocialIntegrationTest {
     }
     @BeforeEach void clear() {
         oidc.reset();
-        jdbc.update("TRUNCATE video_likes, video_comments, video_reports, direct_messages");
+        jdbc.update("TRUNCATE moderation_decisions, comment_reports, video_likes, video_comments, video_reports, direct_messages");
     }
     @AfterAll static void cleanup() { client.close(); oidc.server.stop(0); }
 

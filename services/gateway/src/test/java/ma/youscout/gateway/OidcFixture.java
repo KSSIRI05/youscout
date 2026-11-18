@@ -33,7 +33,7 @@ final class OidcFixture {
                 e.getResponseHeaders().set("Content-Type", "application/json");
                 e.sendResponseHeaders(200, body.length); e.getResponseBody().write(body); e.close();
             });
-            for (String path : java.util.List.of("/v1/skills", "/v1/hashtags")) {
+            for (String path : java.util.List.of("/v1/skills", "/v1/hashtags", "/v1/social")) {
                 server.createContext(path, e -> {
                     authorization.set(e.getRequestHeaders().getFirst("Authorization"));
                     byte[] body="{\"service\":\"stub-catalogue\"}".getBytes(StandardCharsets.UTF_8);

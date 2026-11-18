@@ -7,6 +7,15 @@ Service de persistance des interactions communautaires. Les requêtes nécessite
 - `DELETE /v1/social/comments/{commentId}` : supprimer son commentaire, ou un commentaire publié sur sa propre vidéo (U13).
 - `POST /v1/social/videos/{videoId}/reports` : créer un signalement (un par compte et par vidéo).
 - `GET /v1/social/messages?with={subject}`, `POST /v1/social/messages` : consulter et envoyer les messages persistés d'une conversation.
+- `POST /v1/social/comments/{commentId}/reports` : signaler un commentaire visible (U17), un par compte.
+
+### Modération (rôle `admin`, contrôlé par la Gateway et par Social)
+
+- `GET /v1/social/admin/reports?type=VIDEO|COMMENT&status=OPEN|REVIEWED|DISMISSED&offset=` : file des cibles signalées, la plus récente d'abord, avec le nombre de signalements et les 5 derniers motifs ; pour un commentaire, son texte, son auteur et sa vidéo (A03).
+- `POST /v1/social/admin/reports/{type}/{targetId}/decision` : `DISMISSED` (sans suite) ou `ACTION_TAKEN` ferme tous les signalements ouverts de la cible (A04).
+- `POST /v1/social/admin/comments/{commentId}/remove` : retire le commentaire de toutes les lectures et ferme ses signalements ; un nouvel appel ne change rien.
+
+Chaque décision enregistre l'administrateur (`sub` du jeton), la date, une note facultative et le nombre de signalements fermés dans `moderation_decisions`. Les signalements fermés gardent `decided_by` et `decided_at`.
 
 Le contrat complet est [social.yaml](../../contracts/openapi/social.yaml).
 
