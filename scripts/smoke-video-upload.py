@@ -33,6 +33,12 @@ def compose(*args):
     return result.stdout.strip()
 
 
+def mongo(expression):
+    # Video conserve ses métadonnées et son outbox dans MongoDB (replica set) depuis la migration.
+    return compose("exec", "-T", "video-mongo", "mongosh", "mongodb://localhost:27017/youscout_video?replicaSet=rs0",
+                   "--quiet", "--eval", expression)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--put-object", action="store_true", help="Write a tiny test object to real S3, then delete it using the provisioning role.")
@@ -94,15 +100,13 @@ def main():
             assert status == 200 and completed_replay == confirmation, "Completion retry changed persisted metadata"
         else:
             assert status == 200 and replay["id"] == upload_id, "Retry did not preserve the pending video"
-        count = compose("exec", "-T", "video-db", "psql", "-U", "youscout_video", "-d", "youscout_video", "-Atc",
-                        f"SELECT count(*) FROM videos WHERE id = '{upload_id}' AND idempotency_key = '{key}'")
+        count = mongo(f'print(db.videos.countDocuments({{_id: "{upload_id}", idempotencyKey: "{key}"}}));')
         assert count == "1", "Expected exactly one persistent video"
         if options.verify_outbox:
             deadline = time.monotonic() + 45
             while time.monotonic() < deadline:
-                published = compose("exec", "-T", "video-db", "psql", "-U", "youscout_video", "-d", "youscout_video", "-Atc",
-                    f"SELECT count(*) FROM outbox_events WHERE aggregate_id = '{upload_id}' AND event_type = 'VideoUploaded' "
-                    f"AND payload->'data'->>'videoId' = '{upload_id}' AND published_at IS NOT NULL")
+                published = mongo(f'print(db.video_outbox.countDocuments({{aggregateId: "{upload_id}", eventType: "VideoUploaded", '
+                                  f'"payload.data.videoId": "{upload_id}", publishedAt: {{$ne: null}}}}));')
                 if published == "1":
                     break
                 time.sleep(1)
@@ -120,10 +124,10 @@ def main():
                                      "--profile", "youscout-terraform", "--region", "us-east-1", "--no-cli-pager"], capture_output=True)
             if result.returncode:
                 raise RuntimeError("Temporary S3 object cleanup failed; inspect the latest smoke fixture.")
-        compose("exec", "-T", "video-db", "psql", "-U", "youscout_video", "-d", "youscout_video", "-c",
-                f"DELETE FROM outbox_events WHERE aggregate_id IN (SELECT id FROM videos WHERE idempotency_key = '{key}' AND title = 'Temporary upload smoke')")
-        compose("exec", "-T", "video-db", "psql", "-U", "youscout_video", "-d", "youscout_video", "-c",
-                f"DELETE FROM videos WHERE idempotency_key = '{key}' AND title = 'Temporary upload smoke'")
+        # Seul le document créé par ce smoke (clé d'idempotence et titre) et ses événements sont supprimés.
+        mongo(f'const ids = db.videos.find({{idempotencyKey: "{key}", title: "Temporary upload smoke"}}).toArray().map(v => v._id); '
+              f'db.video_outbox.deleteMany({{aggregateId: {{$in: ids}}}}); '
+              f'db.videos.deleteMany({{_id: {{$in: ids}}}}); print("removed");')
         print("Temporary smoke fixtures removed; no tokens or signed URLs logged.")
 
 
