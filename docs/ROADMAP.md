@@ -20,8 +20,8 @@ Auth (Keycloak), User, Video, Feed, Interaction, Skill/Hashtag ; Gateway, Kafka,
 - [ ] U19-U20 : suivre/ne plus suivre utilisateurs et hashtags.
 - [ ] A05 : interface admin minimale pour le catalogue de skills, avec rôle admin. Console React livrée dans `apps/admin` ; reste la validation sur la pile intégrée.
 - [ ] Feed chronologique avec découverte simple ; fan-out hybride non requis dans cette première livraison.
-- [ ] Démontrer connexion -> upload -> transcodage -> publication -> interaction -> suppression.
-- [ ] Arrêter un worker et rejouer un événement ; vérifier absence de doublon et état utilisateur cohérent.
+- [ ] Démontrer connexion -> upload -> transcodage -> publication -> interaction -> suppression. Scénario automatisé : [`scripts/demo-e2e.py`](DEMO.md), réussi sur la pile locale avec S3 réel le 18 novembre 2026.
+- [ ] Arrêter un worker et rejouer un événement ; vérifier absence de doublon et état utilisateur cohérent. Couvert par l'étape 6 de la démonstration.
 
 Ce MVP sert à valider le socle ; il ne couvre pas encore tout le périmètre produit. Les signalements et la modération globale sont à livrer avant le lancement public envisagé.
 

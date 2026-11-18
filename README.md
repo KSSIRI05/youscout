@@ -53,6 +53,7 @@ User applique alors ses migrations d'outbox et de verrouillage des relations ; F
 | [Sécurité et modération](docs/SECURITE_ET_MODERATION.md) | Authentification, blocage, retrait et fermeture de compte |
 | [Roadmap](docs/ROADMAP.md) | MVP, phases suivantes et critères de démonstration |
 | [Déploiement](docs/DEPLOYMENT.md) | Compose, Kubernetes et cible cloud |
+| [Démonstration](docs/DEMO.md) | Parcours complet du MVP sur la pile locale avec S3 réel |
 | [ADRs](docs/adr/README.md) | Onze décisions retenues (ADR-001 à ADR-011), dont la stack de référence |
 | [Contribution](CONTRIBUTING.md) | Organisation et vérifications |
 
