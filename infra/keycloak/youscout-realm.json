@@ -183,6 +183,22 @@
         "email"
       ],
       "optionalClientScopes": []
+    },
+    {
+      "clientId": "youscout-user-admin",
+      "protocol": "openid-connect",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "${USER_ADMIN_CLIENT_SECRET}",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": true,
+      "defaultClientScopes": [
+        "basic"
+      ],
+      "optionalClientScopes": []
     }
   ],
   "verifyEmail": false,

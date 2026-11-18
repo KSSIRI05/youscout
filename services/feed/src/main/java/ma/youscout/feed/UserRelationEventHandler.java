@@ -17,6 +17,8 @@ class UserRelationEventHandler {
         var event = decoder.decode(record.key(), record.value());
         if (UserRelationEventDecoder.SNAPSHOT_COMPLETE.equals(event.eventType())) {
             projection.markSnapshotComplete();
+        } else if (UserRelationEventDecoder.ACCOUNT_CHANGED.equals(event.eventType())) {
+            projection.accountChanged(event.data().actorSubject(), event.data().action().equals("DEACTIVATE"));
         } else {
             projection.apply(event.data());
         }

@@ -22,6 +22,12 @@ spring:
 server:
   port: ${SERVER_PORT:8081}
 youscout:
+  # Compte de service Keycloak pour désactiver/réactiver un compte (A04) ; vide = fonctionnalité indisponible (503).
+  keycloak-admin:
+    base-url: ${KEYCLOAK_ADMIN_URL:}
+    realm: youscout
+    client-id: youscout-user-admin
+    client-secret: ${USER_ADMIN_CLIENT_SECRET:}
   user-outbox:
     enabled: ${USER_RELATIONSHIPS_ENABLED:false}
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}

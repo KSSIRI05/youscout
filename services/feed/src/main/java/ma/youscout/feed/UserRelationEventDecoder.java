@@ -9,6 +9,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 class UserRelationEventDecoder {
     static final String SNAPSHOT_COMPLETE = "UserRelationshipsSnapshotComplete";
+    static final String ACCOUNT_CHANGED = "UserAccountChanged";
     private static final int MAX_EVENT_BYTES = 8192;
     private final JsonMapper json = JsonMapper.builder()
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
@@ -30,6 +31,15 @@ class UserRelationEventDecoder {
             if (SNAPSHOT_COMPLETE.equals(type)) {
                 if (!data.isObject() || data.size() != 0) invalid();
                 return new UserRelationEvent(id, type, 1, occurredAt, "user-service", null);
+            }
+            // UserAccountChanged v1 : { subject, status } ; représenté comme une action sur le compte lui-même.
+            if (ACCOUNT_CHANGED.equals(type)) {
+                if (!data.isObject() || data.size() != 2 || !data.has("subject") || !data.has("status")) invalid();
+                String status = data.path("status").asText();
+                if (!Set.of("ACTIVE", "DEACTIVATED").contains(status)) invalid();
+                String account = subject(data.path("subject").asText());
+                return new UserRelationEvent(id, type, 1, occurredAt, "user-service",
+                        new UserRelationEvent.Data(status.equals("ACTIVE") ? "REACTIVATE" : "DEACTIVATE", account, account));
             }
             if (!"UserRelationChanged".equals(type) || !data.isObject() || data.size() != 3
                     || !data.has("action") || !data.has("actorSubject") || !data.has("targetSubject")) invalid();

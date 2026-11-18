@@ -6,21 +6,59 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["eventId", "eventType", "eventVersion", "occurredAt", "producer", "data"],
+      "required": [
+        "eventId",
+        "eventType",
+        "eventVersion",
+        "occurredAt",
+        "producer",
+        "data"
+      ],
       "properties": {
-        "eventId": {"type": "string", "format": "uuid"},
-        "eventType": {"const": "UserRelationChanged"},
-        "eventVersion": {"const": 1},
-        "occurredAt": {"type": "string", "format": "date-time"},
-        "producer": {"const": "user-service"},
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "eventType": {
+          "const": "UserRelationChanged"
+        },
+        "eventVersion": {
+          "const": 1
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "producer": {
+          "const": "user-service"
+        },
         "data": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["action", "actorSubject", "targetSubject"],
+          "required": [
+            "action",
+            "actorSubject",
+            "targetSubject"
+          ],
           "properties": {
-            "action": {"enum": ["FOLLOW", "UNFOLLOW", "BLOCK", "UNBLOCK"]},
-            "actorSubject": {"type": "string", "minLength": 1, "maxLength": 255},
-            "targetSubject": {"type": "string", "minLength": 1, "maxLength": 255}
+            "action": {
+              "enum": [
+                "FOLLOW",
+                "UNFOLLOW",
+                "BLOCK",
+                "UNBLOCK"
+              ]
+            },
+            "actorSubject": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "targetSubject": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
           }
         }
       }
@@ -28,15 +66,90 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["eventId", "eventType", "eventVersion", "occurredAt", "producer", "data"],
+      "required": [
+        "eventId",
+        "eventType",
+        "eventVersion",
+        "occurredAt",
+        "producer",
+        "data"
+      ],
       "properties": {
-        "eventId": {"type": "string", "format": "uuid"},
-        "eventType": {"const": "UserRelationshipsSnapshotComplete"},
-        "eventVersion": {"const": 1},
-        "occurredAt": {"type": "string", "format": "date-time"},
-        "producer": {"const": "user-service"},
-        "data": {"type": "object", "maxProperties": 0}
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "eventType": {
+          "const": "UserRelationshipsSnapshotComplete"
+        },
+        "eventVersion": {
+          "const": 1
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "producer": {
+          "const": "user-service"
+        },
+        "data": {
+          "type": "object",
+          "maxProperties": 0
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eventId",
+        "eventType",
+        "eventVersion",
+        "occurredAt",
+        "producer",
+        "data"
+      ],
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "eventType": {
+          "const": "UserAccountChanged"
+        },
+        "eventVersion": {
+          "const": 1
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "producer": {
+          "const": "user-service"
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "subject",
+            "status"
+          ],
+          "properties": {
+            "subject": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "status": {
+              "enum": [
+                "ACTIVE",
+                "DEACTIVATED"
+              ]
+            }
+          }
+        }
       }
     }
-  ]
+  ],
+  "description": "UserAccountChanged (A04) shares the topic and key, so it is ordered with relationship events; consumers hide a DEACTIVATED account's content."
 }

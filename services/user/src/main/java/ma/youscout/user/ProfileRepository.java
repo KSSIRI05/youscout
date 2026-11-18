@@ -29,6 +29,11 @@ class ProfileRepository {
         var rows = jdbc.query("SELECT * FROM user_profiles WHERE subject = ?", this::map, subject);
         return rows.isEmpty() ? null : rows.getFirst();
     }
+    /** Un compte désactivé est introuvable pour les autres joueurs : profil public, abonnement et messages. */
+    UserProfile findActiveIfPresent(String subject) {
+        var rows = jdbc.query("SELECT * FROM user_profiles WHERE subject = ? AND account_status = 'ACTIVE'", this::map, subject);
+        return rows.isEmpty() ? null : rows.getFirst();
+    }
     List<String> following(String subject) {
         return jdbc.queryForList("SELECT followed_subject FROM user_follows WHERE follower_subject = ? ORDER BY created_at DESC", String.class, subject);
     }

@@ -23,7 +23,7 @@ class SecurityIntegrationTest {
     @LocalServerPort int port;
     WebTestClient client;
     // Réinitialise le contexte du test pour rendre les scénarios indépendants.
-    @BeforeEach void setup() { jdbc.update("DELETE FROM user_profiles"); client = WebTestClient.bindToServer().baseUrl("http://127.0.0.1:" + port).build(); }
+    @BeforeEach void setup() { jdbc.update("DELETE FROM account_audit"); jdbc.update("DELETE FROM user_profiles"); client = WebTestClient.bindToServer().baseUrl("http://127.0.0.1:" + port).build(); }
     @AfterAll static void cleanup() { oidc.server.stop(0); }
     // Remplace les adresses de production par celles des ressources temporaires du test.
     @DynamicPropertySource static void properties(DynamicPropertyRegistry r) {

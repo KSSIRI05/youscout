@@ -16,6 +16,10 @@ final class OidcFixture {
     final HttpServer server;
     final AtomicReference<String> requestId = new AtomicReference<>();
     final AtomicReference<String> authorization = new AtomicReference<>();
+    // Doublure de l'API d'administration Keycloak : jeton client_credentials puis appels enregistrés.
+    final java.util.List<String> keycloakCalls = new java.util.concurrent.CopyOnWriteArrayList<>();
+    final java.util.Set<String> keycloakMissing = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    volatile boolean keycloakDown;
     // La clé privée reste dans le test ; le serveur ne publie que sa partie publique.
     OidcFixture() {
         try {
@@ -32,6 +36,22 @@ final class OidcFixture {
                 byte[] body = "{\"service\":\"stub-user\"}".getBytes(StandardCharsets.UTF_8);
                 e.getResponseHeaders().set("Content-Type", "application/json");
                 e.sendResponseHeaders(200, body.length); e.getResponseBody().write(body); e.close();
+            });
+            server.createContext("/realms/youscout/protocol/openid-connect/token", e -> {
+                String form = new String(e.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+                boolean valid = form.contains("grant_type=client_credentials") && form.contains("client_id=youscout-user-admin")
+                    && form.contains("client_secret=test-admin-secret");
+                byte[] body = (valid ? "{\"access_token\":\"kc-admin-token\"}" : "{}").getBytes(StandardCharsets.UTF_8);
+                e.getResponseHeaders().set("Content-Type", "application/json");
+                e.sendResponseHeaders(valid && !keycloakDown ? 200 : 401, body.length); e.getResponseBody().write(body); e.close();
+            });
+            server.createContext("/admin/realms/youscout/users/", e -> {
+                String id = e.getRequestURI().getPath().split("/")[5];
+                String body = new String(e.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+                int status = keycloakDown ? 500 : !"Bearer kc-admin-token".equals(e.getRequestHeaders().getFirst("Authorization")) ? 401
+                    : keycloakMissing.contains(id) ? 404 : 204;
+                if (status == 204) keycloakCalls.add(e.getRequestMethod() + " " + e.getRequestURI().getPath().substring("/admin/realms/youscout".length()) + " " + body);
+                e.sendResponseHeaders(status, -1); e.close();
             });
             server.start();
         } catch (Exception e) { throw new IllegalStateException(e); }
