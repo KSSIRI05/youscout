@@ -311,6 +311,9 @@
           },
           "415": {
             "$ref": "#/components/responses/Error415"
+          },
+          "409": {
+            "description": "The hashtag exists but was deactivated by an admin."
           }
         },
         "requestBody": {
@@ -657,6 +660,135 @@
           }
         }
       }
+    },
+    "/v1/hashtags/admin": {
+      "get": {
+        "operationId": "listAdminHashtags",
+        "description": "Requires realm role admin. Every hashtag, including deactivated ones.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 80,
+              "default": ""
+            },
+            "description": "Normalized literal substring search; leading # is ignored."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HashtagPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          }
+        }
+      }
+    },
+    "/v1/hashtags/admin/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "patch": {
+        "operationId": "setHashtagActive",
+        "description": "Requires realm role admin. Deactivates or reactivates a hashtag; a change is audited.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "active"
+                ],
+                "properties": {
+                  "active": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated hashtag",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Hashtag"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -707,9 +839,11 @@
       "Hashtag": {
         "type": "object",
         "required": [
+          "active",
+          "createdAt",
           "id",
           "name",
-          "createdAt"
+          "updatedAt"
         ],
         "properties": {
           "id": {
@@ -721,6 +855,14 @@
             "maxLength": 50
           },
           "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "active": {
+            "type": "boolean",
+            "description": "false: deactivated by an admin, hidden from player reads and new selections."
+          },
+          "updatedAt": {
             "type": "string",
             "format": "date-time"
           }

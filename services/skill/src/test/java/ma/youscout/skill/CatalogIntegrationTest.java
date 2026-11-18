@@ -40,7 +40,7 @@ class CatalogIntegrationTest {
     @BeforeEach void setup() {
         client=WebTestClient.bindToServer().baseUrl("http://127.0.0.1:"+port).build();
         user=oidc.profileToken("alice","Alice",null);admin=oidc.roleToken("admin");
-        jdbc.update("DELETE FROM hashtag_follows");jdbc.update("DELETE FROM hashtags");jdbc.update("DELETE FROM skill_audit");jdbc.update("DELETE FROM skills");
+        jdbc.update("DELETE FROM hashtag_follows");jdbc.update("DELETE FROM hashtag_audit");jdbc.update("DELETE FROM hashtags");jdbc.update("DELETE FROM skill_audit");jdbc.update("DELETE FROM skills");
         jdbc.update("INSERT INTO skills(id,name,name_key) VALUES (?,'Dribble','dribble')",SEED);
     }
     @AfterAll static void close() { oidc.server.stop(0); }
@@ -50,8 +50,9 @@ class CatalogIntegrationTest {
         return request.exchange();
     }
     UUID tag(String name) {
-        call("POST","/v1/hashtags",user,"{\"name\":\""+name+"\"}").expectStatus().isCreated();
-        return jdbc.queryForObject("SELECT id FROM hashtags",UUID.class);
+        var created=call("POST","/v1/hashtags",user,"{\"name\":\""+name+"\"}").expectStatus().isCreated()
+            .expectBody(java.util.Map.class).returnResult().getResponseBody();
+        return UUID.fromString((String) created.get("id"));
     }
     // Vérifie la disponibilité de l’application et l’historique de migration.
     @Test void migrationAndHealth() {
@@ -120,6 +121,35 @@ class CatalogIntegrationTest {
         call("GET","/v1/hashtags/not-a-uuid",user,null).expectStatus().isBadRequest();
         for(String query:new String[]{"limit=0","limit=101","offset=-1","offset=10001","limit=invalid","q="+"a".repeat(81)})
             call("GET","/v1/skills?"+query,user,null).expectStatus().isBadRequest();
+    }
+    // A04 : un hashtag désactivé disparaît des lectures joueur, ne peut plus être suivi ni recréé, et reste visible de l'admin.
+    @Test void deactivatedHashtagsDisappearForPlayersAndAreAudited() {
+        UUID id=tag("violent"), kept=tag("football");
+        call("PUT","/v1/hashtags/"+id+"/follow",user,null).expectStatus().isNoContent();
+        call("PATCH","/v1/hashtags/admin/"+id,admin,"{\"active\":false}").expectStatus().isOk().expectBody().jsonPath("$.active").isEqualTo(false);
+        call("PATCH","/v1/hashtags/admin/"+id,admin,"{\"active\":false}").expectStatus().isOk();
+        call("GET","/v1/hashtags/"+id,user,null).expectStatus().isNotFound();
+        call("GET","/v1/hashtags?q=",user,null).expectStatus().isOk().expectBody().jsonPath("$.items.length()").isEqualTo(1)
+            .jsonPath("$.items[0].id").isEqualTo(kept.toString());
+        call("GET","/v1/hashtags/following",user,null).expectStatus().isOk().expectBody().jsonPath("$.items.length()").isEqualTo(0);
+        call("PUT","/v1/hashtags/"+id+"/follow",user,null).expectStatus().isNotFound();
+        call("DELETE","/v1/hashtags/"+id+"/follow",user,null).expectStatus().isNoContent();
+        call("POST","/v1/hashtags",user,"{\"name\":\"#Violent\"}").expectStatus().isEqualTo(409);
+        call("GET","/v1/hashtags/admin?q=viol",admin,null).expectStatus().isOk().expectBody().jsonPath("$.items[0].active").isEqualTo(false);
+        call("PATCH","/v1/hashtags/admin/"+id,admin,"{\"active\":true}").expectStatus().isOk();
+        call("GET","/v1/hashtags/"+id,user,null).expectStatus().isOk();
+        assertThat(jdbc.queryForList("SELECT action FROM hashtag_audit ORDER BY occurred_at",String.class)).containsExactly("DEACTIVATE","REACTIVATE");
+    }
+    // Seul l'admin modifie un hashtag ; le corps est strictement contrôlé.
+    @Test void hashtagAdministrationRequiresAdminAndValidInput() {
+        UUID id=tag("football");
+        call("GET","/v1/hashtags/admin",user,null).expectStatus().isForbidden();
+        call("PATCH","/v1/hashtags/admin/"+id,user,"{\"active\":false}").expectStatus().isForbidden();
+        for(String body:new String[]{"{}","{\"active\":null}","{\"active\":\"no\"}","{\"active\":false,\"name\":\"x\"}"})
+            call("PATCH","/v1/hashtags/admin/"+id,admin,body).expectStatus().isBadRequest();
+        call("PATCH","/v1/hashtags/admin/"+UUID.randomUUID(),admin,"{\"active\":false}").expectStatus().isNotFound();
+        assertThat(jdbc.queryForObject("SELECT active FROM hashtags WHERE id=?",Boolean.class,id)).isTrue();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM hashtag_audit",Integer.class)).isZero();
     }
     // Des écritures compatibles et des casses différentes renvoient le même hashtag.
     @Test void hashtagsNormalizeAndReuseCanonicalIds() {

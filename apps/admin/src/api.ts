@@ -11,6 +11,9 @@ export type Skill = {
 export type SkillPatch = Partial<Pick<Skill, "name" | "description" | "active">>;
 export type SkillPage = { items: Skill[]; hasMore: boolean };
 
+export type Hashtag = { id: string; name: string; active: boolean; createdAt: string; updatedAt: string };
+export type HashtagPage = { items: Hashtag[]; hasMore: boolean };
+
 export type ReportType = "VIDEO" | "COMMENT";
 export type ReportStatus = "OPEN" | "REVIEWED" | "DISMISSED";
 export type Report = { reporterSubject: string; reason: string; createdAt: string };
@@ -66,6 +69,16 @@ export class AdminApi {
 
   updateSkill(id: string, patch: SkillPatch): Promise<Skill> {
     return this.request("PATCH", `/v1/skills/admin/${encodeURIComponent(id)}`, patch);
+  }
+
+  async listHashtags(q: string, offset: number): Promise<HashtagPage> {
+    const params = new URLSearchParams({ q, limit: String(PAGE_SIZE + 1), offset: String(offset) });
+    const page = await this.request<{ items: Hashtag[] }>("GET", `/v1/hashtags/admin?${params}`);
+    return { items: page.items.slice(0, PAGE_SIZE), hasMore: page.items.length > PAGE_SIZE };
+  }
+
+  setHashtagActive(id: string, active: boolean): Promise<Hashtag> {
+    return this.request("PATCH", `/v1/hashtags/admin/${encodeURIComponent(id)}`, { active });
   }
 
   // Modération : file de Social, actions sur les vidéos dans Video.

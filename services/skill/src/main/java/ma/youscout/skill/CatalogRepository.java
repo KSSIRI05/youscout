@@ -42,16 +42,25 @@ class CatalogRepository {
         int changed = jdbc.update("INSERT INTO hashtags(id,name) VALUES (?,?) ON CONFLICT(name) DO NOTHING", UUID.randomUUID(), name);
         return new EnsuredHashtag(jdbc.queryForObject("SELECT * FROM hashtags WHERE name=?", this::mapHashtag, name), changed == 1);
     }
-    Hashtag hashtag(UUID id) {
-        return jdbc.query("SELECT * FROM hashtags WHERE id=?", this::mapHashtag, id).stream().findFirst()
+    // Les lectures joueur ne voient que les hashtags actifs ; l'admin voit aussi les hashtags désactivés.
+    Hashtag hashtag(UUID id, boolean includeInactive) {
+        return jdbc.query("SELECT * FROM hashtags WHERE id=? AND (? OR active)", this::mapHashtag, id, includeInactive).stream().findFirst()
             .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Hashtag introuvable."));
     }
-    List<Hashtag> hashtags(String query, int limit, int offset) {
-        return jdbc.query("SELECT * FROM hashtags WHERE position(? in name)>0 ORDER BY name,id LIMIT ? OFFSET ?", this::mapHashtag, query, limit, offset);
+    List<Hashtag> hashtags(String query, boolean includeInactive, int limit, int offset) {
+        return jdbc.query("SELECT * FROM hashtags WHERE (? OR active) AND position(? in name)>0 ORDER BY name,id LIMIT ? OFFSET ?",
+            this::mapHashtag, includeInactive, query, limit, offset);
+    }
+    Hashtag setHashtagActive(UUID id, boolean active) {
+        return jdbc.query("UPDATE hashtags SET active=?, updated_at=clock_timestamp() WHERE id=? RETURNING *", this::mapHashtag, active, id)
+            .stream().findFirst().orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Hashtag introuvable."));
+    }
+    void auditHashtag(UUID hashtagId, String actor, String action) {
+        jdbc.update("INSERT INTO hashtag_audit(id,hashtag_id,actor_subject,action) VALUES (?,?,?,?)", UUID.randomUUID(), hashtagId, actor, action);
     }
     // Le filtre subject empêche de consulter les abonnements d’un autre compte.
     List<Hashtag> following(String subject, int limit, int offset) {
-        return jdbc.query("SELECT h.* FROM hashtags h JOIN hashtag_follows f ON f.hashtag_id=h.id WHERE f.subject=? ORDER BY h.name,h.id LIMIT ? OFFSET ?",
+        return jdbc.query("SELECT h.* FROM hashtags h JOIN hashtag_follows f ON f.hashtag_id=h.id WHERE f.subject=? AND h.active ORDER BY h.name,h.id LIMIT ? OFFSET ?",
             this::mapHashtag, subject, limit, offset);
     }
     // La clé primaire (subject, hashtag_id) rend les abonnements répétés sans effet supplémentaire.
@@ -65,6 +74,7 @@ class CatalogRepository {
             row.getTimestamp("created_at").toInstant(), row.getTimestamp("updated_at").toInstant());
     }
     private Hashtag mapHashtag(ResultSet row, int index) throws SQLException {
-        return new Hashtag(row.getObject("id", UUID.class), row.getString("name"), row.getTimestamp("created_at").toInstant());
+        return new Hashtag(row.getObject("id", UUID.class), row.getString("name"), row.getBoolean("active"),
+            row.getTimestamp("created_at").toInstant(), row.getTimestamp("updated_at").toInstant());
     }
 }
