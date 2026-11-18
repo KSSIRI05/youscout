@@ -129,6 +129,14 @@ class SecurityIntegrationTest {
         client.options().uri("/v1/users/session").header("Origin", "https://untrusted.example")
             .header("Access-Control-Request-Method", "GET").exchange().expectStatus().isForbidden();
     }
+    // La console d'administration a sa propre origine et modifie le catalogue par PATCH.
+    @Test void corsPreflightAllowsTheAdminConsole() {
+        client.options().uri("/v1/skills/admin/00000000-0000-0000-0000-000000000001").header("Origin", "http://localhost:7358")
+            .header("Access-Control-Request-Method", "PATCH").header("Access-Control-Request-Headers", "authorization,content-type")
+            .exchange().expectStatus().isOk().expectHeader().valueEquals("Access-Control-Allow-Origin", "http://localhost:7358");
+        client.options().uri("/v1/skills/admin").header("Origin", "http://localhost:7359")
+            .header("Access-Control-Request-Method", "POST").exchange().expectStatus().isForbidden();
+    }
 
     // Sépare le simple jeton valide, le rôle user et le privilège admin.
     @Test void profileRequiresApplicationRoleAndAdminDiagnosticRequiresAdmin() {

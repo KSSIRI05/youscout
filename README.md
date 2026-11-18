@@ -78,7 +78,7 @@ L'application a deux modes. Le **mode démo** couvre le fil, la découverte, les
 
 La [maquette Figma](https://www.figma.com/design/SZIskR01SeNgOsSrAwiB9p) guide les couleurs, composants et parcours.
 
-Arborescence actuelle : `apps/mobile/`, `services/gateway/`, `services/user/`, `services/skill/`, `services/video/`, `services/feed/`, `services/media-worker/`, `infra/`, `contracts/`, `scripts/`, `docs/` et les workflows mobile/backend. `apps/admin/` reste à créer.
+Arborescence actuelle : `apps/mobile/`, `apps/admin/`, `services/gateway/`, `services/user/`, `services/skill/`, `services/video/`, `services/feed/`, `services/media-worker/`, `infra/`, `contracts/`, `scripts/`, `docs/` et les workflows mobile/backend/admin. `apps/admin/` contient la console React d'administration du catalogue (A05) ; voir [son guide](apps/admin/README.md).
 
 ## Livraison du produit
 

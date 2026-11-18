@@ -18,7 +18,7 @@ Auth (Keycloak), User, Video, Feed, Interaction, Skill/Hashtag ; Gateway, Kafka,
 
 - [ ] U01-U14 : comptes, profils, vidéo galerie/caméra, description/tags/skills, suppression, feed, commentaires/réponses et likes.
 - [ ] U19-U20 : suivre/ne plus suivre utilisateurs et hashtags.
-- [ ] A05 : interface admin minimale pour le catalogue de skills, avec rôle admin.
+- [ ] A05 : interface admin minimale pour le catalogue de skills, avec rôle admin. Console React livrée dans `apps/admin` ; reste la validation sur la pile intégrée.
 - [ ] Feed chronologique avec découverte simple ; fan-out hybride non requis dans cette première livraison.
 - [ ] Démontrer connexion -> upload -> transcodage -> publication -> interaction -> suppression.
 - [ ] Arrêter un worker et rejouer un événement ; vérifier absence de doublon et état utilisateur cohérent.
