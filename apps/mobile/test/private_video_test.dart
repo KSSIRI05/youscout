@@ -109,6 +109,38 @@ void main() {
     expect(calls, 1);
     await tester.pumpWidget(const SizedBox());
   });
+  test('feed videos keep skill ids aligned with their names for rating', () {
+    final video = FeedVideo.fromJson({
+      'videoId': 'v1',
+      'title': 'Clip',
+      'publishedAt': '2026-11-01T00:00:00Z',
+      'ownerSubject': 'bob',
+      'skills': [
+        {'id': 's1', 'name': 'Dribble'},
+        {'id': 's2', 'name': 'Tir'},
+      ],
+      'hashtags': [],
+    });
+    expect(video.skills, ['Dribble', 'Tir']);
+    expect(video.skillIds, ['s1', 's2']);
+  });
+
+  test('skill ratings are indexed by skill with a readable summary', () {
+    final ratings = SkillRating.bySkill({
+      'videoId': 'v1',
+      'skills': [
+        {'skillId': 's1', 'count': 2, 'average': 3.5, 'myScore': 4},
+        {'skillId': 's2', 'count': 1, 'average': 5, 'myScore': null},
+      ],
+    });
+    expect(ratings['s1']!.myScore, 4);
+    expect(ratings['s1']!.label, '3.5 / 5 · 2 notes');
+    expect(ratings['s2']!.label, '5.0 / 5 · 1 note');
+    expect(ratings['s2']!.myScore, isNull);
+    expect(ratings['s3'], isNull);
+    expect(const SkillRating().label, 'Pas encore notée');
+  });
+
   test('playback ticket rejects expired and insecure links', () {
     for (final data in [
       {...ticket(), 'videoUrl': 'http://storage.test/video'},

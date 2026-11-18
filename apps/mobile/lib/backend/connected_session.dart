@@ -195,6 +195,21 @@ class ConnectedSession extends ChangeNotifier {
   }) async => (await _request('GET', '/v1/social/$path', query: query) as List)
       .cast<Map<String, dynamic>>();
 
+  /// U15 : moyennes par compétence et note de l'appelant pour une vidéo.
+  Future<Map<String, dynamic>> videoRatings(String videoId) =>
+      _object('GET', '/v1/ratings/videos/${Uri.encodeComponent(videoId)}');
+
+  /// Note une compétence de 1 à 5 ; `score` null retire la note.
+  Future<Map<String, dynamic>> rateSkill(
+    String videoId,
+    String skillId,
+    int? score,
+  ) => _object(
+    score == null ? 'DELETE' : 'PUT',
+    '/v1/ratings/videos/${Uri.encodeComponent(videoId)}/skills/${Uri.encodeComponent(skillId)}',
+    body: score == null ? null : {'score': score},
+  );
+
   Future<Map<String, dynamic>> publishVideo(String id) =>
       videoRequest('/v1/videos/$id/publish');
 

@@ -57,6 +57,13 @@ spring:
               filters:
                 - RemoveRequestHeader=X-User-Id
                 - RemoveRequestHeader=X-User-Roles
+            - id: rating-service
+              uri: ${RATING_SERVICE_URL:http://localhost:8087}
+              predicates:
+                - Path=/v1/ratings/**
+              filters:
+                - RemoveRequestHeader=X-User-Id
+                - RemoveRequestHeader=X-User-Roles
 server:
   port: 8080
 # N’expose que les sondes de santé, sans détails internes dans les réponses.

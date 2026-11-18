@@ -28,6 +28,7 @@ class SecurityIntegrationTest {
         r.add("VIDEO_SERVICE_URL", oidc::base);
         r.add("FEED_SERVICE_URL", oidc::base);
         r.add("SOCIAL_SERVICE_URL", oidc::base);
+        r.add("RATING_SERVICE_URL", oidc::base);
     }
     @Test void uploadPostRequiresRoleAndAllowsIdempotencyCorsHeader() {
         client.post().uri("/v1/videos/uploads").exchange().expectStatus().isUnauthorized();
@@ -147,6 +148,15 @@ class SecurityIntegrationTest {
         String admin = oidc.roleToken("admin");
         client.post().uri(path).headers(h -> h.setBearerAuth(admin)).exchange().expectStatus().isOk();
         assertThat(oidc.authorization.get()).isEqualTo("Bearer " + admin);
+    }
+    @Test void ratingRoutesRequireAnApplicationRoleAndForwardTheToken() {
+        String path = "/v1/ratings/videos/00000000-0000-0000-0000-000000000001/skills/00000000-0000-0000-0000-000000000002";
+        client.put().uri(path).exchange().expectStatus().isUnauthorized();
+        client.put().uri(path).headers(h -> h.setBearerAuth(oidc.roleToken())).exchange().expectStatus().isForbidden();
+        String user = oidc.roleToken("user");
+        client.put().uri(path).headers(h -> h.setBearerAuth(user)).exchange().expectStatus().isOk();
+        assertThat(oidc.authorization.get()).isEqualTo("Bearer " + user);
+        client.get().uri("/v1/ratings/other").headers(h -> h.setBearerAuth(user)).exchange().expectStatus().isForbidden();
     }
     // La console d'administration a sa propre origine et modifie le catalogue par PATCH.
     @Test void corsPreflightAllowsTheAdminConsole() {

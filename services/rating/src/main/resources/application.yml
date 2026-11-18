@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: rating-service
+  datasource:
+    url: ${RATING_DB_URL:jdbc:postgresql://localhost:5438/youscout_rating}
+    username: ${RATING_DB_USERNAME:youscout_rating}
+    password: ${RATING_DB_PASSWORD}
+  flyway:
+    enabled: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER:http://localhost:8180/realms/youscout}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:http://localhost:8180/realms/youscout/protocol/openid-connect/certs}
+          audiences: youscout-api
+server:
+  port: ${SERVER_PORT:8087}
+# Video confirme la publication et les compétences de la vidéo ; User fournit les blocages.
+rating:
+  user-service-url: ${USER_SERVICE_URL:http://localhost:8081}
+  video-service-url: ${VIDEO_SERVICE_URL:http://localhost:8083}
+management:
+  endpoints.web.exposure.include: health
+  endpoint.health.show-details: never
+  endpoint.health.probes.enabled: true

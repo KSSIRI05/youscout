@@ -11,7 +11,7 @@ L'architecture cible reste celle de [ARCHITECTURE.md](ARCHITECTURE.md). Ce table
 | Video et media-worker | MongoDB en replica set pour metadonnees, etats et outbox (tests d'integration sur replica set Testcontainers) ; upload S3 prive, traitement FFmpeg, publication, suppression par le proprietaire avec `VideoDeleted`, retrait du fil par Feed, nettoyage S3 par le worker et bouton de suppression dans Flutter | HLS, CDN prive, reconciliation |
 | Feed | Projection VideoPublished, projection Redis des suivis/blocages, cache de pages versionne | Fan-out des publications par utilisateur, retrait de contenus, reconstruction automatisee de Redis |
 | Interaction, Chat, Moderation | Social agrege likes, commentaires avec reponses, signalements et messages persistants ; ecritures verifiees aupres de Video (publication) et User (blocages), suppression par le proprietaire de la video (U13), pagination par curseur ; moderation : signalement des commentaires, file admin, retrait de commentaires et de videos (VideoModerated, masquage dans Feed) avec decisions journalisees | Frontieres separees, migration MongoDB, chat WebSocket |
-| Rating | Absent | Service, regles de notation et persistance PostgreSQL |
+| Rating | Implemente (U15) | Evenement RatingChanged et prise en compte dans le classement du fil |
 | Notification | Absent | Service, appareils et push FCM/APNs |
 | Admin/Analytics | Absent | Dashboard, projections et mesures definies |
 | Exploitation | Compose local, CI, S3 Terraform, Kafka local | Kubernetes/staging, OTel/metrics/logs/traces, sauvegardes, restauration et charge |
