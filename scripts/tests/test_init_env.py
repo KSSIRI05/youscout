@@ -48,6 +48,19 @@ class InitEnvironmentTest(unittest.TestCase):
             self.assertNotEqual(0, result.returncode)
             self.assertEqual(once, env.read_text(encoding="utf-8"))
 
+    # Régression : un .env enregistré avec BOM ne doit pas faire régénérer sa première clé.
+    def test_upgrade_ignores_a_utf8_bom_on_the_first_key(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            script = root / "init-env.py"
+            shutil.copyfile(pathlib.Path(__file__).resolve().parents[2] / "infra/compose/init-env.py", script)
+            env = root / ".env"
+            env.write_bytes(b"\xef\xbb\xbfKEYCLOAK_DB_PASSWORD=keep-db\r\nUSER_DB_PASSWORD=keep-user\r\n")
+            subprocess.run([sys.executable, str(script), "--upgrade"], check=True, capture_output=True)
+            names = [line.split("=", 1)[0] for line in env.read_text(encoding="utf-8-sig").splitlines() if "=" in line]
+            self.assertEqual(1, names.count("KEYCLOAK_DB_PASSWORD"))
+            self.assertEqual(9, len(set(names)))
+
     def test_new_environment_contains_all_credentials(self):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)

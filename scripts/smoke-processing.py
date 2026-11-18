@@ -113,8 +113,12 @@ def main():
                     raise RuntimeError("Cleanup refused an unexpected derived fixture key.")
             for object_key in [f"videos/{video_id}/source", *keys]:
                 command([*aws_base, "s3api", "delete-object", "--bucket", bucket, "--key", object_key])
-            sql("worker-db", "youscout_media_worker", f"DELETE FROM processing_jobs WHERE video_id = '{video_id}';")
-            sql("video-db", "youscout_video", f"BEGIN; DELETE FROM processing_result_inbox WHERE video_id = '{video_id}'; DELETE FROM outbox_events WHERE aggregate_id = '{video_id}'; DELETE FROM videos WHERE id = '{video_id}' AND idempotency_key = '{key}'; COMMIT;")
+            sql("worker-db", "youscout_media_worker", f"DELETE FROM processing_attempts WHERE video_id = '{video_id}'; "
+                f"DELETE FROM processing_jobs WHERE video_id = '{video_id}';")
+            # Video conserve ses métadonnées, son outbox et l'inbox des résultats dans MongoDB.
+            command([*BASE, "exec", "-T", "video-mongo", "mongosh", "mongodb://localhost:27017/youscout_video?replicaSet=rs0", "--quiet", "--eval",
+                     f'db.processing_result_inbox.deleteMany({{videoId: "{video_id}"}}); db.video_outbox.deleteMany({{aggregateId: "{video_id}"}}); '
+                     f'db.videos.deleteOne({{_id: "{video_id}", idempotencyKey: "{key}"}}); print("removed");'])
             print("Own source/derived S3 objects and DB fixtures removed; Kafka test messages expire with retention.", flush=True)
 
 
