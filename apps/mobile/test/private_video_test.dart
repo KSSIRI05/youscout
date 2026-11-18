@@ -344,4 +344,48 @@ void main() {
     expect(find.text('Autre clip'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('a video removed by moderation cannot be played or published', (
+    tester,
+  ) async {
+    var published = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: PrivateVideoLibrary(
+              request: (path, {query}) async => {
+                'hasMore': false,
+                'items': [
+                  {
+                    'id': 'gone',
+                    'title': 'Clip retiré',
+                    'uploadStatus': 'UPLOADED',
+                    'processingStatus': 'READY',
+                    'publicationStatus': 'UNPUBLISHED',
+                    'moderationStatus': 'REMOVED',
+                  },
+                ],
+              },
+              publish: (id) async {
+                published++;
+                return {};
+              },
+              delete: (id) async {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Retirée par la modération'), findsOneWidget);
+    expect(find.text('Retirée'), findsOneWidget);
+    expect(find.text('Publier'), findsNothing);
+    await tester.tap(find.text('Clip retiré'));
+    await tester.pumpAndSettle();
+    expect(find.text('Fermer le lecteur'), findsNothing);
+    expect(find.byKey(const Key('delete-gone')), findsOneWidget);
+    expect(published, 0);
+    await tester.pumpWidget(const SizedBox());
+  });
 }

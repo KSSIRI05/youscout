@@ -72,7 +72,9 @@ class _PrivateVideoLibraryState extends State<PrivateVideoLibrary> {
             .map((v) => PrivateVideo.fromJson(v as Map<String, dynamic>))
             .toList();
         more = data['hasMore'] as bool;
-        if (!videos.any((v) => v.id == selected && v.ready)) selected = null;
+        if (!videos.any((v) => v.id == selected && v.ready && !v.removed)) {
+          selected = null;
+        }
       });
       if (videos.any((v) => v.waiting)) {
         poll = Timer(const Duration(seconds: 4), load);
@@ -158,7 +160,9 @@ class _PrivateVideoLibraryState extends State<PrivateVideoLibrary> {
     }
   }
 
-  Widget? status(PrivateVideo video) => video.ready
+  Widget? status(PrivateVideo video) => video.removed
+      ? const Chip(label: Text('Retirée'))
+      : video.ready
       ? video.published
             ? const Chip(label: Text('Publié'))
             : widget.publish == null
@@ -236,7 +240,9 @@ class _PrivateVideoLibraryState extends State<PrivateVideoLibrary> {
             title: Text(video.title),
             subtitle: Text(video.label),
             leading: Icon(
-              video.ready
+              video.removed
+                  ? Icons.block
+                  : video.ready
                   ? Icons.play_circle_outline
                   : video.processingStatus == 'FAILED'
                   ? Icons.error_outline
@@ -258,7 +264,7 @@ class _PrivateVideoLibraryState extends State<PrivateVideoLibrary> {
                       ),
                     ],
                   ),
-            onTap: video.ready
+            onTap: video.ready && !video.removed
                 ? () => setState(() => selected = video.id)
                 : null,
           ),

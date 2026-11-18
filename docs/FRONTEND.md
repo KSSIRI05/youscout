@@ -9,7 +9,7 @@ Le frontend Flutter propose désormais deux parcours indépendants : une connexi
 | Catalogue des compétences avec recherche et pagination ; administration React (`apps/admin`) | Administration des autres domaines (A01-A04, A06) |
 | Hashtags, création et abonnements personnels persistants | Modération des hashtags |
 | Compétences et hashtags associés aux vidéos publiées | Notifications temps réel et console de modération |
-| Likes, commentaires, signalements et messages persistants | Notifications temps réel et console de modération |
+| Likes, commentaires, signalements (vidéos et commentaires) et messages persistants ; vidéos retirées par la modération signalées dans « Mes vidéos » | Notifications temps réel |
 | Renouvellement, erreurs réseau/403/401 et déconnexion | Stockage de session durable entre relancements |
 | Adaptateurs web et AppAuth natif | Builds et parcours Android/iOS sur appareil |
 | Sélection, titre, PUT S3 avec progression et confirmation Video, validés sur le web avec le vrai bucket | Validation sur appareils Android/iOS |
