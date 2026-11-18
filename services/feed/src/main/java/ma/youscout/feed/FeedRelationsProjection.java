@@ -13,6 +13,7 @@ class FeedRelationsProjection {
     private static final String PREFIX = "youscout:feed:relations:";
     private static final String READY_KEY = PREFIX + "snapshot-ready";
     private static final String HEARTBEAT_KEY = PREFIX + "consumer-heartbeat";
+    private static final String DEACTIVATED_KEY = PREFIX + "deactivated-accounts";
     private static final DefaultRedisScript<Long> APPLY = new DefaultRedisScript<>("""
         local action = ARGV[1]
         local actor = ARGV[2]
@@ -53,6 +54,15 @@ class FeedRelationsProjection {
                 blockedByKey(target), followingKey(target), versionKey(actor), versionKey(target)),
                 event.action(), actor, target);
     }
+
+    /** Les vidéos d'un compte désactivé sont masquées pour tous ; la version globale invalide les pages en cache. */
+    void accountChanged(String subject, boolean deactivated) {
+        if (deactivated) redis.opsForSet().add(DEACTIVATED_KEY, subject);
+        else redis.opsForSet().remove(DEACTIVATED_KEY, subject);
+        videosChanged();
+    }
+
+    List<String> deactivated() { return members(DEACTIVATED_KEY); }
 
     void markSnapshotComplete() {
         redis.opsForValue().set(READY_KEY, "true");

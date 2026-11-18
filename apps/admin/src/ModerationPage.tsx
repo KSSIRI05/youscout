@@ -9,8 +9,8 @@ const STATUSES: { value: ReportStatus; label: string }[] = [
 const message = (error: unknown) => (error instanceof ApiError ? error.message : "Une erreur inattendue est survenue.");
 
 /** A03/A04 : signalements de vidéos et de commentaires, et décisions de modération. */
-export function ModerationPage({ api, open = (url: string) => window.open(url, "_blank", "noopener,noreferrer") }:
-  { api: AdminApi; open?: (url: string) => void }) {
+export function ModerationPage({ api, open = (url: string) => window.open(url, "_blank", "noopener,noreferrer"), onOpenAccount }:
+  { api: AdminApi; open?: (url: string) => void; onOpenAccount?: (subject: string) => void }) {
   const [type, setType] = useState<ReportType>("VIDEO");
   const [status, setStatus] = useState<ReportStatus>("OPEN");
   const [offset, setOffset] = useState(0);
@@ -131,6 +131,11 @@ export function ModerationPage({ api, open = (url: string) => window.open(url, "
                 {target.type === "VIDEO"
                   ? video && `Propriétaire : ${video.ownerSubject}`
                   : `Auteur : ${target.commentAuthor} · sur ${video ? `« ${video.title} »` : "une vidéo supprimée"}`}
+                {onOpenAccount && (target.type === "COMMENT" || video) && (
+                  <button className="secondary link" onClick={() => onOpenAccount(target.type === "VIDEO" ? video!.ownerSubject : target.commentAuthor!)}>
+                    Voir le compte
+                  </button>
+                )}
               </p>
               <ul>
                 {target.reports.map(report => (

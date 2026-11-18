@@ -34,9 +34,18 @@ class CatalogController {
     Skill patch(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@RequestBody Map<String,Object> body) { return service.patch(CatalogInput.subject(jwt),id,body); }
     @GetMapping("/v1/hashtags")
     CatalogPage<Hashtag> hashtags(@RequestParam(defaultValue="") String q,@RequestParam(defaultValue="20") int limit,@RequestParam(defaultValue="0") int offset) {
-        CatalogInput.page(limit,offset); return new CatalogPage<>(repository.hashtags(CatalogInput.search(q),limit,offset),limit,offset);
+        CatalogInput.page(limit,offset); return new CatalogPage<>(repository.hashtags(CatalogInput.search(q),false,limit,offset),limit,offset);
     }
-    @GetMapping("/v1/hashtags/{id}") Hashtag hashtag(@PathVariable UUID id) { return repository.hashtag(id); }
+    @GetMapping("/v1/hashtags/{id}") Hashtag hashtag(@PathVariable UUID id) { return repository.hashtag(id,false); }
+    // Administration : tous les hashtags, y compris désactivés, et activation (A04).
+    @GetMapping("/v1/hashtags/admin")
+    CatalogPage<Hashtag> adminHashtags(@RequestParam(defaultValue="") String q,@RequestParam(defaultValue="20") int limit,@RequestParam(defaultValue="0") int offset) {
+        CatalogInput.page(limit,offset); return new CatalogPage<>(repository.hashtags(CatalogInput.search(q),true,limit,offset),limit,offset);
+    }
+    @PatchMapping(value="/v1/hashtags/admin/{id}",consumes="application/json")
+    Hashtag patchHashtag(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@RequestBody Map<String,Object> body) {
+        return service.setHashtagActive(CatalogInput.subject(jwt),id,body);
+    }
     // L’unicité canonique permet de renvoyer le même hashtag après plusieurs créations.
     @PostMapping(value="/v1/hashtags",consumes="application/json")
     ResponseEntity<Hashtag> ensure(@RequestBody Map<String,Object> body) {

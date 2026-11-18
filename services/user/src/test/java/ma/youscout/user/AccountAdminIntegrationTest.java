@@ -1,0 +1,102 @@
+package ma.youscout.user;
+import java.util.List;
+import org.junit.jupiter.api.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+import static org.assertj.core.api.Assertions.assertThat;
+/** Désactivation de compte : Keycloak (doublure), état du profil, audit et événement d'outbox. */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Testcontainers
+class AccountAdminIntegrationTest {
+    static final OidcFixture oidc = new OidcFixture();
+    @Container static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17.11-alpine");
+    @Autowired JdbcTemplate jdbc;
+    @LocalServerPort int port;
+    WebTestClient client;
+    final String admin = oidc.roleToken("admin"), alice = oidc.profileToken("alice", "Alice", "alice"), bob = oidc.profileToken("bob", "Bob", "bob");
+
+    @DynamicPropertySource static void properties(DynamicPropertyRegistry r) {
+        r.add("spring.security.oauth2.resourceserver.jwt.issuer-uri", oidc::base);
+        r.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri", () -> oidc.base() + "/jwks");
+        r.add("spring.datasource.url", postgres::getJdbcUrl);
+        r.add("spring.datasource.username", postgres::getUsername);
+        r.add("spring.datasource.password", postgres::getPassword);
+        r.add("youscout.keycloak-admin.base-url", oidc::base);
+        r.add("youscout.keycloak-admin.client-secret", () -> "test-admin-secret");
+    }
+    @BeforeEach void setup() {
+        jdbc.update("DELETE FROM account_audit");
+        jdbc.update("DELETE FROM user_follows");
+        jdbc.update("DELETE FROM user_event_outbox WHERE event_type <> 'UserRelationshipsSnapshotComplete'");
+        jdbc.update("DELETE FROM user_profiles");
+        oidc.keycloakCalls.clear(); oidc.keycloakMissing.clear(); oidc.keycloakDown = false;
+        client = WebTestClient.bindToServer().baseUrl("http://127.0.0.1:" + port).build();
+        for (String token : List.of(alice, bob)) client.get().uri("/v1/users/me").headers(h -> h.setBearerAuth(token)).exchange().expectStatus().isOk();
+    }
+    @AfterAll static void cleanup() { oidc.server.stop(0); }
+
+    @Test void deactivationBlocksKeycloakHidesTheProfileAndIsRecordedOnce() {
+        for (int attempt = 0; attempt < 2; attempt++)
+            post("/v1/users/admin/accounts/alice/deactivate", admin, "{\"note\":\"Harcèlement\"}").expectStatus().isOk()
+                .expectHeader().valueEquals("Cache-Control", "no-store")
+                .expectBody().jsonPath("$.status").isEqualTo("DEACTIVATED").jsonPath("$.statusNote").isEqualTo("Harcèlement")
+                .jsonPath("$.statusChangedBy").isEqualTo("role-test");
+        assertThat(oidc.keycloakCalls).startsWith("PUT /users/alice {\"enabled\":false}", "POST /users/alice/logout ");
+        client.get().uri("/v1/users/alice").headers(h -> h.setBearerAuth(bob)).exchange().expectStatus().isNotFound();
+        client.put().uri("/v1/users/alice/follow").headers(h -> h.setBearerAuth(bob)).exchange().expectStatus().isNotFound();
+        assertThat(jdbc.queryForList("SELECT action FROM account_audit", String.class)).containsExactly("DEACTIVATE");
+        assertThat(events()).containsExactly("alice DEACTIVATED");
+    }
+
+    @Test void reactivationRestoresLoginAndProfile() {
+        post("/v1/users/admin/accounts/alice/deactivate", admin, null).expectStatus().isOk();
+        oidc.keycloakCalls.clear();
+        post("/v1/users/admin/accounts/alice/reactivate", admin, "{}").expectStatus().isOk().expectBody().jsonPath("$.status").isEqualTo("ACTIVE");
+        assertThat(oidc.keycloakCalls).containsExactly("PUT /users/alice {\"enabled\":true}");
+        client.get().uri("/v1/users/alice").headers(h -> h.setBearerAuth(bob)).exchange().expectStatus().isOk();
+        assertThat(events()).containsExactly("alice DEACTIVATED", "alice ACTIVE");
+        client.get().uri("/v1/users/admin/accounts/alice").headers(h -> h.setBearerAuth(admin)).exchange().expectStatus().isOk()
+            .expectBody().jsonPath("$.displayName").isEqualTo("Alice").jsonPath("$.status").isEqualTo("ACTIVE");
+    }
+
+    @Test void onlyAdminsDeactivateAndFailuresLeaveTheAccountUnchanged() {
+        post("/v1/users/admin/accounts/alice/deactivate", bob, null).expectStatus().isForbidden();
+        post("/v1/users/admin/accounts/ghost/deactivate", admin, null).expectStatus().isNotFound();
+        oidc.keycloakMissing.add("alice");
+        post("/v1/users/admin/accounts/alice/deactivate", admin, null).expectStatus().isNotFound();
+        oidc.keycloakMissing.clear();
+        oidc.keycloakDown = true;
+        post("/v1/users/admin/accounts/alice/deactivate", admin, null).expectStatus().isEqualTo(503);
+        oidc.keycloakDown = false;
+        for (String body : List.of("{\"note\":42}", "{\"status\":\"ACTIVE\"}", "{\"note\":\"" + "x".repeat(501) + "\"}"))
+            post("/v1/users/admin/accounts/alice/deactivate", admin, body).expectStatus().isBadRequest();
+        assertThat(oidc.keycloakCalls).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT account_status FROM user_profiles WHERE subject = 'alice'", String.class)).isEqualTo("ACTIVE");
+        assertThat(events()).isEmpty();
+    }
+
+    @Test void anAdminCannotDeactivateTheirOwnAccount() {
+        client.get().uri("/v1/users/me").headers(h -> h.setBearerAuth(admin)).exchange().expectStatus().isOk();
+        post("/v1/users/admin/accounts/role-test/deactivate", admin, null).expectStatus().isBadRequest();
+        assertThat(oidc.keycloakCalls).isEmpty();
+    }
+
+    WebTestClient.ResponseSpec post(String path, String token, String body) {
+        var request = client.post().uri(path).headers(h -> h.setBearerAuth(token));
+        return body == null ? request.exchange() : request.contentType(org.springframework.http.MediaType.APPLICATION_JSON).bodyValue(body).exchange();
+    }
+    List<String> events() {
+        return jdbc.queryForList("""
+            SELECT concat_ws(' ', payload->'data'->>'subject', payload->'data'->>'status')
+              FROM user_event_outbox WHERE event_type = 'UserAccountChanged' ORDER BY event_sequence
+            """, String.class);
+    }
+}

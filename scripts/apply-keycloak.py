@@ -2,7 +2,7 @@
 import copy
 import json
 from urllib.parse import quote
-from keycloak_admin import KeycloakAdmin, ROOT
+from keycloak_admin import KeycloakAdmin, ROOT, local_values
 
 def main():
     # Le JSON versionné décrit la configuration souhaitée ; les utilisateurs existants sont conservés.
@@ -30,6 +30,10 @@ def main():
             # Un client public ajouté après l'import initial (ex. youscout-admin) est créé ; il n'a pas de secret.
             admin.request("POST", base + "/clients", client)
             existing = admin.request("GET", base + "/clients?" + "clientId=" + quote(client["clientId"]))
+        elif not existing and client["clientId"] == "youscout-user-admin":
+            # Client confidentiel ajouté après l'import : son secret vient du .env local, jamais du dépôt.
+            admin.request("POST", base + "/clients", {**client, "secret": local_values()["USER_ADMIN_CLIENT_SECRET"]})
+            existing = admin.request("GET", base + "/clients?" + "clientId=" + quote(client["clientId"]))
         assert len(existing) == 1, "Expected existing YouScout client; import the realm on first startup"
         client_id = existing[0]["id"]
         # Le client existe déjà : son secret courant ne doit pas être remplacé par celui de l’import.
@@ -51,6 +55,12 @@ def main():
             admin.request("DELETE", scope_path, unwanted)
         admin.request("POST", scope_path, allowed)
         # Attribue le rôle au compte de service lui-même, en plus de l’autoriser dans le scope client.
+        if client["clientId"] == "youscout-user-admin":
+            # Seuls les droits de gestion des utilisateurs du realm sont accordés au compte de service.
+            account = admin.request("GET", base + "/clients/" + client_id + "/service-account-user")
+            management = admin.request("GET", base + "/clients?clientId=realm-management")[0]["id"]
+            roles_needed = [admin.request("GET", base + "/clients/" + management + "/roles/" + name) for name in ("manage-users", "view-users")]
+            admin.request("POST", base + "/users/" + account["id"] + "/role-mappings/clients/" + management, roles_needed)
         if client["clientId"] == "youscout-smoke":
             account = admin.request("GET", base + "/clients/" + client_id + "/service-account-user")
             admin.request("POST", base + "/users/" + account["id"] + "/role-mappings/realm", [roles["user"]])

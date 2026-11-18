@@ -54,6 +54,7 @@ services:
       KC_HOSTNAME: http://localhost:8180
       KC_HEALTH_ENABLED: 'true'
       SMOKE_CLIENT_SECRET: ${SMOKE_CLIENT_SECRET:?Run init-env.py first}
+      USER_ADMIN_CLIENT_SECRET: ${USER_ADMIN_CLIENT_SECRET:?Run init-env.py --upgrade first}
     ports: ['127.0.0.1:8180:8080']
     volumes: ['../keycloak/youscout-realm.json:/opt/keycloak/data/import/youscout-realm.json:ro']
     depends_on:
@@ -80,6 +81,9 @@ services:
       USER_DB_PASSWORD: ${USER_DB_PASSWORD:?Run init-env.py first}
       OIDC_ISSUER: http://localhost:8180/realms/youscout
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
+      # Désactivation de comptes (A04) via l'API d'administration Keycloak.
+      KEYCLOAK_ADMIN_URL: http://keycloak:8080
+      USER_ADMIN_CLIENT_SECRET: ${USER_ADMIN_CLIENT_SECRET:?Run init-env.py --upgrade first}
     depends_on:
       user-db: {condition: service_healthy}
       keycloak: {condition: service_healthy}

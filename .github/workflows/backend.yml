@@ -34,6 +34,7 @@ jobs:
       - run: python3 scripts/smoke-worker.py
       - run: python3 scripts/smoke-deletion.py
       - run: python3 scripts/smoke-identity.py
+      - run: python3 scripts/smoke-accounts.py
       # Contrôle les données après redémarrage, puis renouvelle les connexions de la Gateway.
       - name: Verify profiles and hashtag follows survive restart
         run: |

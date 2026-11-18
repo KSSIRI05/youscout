@@ -59,6 +59,35 @@ class FeedRelationsProjectionTest {
         assertThat(projection.following("bob")).containsExactly("alice");
     }
 
+    @Test void accountEventsHideAndShowAnOwnerForEveryReader() {
+        var handler = new UserRelationEventHandler(new UserRelationEventDecoder(), projection);
+        handler.handle(account("alice", "DEACTIVATED"));
+        assertThat(projection.deactivated()).containsExactly("alice");
+        assertThat(projection.videoVersion()).isEqualTo("1");
+        handler.handle(account("alice", "DEACTIVATED"));
+        assertThat(projection.deactivated()).containsExactly("alice");
+        handler.handle(account("alice", "ACTIVE"));
+        assertThat(projection.deactivated()).isEmpty();
+        assertThat(projection.videoVersion()).isEqualTo("3");
+    }
+
+    @Test void malformedAccountEventsAreRejected() {
+        var decoder = new UserRelationEventDecoder();
+        for (String data : new String[] {"{\"subject\":\"alice\",\"status\":\"BANNED\"}", "{\"subject\":\"\",\"status\":\"ACTIVE\"}",
+                "{\"subject\":\"alice\"}", "{\"subject\":\"alice\",\"status\":\"ACTIVE\",\"extra\":1}"})
+            assertThatThrownBy(() -> decoder.decode("youscout-user-relationships-v1", accountJson(data)))
+                .isInstanceOf(UserRelationEventDecoder.InvalidRelationshipEvent.class);
+    }
+
+    static org.apache.kafka.clients.consumer.ConsumerRecord<String, String> account(String subject, String status) {
+        return new org.apache.kafka.clients.consumer.ConsumerRecord<>("user.relationships.v1", 0, 0, "youscout-user-relationships-v1",
+            accountJson("{\"subject\":\"" + subject + "\",\"status\":\"" + status + "\"}"));
+    }
+    static String accountJson(String data) {
+        return "{\"eventId\":\"" + java.util.UUID.randomUUID() + "\",\"eventType\":\"UserAccountChanged\",\"eventVersion\":1,"
+            + "\"occurredAt\":\"2026-11-18T10:00:00Z\",\"producer\":\"user-service\",\"data\":" + data + "}";
+    }
+
     @Test void unknownActionsAreRejectedWithoutChangingVersions() {
         assertThatThrownBy(() -> apply("MUTE", "alice", "bob")).isInstanceOf(RuntimeException.class);
         assertThat(projection.version("alice")).isEqualTo("0");

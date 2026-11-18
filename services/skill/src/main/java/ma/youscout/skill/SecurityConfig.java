@@ -19,7 +19,7 @@ class SecurityConfig {
             .authorizeHttpRequests(a -> a
                 .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                 // Les règles spécifiques admin passent avant les routes générales du catalogue.
-                .requestMatchers("/v1/skills/admin", "/v1/skills/admin/**").hasRole("admin")
+                .requestMatchers("/v1/skills/admin", "/v1/skills/admin/**", "/v1/hashtags/admin", "/v1/hashtags/admin/**").hasRole("admin")
                 .requestMatchers("/v1/skills", "/v1/skills/**", "/v1/hashtags", "/v1/hashtags/**").hasAnyRole("user", "admin")
                 .anyRequest().denyAll())
             .exceptionHandling(e -> e.authenticationEntryPoint((request, response, error) -> ApiSecurityErrors.unauthorized(response, error))

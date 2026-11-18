@@ -4,8 +4,8 @@ import java.util.List;
 import java.util.UUID;
 /** Compétence persistée ; active=false la masque aux lectures utilisateur sans supprimer son identifiant. */
 record Skill(UUID id, String name, String description, boolean active, Instant createdAt, Instant updatedAt) {}
-/** Hashtag partagé dont le nom est stocké sous sa forme canonique. */
-record Hashtag(UUID id, String name, Instant createdAt) {}
+/** Hashtag partagé dont le nom est stocké sous sa forme canonique ; active=false le retire des lectures et des nouvelles sélections. */
+record Hashtag(UUID id, String name, boolean active, Instant createdAt, Instant updatedAt) {}
 /** Page de résultats et paramètres utilisés ; aucun total global n’est calculé. */
 record CatalogPage<T>(List<T> items, int limit, int offset) {}
 /** Indique si l’ensure a créé une ligne (201) ou retrouvé le hashtag existant (200). */

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { AdminApi } from "./api";
 import { AuthError, Session, completeLogin, loginUrl } from "./auth";
+import { AccountsPage } from "./AccountsPage";
+import { HashtagsPage } from "./HashtagsPage";
 import { ModerationPage } from "./ModerationPage";
 import { SkillsPage } from "./SkillsPage";
 
@@ -25,7 +27,8 @@ const browser: AppDeps = {
 
 export function App({ deps = browser }: { deps?: AppDeps }) {
   const [state, setState] = useState<State>({ kind: "loading" });
-  const [page, setPage] = useState<"skills" | "moderation">("skills");
+  const [page, setPage] = useState<"skills" | "hashtags" | "moderation" | "accounts">("skills");
+  const [accountSubject, setAccountSubject] = useState("");
 
   useEffect(() => {
     if (deps.location.pathname !== "/callback") { setState({ kind: "signedOut" }); return; }
@@ -84,14 +87,20 @@ export function App({ deps = browser }: { deps?: AppDeps }) {
           <nav aria-label="Sections">
             <button className={page === "skills" ? undefined : "secondary"} aria-current={page === "skills" ? "page" : undefined}
                     onClick={() => setPage("skills")}>Compétences</button>
+            <button className={page === "hashtags" ? undefined : "secondary"} aria-current={page === "hashtags" ? "page" : undefined}
+                    onClick={() => setPage("hashtags")}>Hashtags</button>
             <button className={page === "moderation" ? undefined : "secondary"} aria-current={page === "moderation" ? "page" : undefined}
                     onClick={() => setPage("moderation")}>Signalements</button>
+            <button className={page === "accounts" ? undefined : "secondary"} aria-current={page === "accounts" ? "page" : undefined}
+                    onClick={() => { setAccountSubject(""); setPage("accounts"); }}>Comptes</button>
           </nav>
         )}
         <span className="muted">{session.displayName}</span>
         <button className="secondary" onClick={() => logout(session)}>Se déconnecter</button>
       </header>
-      {session.isAdmin && api ? (page === "skills" ? <SkillsPage api={api} /> : <ModerationPage api={api} />) : (
+      {session.isAdmin && api ? (page === "skills" ? <SkillsPage api={api} /> : page === "hashtags" ? <HashtagsPage api={api} />
+        : page === "accounts" ? <AccountsPage key={accountSubject} api={api} initialSubject={accountSubject} />
+        : <ModerationPage api={api} onOpenAccount={subject => { setAccountSubject(subject); setPage("accounts"); }} />) : (
         <main className="center">
           <div className="panel login">
             <h2>Accès refusé</h2>

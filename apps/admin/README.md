@@ -4,6 +4,8 @@ Console web React + TypeScript (ADR-011) pour l'exigence **A05** : ajouter, modi
 
 La page **Signalements** couvre **A03/A04** : vidéos et commentaires signalés, regroupés par contenu avec le nombre de signalements et les derniers motifs, filtrés par état (à traiter, action prise, classés sans suite). Pour une vidéo : la regarder (lien temporaire), la retirer (Video la masque partout, Social ferme les signalements) ou la rétablir ; pour un commentaire : le retirer. Chaque décision peut porter une note et est journalisée côté serveur avec l'administrateur.
 
+Les pages **Hashtags** et **Comptes** complètent A04 : désactiver un hashtag le retire des recherches, des abonnements et des nouvelles vidéos ; désactiver un compte (après confirmation) bloque sa connexion dans Keycloak, ferme ses sessions et masque son profil et ses vidéos. Les deux actions sont réversibles et journalisées. Depuis la file des signalements, « Voir le compte » ouvre directement le propriétaire ou l'auteur.
+
 ## Connexion
 
 - Client Keycloak public `youscout-admin`, Authorization Code + PKCE S256, sans mot de passe direct ni flux implicite. Redirection autorisée : `http://localhost:7358/callback`.

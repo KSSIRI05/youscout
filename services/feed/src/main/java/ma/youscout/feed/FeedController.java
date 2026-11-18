@@ -84,6 +84,7 @@ class FeedController {
             var excluded = new LinkedHashSet<String>();
             excluded.addAll(relations.blocked(subject));
             excluded.addAll(relations.blockedBy(subject));
+            excluded.addAll(relations.deactivated());
             var rows = feed.page(PAGE_SIZE + 1, offset, owners, new ArrayList<>(excluded));
             var items = rows.subList(0, Math.min(PAGE_SIZE, rows.size())).stream()
                     .map(row -> new Entry(row.videoId(), row.title(), row.publishedAt(), row.ownerSubject(),

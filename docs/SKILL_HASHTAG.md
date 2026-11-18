@@ -19,7 +19,9 @@ Toutes les routes exigent un access token Keycloak valide. Le contrat exécutabl
 | `GET /v1/hashtags/{id}` | user/admin | Hashtag par identifiant |
 | `GET /v1/hashtags/following` | user/admin | Abonnements personnels, sélectionnés par le sub du JWT |
 | `PUT /v1/hashtags/{id}/follow` | user/admin | Abonnement idempotent, HTTP 204 |
-| `DELETE /v1/hashtags/{id}/follow` | user/admin | Désabonnement idempotent, HTTP 204 |
+| `DELETE /v1/hashtags/{id}/follow` | user/admin | Désabonnement idempotent, HTTP 204 (possible même si le hashtag est désactivé) |
+| `GET /v1/hashtags/admin` | admin | Tous les hashtags, y compris désactivés |
+| `PATCH /v1/hashtags/admin/{id}` | admin | `{"active": false\|true}` : désactive ou réactive (A04), journalisé dans `hashtag_audit` |
 
 Les listes renvoient `{items, limit, offset}`. `limit` vaut 20 par défaut et reste entre 1 et 100 ; `offset` reste entre 0 et 10000. `q` est une recherche de sous-chaîne littérale normalisée, sans interprétation de `%` ou `_` comme jokers. Le catalogue admin et les deux listes générales acceptent `q` (80 points de code maximum). Les abonnements personnels ne prennent pas `q`.
 
@@ -78,4 +80,4 @@ Les tests couvrent migrations, droits, validation, Unicode, désactivation/réac
 
 Le contrôle de persistance suit la procédure de [BACKEND.md](BACKEND.md) : redémarrer User et Skill, attendre leur disponibilité, puis redémarrer la Gateway pour renouveler ses connexions vers les services Docker.
 
-Les API sont raccordées au mode connecté Flutter : compétences, hashtags et abonnements personnels avec recherche et pagination. La console React [`apps/admin`](../apps/admin/README.md) couvre A05 : catalogue complet avec recherche et pagination, ajout, modification, désactivation et réactivation, avec le client Keycloak `youscout-admin` et le rôle `admin`. La désactivation/modération des hashtags, les événements Kafka et l’outbox transactionnelle sont des étapes ultérieures. Le journal admin n’est pas un relais outbox. Video devra référencer les identifiants du catalogue via ses contrats, sans accéder à cette base.
+Les API sont raccordées au mode connecté Flutter : compétences, hashtags et abonnements personnels avec recherche et pagination. La console React [`apps/admin`](../apps/admin/README.md) couvre A05 : catalogue complet avec recherche et pagination, ajout, modification, désactivation et réactivation, avec le client Keycloak `youscout-admin` et le rôle `admin`. Un hashtag désactivé disparaît de la recherche, des abonnements affichés et des lectures par identifiant ; il ne peut plus être suivi, recréé (409) ni associé à une nouvelle vidéo, Video refusant les références introuvables. Les vidéos déjà publiées gardent leur instantané. Les événements Kafka et l’outbox transactionnelle sont des étapes ultérieures. Le journal admin n’est pas un relais outbox. Video devra référencer les identifiants du catalogue via ses contrats, sans accéder à cette base.

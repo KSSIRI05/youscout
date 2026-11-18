@@ -34,7 +34,7 @@ class ProfileService {
     @Transactional(readOnly = true)
     public PublicProfile publicProfile(Jwt jwt, String target) {
         String viewer = subject(jwt); validateSubject(target);
-        UserProfile profile = profiles.findIfPresent(target);
+        UserProfile profile = profiles.findActiveIfPresent(target);
         if (profile == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Profil introuvable.");
         return new PublicProfile(profile.subject(), profile.displayName(), profile.biography(),
             profiles.followingCount(target), profiles.followerCount(target), profiles.isFollowing(viewer, target));
@@ -54,7 +54,7 @@ class ProfileService {
         String viewer = subject(jwt); validateSubject(target);
         profiles.lockRelationship(viewer, target);
         if (viewer.equals(target)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tu ne peux pas te suivre toi-même.");
-        if (profiles.findIfPresent(target) == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Profil introuvable.");
+        if (profiles.findActiveIfPresent(target) == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Profil introuvable.");
         if (profiles.isBlockedEitherWay(viewer, target)) throw new ResponseStatusException(HttpStatus.CONFLICT, "Un blocage empêche cet abonnement.");
         profiles.follow(viewer, target);
         relationEvents.append("FOLLOW", viewer, target);
