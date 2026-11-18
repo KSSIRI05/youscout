@@ -28,7 +28,7 @@ import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignReques
 class VideoDetailsController {
     record Details(UUID id, String title, String uploadStatus, String processingStatus, String errorCode,
                    Long durationMillis, Integer width, Integer height, Instant processingUpdatedAt,
-                   String publicationStatus, Instant publishedAt) {}
+                   String publicationStatus, Instant publishedAt, String moderationStatus) {}
     record Page(List<Details> items, boolean hasMore) {}
     record Playback(String videoUrl, String thumbnailUrl, Instant expiresAt) {}
     record Publication(UUID id, String ownerSubject, Instant publishedAt) {}
@@ -64,13 +64,16 @@ class VideoDetailsController {
     ResponseEntity<Playback> playback(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
         Document video = findOwned(id, jwt.getSubject());
         if (video == null) throw notFound("Vidéo introuvable.");
+        // Le propriétaire voit l'état de sa vidéo retirée, mais ne peut plus la diffuser.
+        if (ModerationService.REMOVED.equals(ModerationService.status(video)))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Vidéo retirée par la modération.");
         return signedPlayback(id, video);
     }
 
     @GetMapping("/{id}/public-playback")
     ResponseEntity<Playback> publicPlayback(@PathVariable UUID id) {
         Document video = mongo.findOne(Query.query(Criteria.where("_id").is(id.toString())
-                .and("publicationStatus").is("PUBLISHED").and("deletedAt").is(null)), Document.class, "videos");
+                .and("publicationStatus").is("PUBLISHED").and("deletedAt").is(null).and("moderationStatus").ne("REMOVED")), Document.class, "videos");
         if (video == null) throw notFound("Vidéo publiée introuvable.");
         return signedPlayback(id, video);
     }
@@ -79,7 +82,7 @@ class VideoDetailsController {
     @GetMapping("/{id}/publication")
     ResponseEntity<Publication> publication(@PathVariable UUID id) {
         Document video = mongo.findOne(Query.query(Criteria.where("_id").is(id.toString())
-                .and("publicationStatus").is("PUBLISHED").and("deletedAt").is(null)), Document.class, "videos");
+                .and("publicationStatus").is("PUBLISHED").and("deletedAt").is(null).and("moderationStatus").ne("REMOVED")), Document.class, "videos");
         if (video == null) throw notFound("Vidéo publiée introuvable.");
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new Publication(id,
                 video.getString("ownerSubject"), VideoRepository.instant(video.get("publishedAt"))));
@@ -90,7 +93,7 @@ class VideoDetailsController {
                 Document.class, "videos");
     }
 
-    private ResponseEntity<Playback> signedPlayback(UUID id, Document row) {
+    ResponseEntity<Playback> signedPlayback(UUID id, Document row) {
         if (!"READY".equals(row.getString("processingStatus")) || !"UPLOADED".equals(row.getString("status")))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Vidéo pas encore disponible pour la lecture.");
         String videoKey = row.getString("processedVideoKey"), thumbnailKey = row.getString("thumbnailKey");
@@ -116,7 +119,7 @@ class VideoDetailsController {
         return new Details(UUID.fromString(row.getString("id")), row.getString("title"), row.getString("status"),
                 row.getString("processingStatus"), row.getString("processingError"), longValue(row.get("durationMillis")),
                 intValue(row.get("width")), intValue(row.get("height")), VideoRepository.instant(row.get("processingUpdatedAt")),
-                row.getString("publicationStatus"), VideoRepository.instant(row.get("publishedAt")));
+                row.getString("publicationStatus"), VideoRepository.instant(row.get("publishedAt")), ModerationService.status(row));
     }
 
     private static Long longValue(Object value) { return value == null ? null : ((Number) value).longValue(); }

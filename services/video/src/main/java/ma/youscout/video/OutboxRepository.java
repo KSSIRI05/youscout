@@ -67,6 +67,19 @@ class OutboxRepository {
         insert(videoId, "VideoDeleted", envelope(UUID.randomUUID(), "VideoDeleted", 1, deletedAt, data), Instant.now());
     }
 
+    /** The version orders moderation changes for consumers; no S3 key, note or admin identity is published. */
+    @Transactional(transactionManager = "mongoTransactionManager", propagation = Propagation.MANDATORY)
+    public void enqueueModerated(UUID videoId) {
+        Document video = mongo.findById(videoId.toString(), Document.class, "videos");
+        if (video == null || video.get("moderatedAt") == null || !(video.get("moderationVersion") instanceof Number version))
+            throw new IllegalStateException("Moderated video required for outbox.");
+        Instant moderatedAt = VideoRepository.instant(video.get("moderatedAt"));
+        Document data = new Document("videoId", videoId.toString()).append("ownerSubject", video.getString("ownerSubject"))
+                .append("action", ModerationService.status(video)).append("version", version.longValue())
+                .append("moderatedAt", moderatedAt.toString());
+        insert(videoId, "VideoModerated", envelope(UUID.randomUUID(), "VideoModerated", 1, moderatedAt, data), Instant.now());
+    }
+
     private Document envelope(UUID eventId, String type, int version, Instant occurredAt, Document data) {
         return new Document("eventId", eventId.toString()).append("eventType", type)
                 .append("eventVersion", version).append("occurredAt", occurredAt.toString())

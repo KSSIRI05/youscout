@@ -8,13 +8,15 @@ import org.springframework.stereotype.Component;
 class PublishedVideoHandler {
     private final PublishedVideoDecoder decoder;
     private final DeletedVideoDecoder deletions;
+    private final ModeratedVideoDecoder moderations;
     private final FeedStore store;
     private final FeedRelationsProjection projection;
     private final FeedIngestionProperties properties;
-    PublishedVideoHandler(PublishedVideoDecoder decoder, DeletedVideoDecoder deletions, FeedStore store,
-                          FeedRelationsProjection projection, FeedIngestionProperties properties) {
+    PublishedVideoHandler(PublishedVideoDecoder decoder, DeletedVideoDecoder deletions, ModeratedVideoDecoder moderations,
+                          FeedStore store, FeedRelationsProjection projection, FeedIngestionProperties properties) {
         this.decoder = decoder;
         this.deletions = deletions;
+        this.moderations = moderations;
         this.store = store;
         this.projection = projection;
         this.properties = properties;
@@ -22,9 +24,13 @@ class PublishedVideoHandler {
 
     void handle(ConsumerRecord<String, String> record) {
         try {
-            boolean changed = properties.deletedTopic().equals(record.topic())
-                ? store.acceptDeletion(deletions.decode(record.key(), record.value()), record.topic(), record.partition(), record.offset())
-                : store.accept(decoder.decode(record.key(), record.value()), record.topic(), record.partition(), record.offset());
+            boolean changed;
+            if (properties.deletedTopic().equals(record.topic()))
+                changed = store.acceptDeletion(deletions.decode(record.key(), record.value()), record.topic(), record.partition(), record.offset());
+            else if (properties.moderatedTopic().equals(record.topic()))
+                changed = store.acceptModeration(moderations.decode(record.key(), record.value()), record.topic(), record.partition(), record.offset());
+            else
+                changed = store.accept(decoder.decode(record.key(), record.value()), record.topic(), record.partition(), record.offset());
             // Invalidates every cached page only when the visible feed actually changed.
             if (changed) projection.videosChanged();
         } catch (PublishedVideoDecoder.InvalidEvent invalid) {

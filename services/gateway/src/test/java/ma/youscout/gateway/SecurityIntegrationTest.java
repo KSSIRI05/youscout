@@ -140,6 +140,14 @@ class SecurityIntegrationTest {
         client.post().uri("/v1/social/comments/00000000-0000-0000-0000-000000000001/reports")
             .headers(h -> h.setBearerAuth(oidc.roleToken("user"))).exchange().expectStatus().isOk();
     }
+    @Test void videoModerationRoutesRequireAdminAtTheGateway() {
+        String path = "/v1/videos/admin/00000000-0000-0000-0000-000000000001/takedown";
+        client.post().uri(path).exchange().expectStatus().isUnauthorized();
+        client.post().uri(path).headers(h -> h.setBearerAuth(oidc.roleToken("user"))).exchange().expectStatus().isForbidden();
+        String admin = oidc.roleToken("admin");
+        client.post().uri(path).headers(h -> h.setBearerAuth(admin)).exchange().expectStatus().isOk();
+        assertThat(oidc.authorization.get()).isEqualTo("Bearer " + admin);
+    }
     // La console d'administration a sa propre origine et modifie le catalogue par PATCH.
     @Test void corsPreflightAllowsTheAdminConsole() {
         client.options().uri("/v1/skills/admin/00000000-0000-0000-0000-000000000001").header("Origin", "http://localhost:7358")

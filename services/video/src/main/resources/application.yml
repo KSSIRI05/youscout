@@ -31,6 +31,7 @@ youscout:
     uploaded-topic: ${VIDEO_UPLOADED_TOPIC:video.uploaded.v1}
     published-topic: ${VIDEO_PUBLISHED_TOPIC:video.published.v2}
     deleted-topic: ${VIDEO_DELETED_TOPIC:video.deleted.v1}
+    moderated-topic: ${VIDEO_MODERATED_TOPIC:video.moderation.v1}
     poll-ms: 1000
     initial-delay-ms: 5000
   storage:

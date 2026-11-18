@@ -4,6 +4,13 @@
 
 Ce module Spring Boot valide Keycloak et persiste les documents Video et l'outbox transactionnelle dans MongoDB. PostgreSQL reste réservé à l'import ponctuel et à la conservation de la sauvegarde source. Le service prépare les uploads S3, confirme les fichiers reçus et publie les événements dans Kafka. La Gateway expose `GET /v1/videos/session`, `POST /v1/videos/uploads` et `POST /v1/videos/{id}/complete`. Le profil de traitement du worker valide le média et publie son résultat ; voir [le guide FFmpeg](../../docs/MEDIA_PROCESSING.md) et [le guide Kafka/outbox](../../docs/VIDEO_OUTBOX.md).
 
+## Modération (rôle admin)
+
+- `GET /v1/videos/admin/{id}` : vue administrateur (titre, propriétaire, états, modération) ; `GET /v1/videos/admin/{id}/playback` : liens de lecture temporaires pour examiner un signalement, y compris une vidéo retirée.
+- `POST /v1/videos/admin/{id}/takedown` et `/restore`, avec une note facultative : retire ou rétablit la vidéo. Les fichiers sont conservés.
+
+Une vidéo retirée disparaît de la lecture publique et de `/publication` (Social refuse alors likes, commentaires et signalements) ; elle ne peut plus être publiée. Son propriétaire la voit toujours dans sa bibliothèque avec `moderationStatus: REMOVED`, mais sa lecture privée renvoie `409`. Chaque changement incrémente `moderationVersion` et écrit `VideoModerated v1` dans l'outbox dans la même transaction ([schéma](../../contracts/events/video-moderated.v1.schema.json)) ; un appel répété ne change rien. L'unicité de l'outbox par vidéo ne s'applique plus qu'aux événements uniques (upload, publication, suppression).
+
 ## Supprimer une vidéo
 
 `DELETE /v1/videos/{id}` permet au propriétaire, et à lui seul (même un admin ne supprime pas la vidéo d'un autre compte), de supprimer sa vidéo, quel que soit son état. Une transaction MongoDB pose `deletedAt` et écrit `VideoDeleted v1` dans l'outbox ; le relais l'envoie vers `video.deleted.v1` ([schéma](../../contracts/events/video-deleted.v1.schema.json)). L'événement ne contient ni clé S3 ni URL : `videoId`, `ownerSubject`, `deletedAt` et `wasPublished`.

@@ -186,6 +186,7 @@ services:
       VIDEO_UPLOAD_URL_SECONDS: ${VIDEO_UPLOAD_URL_SECONDS:-300}
       VIDEO_PUBLISHED_TOPIC: video.published.v2
       VIDEO_DELETED_TOPIC: video.deleted.v1
+      VIDEO_MODERATED_TOPIC: video.moderation.v1
       VIDEO_SKILL_SERVICE_URL: http://skill:8080
       OIDC_ISSUER: http://localhost:8180/realms/youscout
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs

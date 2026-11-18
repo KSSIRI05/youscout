@@ -52,6 +52,14 @@ services:
     entrypoint: [/opt/kafka/bin/kafka-topics.sh]
     command: [--bootstrap-server, 'kafka:9092', --create, --if-not-exists, --topic, video.deleted.v1, --partitions, '3', --replication-factor, '1', --config, min.insync.replicas=1, --config, retention.ms=604800000]
     restart: 'no'
+  kafka-moderation-init:
+    profiles: [video, feed]
+    image: apache/kafka:4.1.2
+    depends_on:
+      kafka: {condition: service_healthy}
+    entrypoint: [/opt/kafka/bin/kafka-topics.sh]
+    command: [--bootstrap-server, 'kafka:9092', --create, --if-not-exists, --topic, video.moderation.v1, --partitions, '3', --replication-factor, '1', --config, min.insync.replicas=1, --config, retention.ms=604800000]
+    restart: 'no'
   kafka-user-relations-init:
     profiles: [video, feed]
     image: apache/kafka:4.1.2
@@ -68,12 +76,14 @@ services:
       kafka-init: {condition: service_completed_successfully}
       kafka-published-init: {condition: service_completed_successfully}
       kafka-deleted-init: {condition: service_completed_successfully}
+      kafka-moderation-init: {condition: service_completed_successfully}
   feed:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     depends_on:
       kafka-published-init: {condition: service_completed_successfully}
       kafka-deleted-init: {condition: service_completed_successfully}
+      kafka-moderation-init: {condition: service_completed_successfully}
       kafka-user-relations-init: {condition: service_completed_successfully}
   user:
     environment:
