@@ -13,7 +13,9 @@ path = Path(__file__).with_name(".env")
 # Chaque base et chaque accès technique possèdent un secret séparé.
 keys = ("KEYCLOAK_DB_PASSWORD", "USER_DB_PASSWORD", "KEYCLOAK_ADMIN_PASSWORD", "SMOKE_CLIENT_SECRET", "SKILL_DB_PASSWORD", "VIDEO_DB_PASSWORD", "MEDIA_WORKER_DB_PASSWORD", "FEED_DB_PASSWORD", "SOCIAL_DB_PASSWORD")
 if options.upgrade and path.exists():
-    existing_text = path.read_text(encoding="utf-8")
+    # utf-8-sig ignore le BOM qu'ajoutent certains éditeurs Windows ; sinon la première clé passerait pour absente
+    # et un nouveau secret, différent de celui des bases existantes, serait ajouté pour elle.
+    existing_text = path.read_text(encoding="utf-8-sig")
     # Capture seulement les noms de variables, avec espaces ou export éventuels, sans lire leurs valeurs.
     # Les commentaires ne correspondent pas au motif et ne comptent pas comme des clés existantes.
     existing_keys = set(re.findall(
