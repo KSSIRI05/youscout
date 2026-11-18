@@ -6,7 +6,7 @@ Le frontend Flutter propose désormais deux parcours indépendants : une connexi
 | --- | --- |
 | Inscription et connexion Keycloak, Authorization Code + PKCE | Connexion sociale, SMTP |
 | Profils publics et abonnements persistants | Validation sur appareils |
-| Catalogue des compétences avec recherche et pagination | Administration React du catalogue |
+| Catalogue des compétences avec recherche et pagination ; administration React (`apps/admin`) | Administration des autres domaines (A01-A04, A06) |
 | Hashtags, création et abonnements personnels persistants | Modération des hashtags |
 | Compétences et hashtags associés aux vidéos publiées | Notifications temps réel et console de modération |
 | Likes, commentaires, signalements et messages persistants | Notifications temps réel et console de modération |
