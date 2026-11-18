@@ -238,6 +238,20 @@ class UploadIntegrationTest {
         }
     }
 
+    @Test void completionErrorsAreReadableFrench() throws Exception {
+        assertThat(JsonPath.parse(complete(UUID.randomUUID().toString(), "alice").body()).read("$.detail", String.class))
+                .isEqualTo("Vidéo introuvable.");
+        String id = prepareId("alice");
+        when(s3.headObject(any(HeadObjectRequest.class)))
+                .thenReturn(HeadObjectResponse.builder().contentLength(13L).contentType("video/mp4").eTag("etag").build());
+        assertThat(JsonPath.parse(complete(id, "alice").body()).read("$.detail", String.class))
+                .isEqualTo("Taille ou type déclaré du fichier incorrect.");
+        when(s3.headObject(any(HeadObjectRequest.class)))
+                .thenReturn(HeadObjectResponse.builder().contentLength(12L).contentType("video/mp4").build());
+        assertThat(JsonPath.parse(complete(id, "alice").body()).read("$.detail", String.class))
+                .isEqualTo("Métadonnées S3 temporairement indisponibles.");
+    }
+
     @Test void s3FailuresAndMissingEtagDoNotChangeStateOrLeakDetails() throws Exception {
         String id = prepareId("alice");
         when(s3.headObject(any(HeadObjectRequest.class))).thenThrow(S3Exception.builder().statusCode(500).message("secret-diagnostic").build());
