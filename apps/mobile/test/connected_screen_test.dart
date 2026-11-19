@@ -20,21 +20,27 @@ void main() {
       await tester.scrollUntilVisible(find.byKey(const Key('login')), 200);
       await tester.tap(find.byKey(const Key('login')));
       await tester.pumpAndSettle();
+      // Le fil s'ouvre en premier ; le profil est le dernier onglet.
+      expect(find.text('Le fil'), findsOneWidget);
+      await tester.tap(find.text('Profil').last);
+      await tester.pumpAndSettle();
       expect(find.text('Joueur réel'), findsNWidgets(2));
       await tester.enterText(
         find.byKey(const Key('account-name')),
         'Mon nom enregistré',
       );
       await tester.ensureVisible(find.byKey(const Key('save-account')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('save-account')));
       await tester.pumpAndSettle();
       expect(fixture.name, 'Mon nom enregistré');
-      await tester.tap(find.text('Catalogue').last);
+      await tester.tap(find.text('Explorer').last);
       await tester.pumpAndSettle();
       expect(find.text('Dribble 0'), findsOneWidget);
       await tester.tap(find.text('Hashtags'));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.byKey(const Key('follow-tag-real')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('follow-tag-real')));
       await tester.pumpAndSettle();
       expect(fixture.following, contains('tag-real'));
@@ -57,6 +63,8 @@ void main() {
       await tester.pumpWidget(YouScoutApp(store: demo, session: session));
       await tester.pumpAndSettle();
       await tester.runAsync(session.login);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Profil').last);
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
         find.byKey(const Key('close-account')),

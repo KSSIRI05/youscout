@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import '../backend/private_video.dart';
+import '../core/theme.dart';
+import 'terrain.dart';
 
 class PrivateVideoPlayer extends StatefulWidget {
   const PrivateVideoPlayer({
@@ -123,67 +125,103 @@ class _PrivateVideoPlayerState extends State<PrivateVideoPlayer>
 
   @override
   Widget build(BuildContext context) {
+    final p = context.scout;
     if (failed) {
-      return Column(
-        children: [
-          const Text('Lecture interrompue ou lien expiré.'),
-          TextButton(
-            onPressed: loading ? null : load,
-            child: const Text('Réessayer la lecture'),
+      return SizedBox(
+        height: 200,
+        child: PitchSurface(
+          marks: PitchMarks.none,
+          radius: 12,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Lecture interrompue ou lien expiré.'),
+                const SizedBox(height: 8),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: p.surPelouse,
+                    foregroundColor: p.pelouse,
+                  ),
+                  onPressed: loading ? null : load,
+                  child: const Text('Réessayer la lecture'),
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
       );
     }
     final active = controller;
     if (loading || active == null) {
-      return const SizedBox(
-        height: 160,
-        child: Center(child: CircularProgressIndicator()),
+      return SizedBox(
+        height: 200,
+        child: PitchSurface(
+          marks: PitchMarks.none,
+          radius: 12,
+          child: Center(child: CircularProgressIndicator(color: p.surPelouse)),
+        ),
       );
     }
-    return Column(
-      children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 330),
-          child: AspectRatio(
-            aspectRatio: active.value.aspectRatio,
-            child: started
-                ? VideoPlayer(active)
-                : Image.network(
-                    ticket!.thumbnail.toString(),
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, _, _) => const Center(
-                      child: Icon(Icons.movie_outlined, size: 64),
-                    ),
-                  ),
-          ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: ColoredBox(
+        color: Colors.black,
+        child: Column(
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 420),
+              child: AspectRatio(
+                aspectRatio: active.value.aspectRatio,
+                child: started
+                    ? VideoPlayer(active)
+                    : Image.network(
+                        ticket!.thumbnail.toString(),
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) =>
+                            const PitchSurface(marks: PitchMarks.none),
+                      ),
+              ),
+            ),
+            VideoProgressIndicator(
+              active,
+              allowScrubbing: true,
+              colors: VideoProgressColors(
+                playedColor: p.surPelouse,
+                bufferedColor: p.surPelouse.withValues(alpha: 0.35),
+                backgroundColor: p.surPelouse.withValues(alpha: 0.15),
+              ),
+            ),
+            ValueListenableBuilder<VideoPlayerValue>(
+              valueListenable: active,
+              builder: (context, value, _) => IconButton(
+                tooltip: value.isPlaying ? 'Mettre en pause' : 'Lire la vidéo',
+                color: p.surPelouse,
+                onPressed: () async {
+                  if (!ticket!.expiresAt.isAfter(DateTime.now())) {
+                    await load();
+                    return;
+                  }
+                  setState(() => started = true);
+                  try {
+                    value.isPlaying
+                        ? await active.pause()
+                        : await active.play();
+                  } catch (_) {
+                    if (mounted) {
+                      setState(() {
+                        failed = true;
+                        ticket = null;
+                      });
+                    }
+                  }
+                },
+                icon: Icon(value.isPlaying ? Icons.pause : Icons.play_arrow),
+              ),
+            ),
+          ],
         ),
-        VideoProgressIndicator(active, allowScrubbing: true),
-        ValueListenableBuilder<VideoPlayerValue>(
-          valueListenable: active,
-          builder: (context, value, _) => IconButton(
-            tooltip: value.isPlaying ? 'Mettre en pause' : 'Lire la vidéo',
-            onPressed: () async {
-              if (!ticket!.expiresAt.isAfter(DateTime.now())) {
-                await load();
-                return;
-              }
-              setState(() => started = true);
-              try {
-                value.isPlaying ? await active.pause() : await active.play();
-              } catch (_) {
-                if (mounted) {
-                  setState(() {
-                    failed = true;
-                    ticket = null;
-                  });
-                }
-              }
-            },
-            icon: Icon(value.isPlaying ? Icons.pause : Icons.play_arrow),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

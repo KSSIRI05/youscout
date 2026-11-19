@@ -1,17 +1,16 @@
 # Ressources visuelles
 
-Les cinq illustrations PNG sont des exports de calques de contenu du fichier Figma YouScout, pas des captures d'écran complètes de l'interface. Les composants Flutter restent des widgets natifs et interactifs.
+L'identité « Terrain de détection » est dessinée en Flutter, sans image : la pelouse tondue, les lignes de craie, le plot de notation et le poste du joueur sont des `CustomPainter` dans `lib/widgets/terrain.dart`. Les couleurs (clair et sombre) sont dans `lib/core/theme.dart`.
 
-Source : https://www.figma.com/design/SZIskR01SeNgOsSrAwiB9p
+## Polices
 
-| Fichier | Calque Figma | Dimensions exportées | Utilisation |
+Deux familles, embarquées en instances statiques depuis Google Fonts. Flutter n'applique pas `fontWeight` à l'axe d'une police variable ; un fichier par graisse garantit la graisse demandée.
+
+| Famille Flutter | Fichiers | Rôle | Licence |
 | --- | --- | --- | --- |
-| football-demo.png | 3:1808 | 342 × 330 | Feed, illustration des publications fictives |
-| football-discover.png | 3:1874 | 342 × 154 | Découverte |
-| football-upload.png | 3:2043 | 342 × 285 | Sélection vidéo et accueil |
-| football-details.png | 3:2086 | 342 × 180 | Préparation d'un exemple |
-| football-profile.png | 3:2003 | 342 × 245 | Export profil réservé pour une évolution |
+| `BigShoulders` | BigShouldersDisplay-SemiBold (600), -ExtraBold (800) | Noms de joueurs, titres d'écran, moyennes | SIL OFL 1.1, `fonts/OFL-BigShouldersDisplay.txt` |
+| `ReadexPro` | ReadexPro-Light (300), -Regular (400), -Medium (500), -SemiBold (600) | Tout le reste du texte | SIL OFL 1.1, `fonts/OFL-ReadexPro.txt` |
 
-Les illustrations ne simulent pas un lecteur vidéo. Une vraie vidéo sélectionnée localement utilise `video_player`. Aucun lien temporaire Figma n'est utilisé à l'exécution.
+Readex Pro est dessinée pour le latin et l'arabe. Les fichiers embarqués proviennent de l'API Google Fonts : avant d'ajouter une interface arabe, vérifier qu'ils contiennent les glyphes arabes, sinon les remplacer par la version complète.
 
-Inter est embarquée depuis le dépôt officiel Google Fonts (fichier variable `ofl/inter/Inter[opsz,wght].ttf`), sous SIL Open Font License ; voir `fonts/OFL.txt`. La police fonctionne sans téléchargement à l'exécution.
+Les polices fonctionnent sans téléchargement à l'exécution.

@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../backend/api.dart';
 import '../backend/connected_session.dart';
 import '../backend/private_video.dart';
 import '../core/theme.dart';
 import '../widgets/private_video_player.dart';
+import '../widgets/terrain.dart';
 
 class ConnectedFeedScreen extends StatefulWidget {
   const ConnectedFeedScreen({
@@ -26,6 +28,9 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
   int offset = 0, generation = 0;
   bool followingOnly = false;
   final Map<String, Map<String, dynamic>> likeStates = {};
+
+  /// Noms publics lus auprès de User, une fois par compte, pour afficher un nom plutôt qu'un identifiant.
+  final Map<String, String> names = {};
 
   @override
   void initState() {
@@ -68,11 +73,44 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
         hasMore = data['hasMore'] as bool;
         if (!videos.any((video) => video.id == selected)) selected = null;
       });
+      unawaited(_resolveNames(videos.map((video) => video.ownerSubject)));
     } catch (_) {
       if (mounted && generation == current) setState(() => failed = true);
     } finally {
       if (mounted && generation == current) setState(() => loading = false);
     }
+  }
+
+  String nameOf(String subject) {
+    final me = widget.session.profile;
+    if (me != null && me.subject == subject) return me.name;
+    return names[subject] ?? 'Un joueur';
+  }
+
+  /// Un compte fermé, désactivé ou bloqué reste « Un joueur ».
+  Future<void> _resolveNames(Iterable<String> subjects) async {
+    final me = widget.session.profile?.subject;
+    final missing = subjects
+        .toSet()
+        .where((s) => s != me && !names.containsKey(s))
+        .toList();
+    if (missing.isEmpty) return;
+    final found = await Future.wait(
+      missing.map((subject) async {
+        try {
+          final profile = await widget.session.publicProfile(subject);
+          return (subject, profile['displayName'] as String);
+        } catch (_) {
+          return (subject, 'Un joueur');
+        }
+      }),
+    );
+    if (!mounted) return;
+    setState(() {
+      for (final (subject, name) in found) {
+        names[subject] = name;
+      }
+    });
   }
 
   Future<void> _like(FeedVideo video) async {
@@ -104,6 +142,7 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
     try {
       items = await widget.session.socialList('videos/${video.id}/comments');
       hasOlder = items.length >= commentPageSize;
+      await _resolveNames(items.map((c) => c['authorSubject'] as String));
     } catch (_) {
       _message('Impossible de charger les commentaires.');
       input.dispose();
@@ -118,11 +157,15 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
       isScrollControlled: true,
       builder: (sheetContext) => StatefulBuilder(
         builder: (context, refresh) {
+          final p = context.scout;
           Future<void> loadOlder() async {
             try {
               final older = await widget.session.socialList(
                 'videos/${video.id}/comments',
                 query: {'before': items.first['id'] as String},
+              );
+              await _resolveNames(
+                older.map((c) => c['authorSubject'] as String),
               );
               refresh(() {
                 items = [...older, ...items];
@@ -149,7 +192,7 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
           return Padding(
             padding: EdgeInsets.fromLTRB(
               20,
-              20,
+              0,
               20,
               MediaQuery.viewInsetsOf(context).bottom + 20,
             ),
@@ -161,12 +204,21 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
                   'Commentaires',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
+                Text(
+                  video.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
                 const SizedBox(height: 12),
                 SizedBox(
-                  height: 260,
+                  height: 280,
                   child: items.isEmpty
-                      ? const Center(
-                          child: Text('Aucun commentaire pour le moment.'),
+                      ? Center(
+                          child: Text(
+                            'Aucun commentaire pour le moment.',
+                            style: TextStyle(color: p.gradin),
+                          ),
                         )
                       : ListView(
                           children: [
@@ -180,52 +232,47 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
                                 ),
                               ),
                             for (final entry in threadComments(items))
-                              ListTile(
-                                contentPadding: EdgeInsets.only(
-                                  left: entry.reply ? 40 : 0,
+                              _CommentRow(
+                                author: nameOf(
+                                  entry.comment['authorSubject'] as String,
                                 ),
-                                leading: CircleAvatar(
-                                  radius: entry.reply ? 14 : 20,
-                                  child: const Icon(Icons.person),
-                                ),
-                                title: Text(entry.comment['body'] as String),
-                                subtitle: Text(
-                                  shortSubject(
-                                    entry.comment['authorSubject'] as String,
-                                  ),
-                                ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (!entry.reply)
-                                      IconButton(
-                                        tooltip: 'Répondre',
-                                        icon: const Icon(Icons.reply),
-                                        onPressed: () => refresh(
-                                          () => replyTo = entry.comment,
-                                        ),
+                                body: entry.comment['body'] as String,
+                                reply: entry.reply,
+                                actions: [
+                                  if (!entry.reply)
+                                    IconButton(
+                                      tooltip: 'Répondre',
+                                      icon: const Icon(Icons.reply, size: 20),
+                                      onPressed: () => refresh(
+                                        () => replyTo = entry.comment,
                                       ),
-                                    if (me != null &&
-                                        entry.comment['authorSubject'] != me)
-                                      IconButton(
-                                        tooltip: 'Signaler',
-                                        icon: const Icon(Icons.flag_outlined),
-                                        onPressed: () => _report(
-                                          'comments/${entry.comment['id']}/reports',
-                                          'Signaler ce commentaire',
-                                        ),
+                                    ),
+                                  if (me != null &&
+                                      entry.comment['authorSubject'] != me)
+                                    IconButton(
+                                      tooltip: 'Signaler',
+                                      icon: const Icon(
+                                        Icons.flag_outlined,
+                                        size: 20,
                                       ),
-                                    // Auteur ou propriétaire de la vidéo (U13).
-                                    if (me != null &&
-                                        (entry.comment['authorSubject'] == me ||
-                                            video.ownerSubject == me))
-                                      IconButton(
-                                        tooltip: 'Supprimer',
-                                        icon: const Icon(Icons.delete_outline),
-                                        onPressed: () => delete(entry.comment),
+                                      onPressed: () => _report(
+                                        'comments/${entry.comment['id']}/reports',
+                                        'Signaler ce commentaire',
                                       ),
-                                  ],
-                                ),
+                                    ),
+                                  // Auteur ou propriétaire de la vidéo (U13).
+                                  if (me != null &&
+                                      (entry.comment['authorSubject'] == me ||
+                                          video.ownerSubject == me))
+                                    IconButton(
+                                      tooltip: 'Supprimer',
+                                      icon: const Icon(
+                                        Icons.delete_outline,
+                                        size: 20,
+                                      ),
+                                      onPressed: () => delete(entry.comment),
+                                    ),
+                                ],
                               ),
                           ],
                         ),
@@ -235,8 +282,8 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          'Réponse à ${shortSubject(replyTo!['authorSubject'] as String)}',
-                          style: const TextStyle(color: ScoutColors.muted),
+                          'Réponse à ${nameOf(replyTo!['authorSubject'] as String)}',
+                          style: TextStyle(color: p.gradin),
                         ),
                       ),
                       IconButton(
@@ -246,7 +293,9 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
                       ),
                     ],
                   ),
+                const SizedBox(height: 8),
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: TextField(
@@ -254,10 +303,13 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
                         maxLength: 1000,
                         decoration: const InputDecoration(
                           hintText: 'Écrire un commentaire',
+                          counterText: '',
                         ),
                       ),
                     ),
+                    const SizedBox(width: 8),
                     IconButton.filled(
+                      tooltip: 'Envoyer le commentaire',
                       onPressed: () async {
                         if (input.text.trim().isEmpty) return;
                         try {
@@ -296,7 +348,7 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
     input.dispose();
   }
 
-  /// U15 : moyenne par compétence ; les autres joueurs notent de 1 à 5, modifient ou retirent leur note.
+  /// U15 : la fiche du clip. Moyenne par compétence ; les autres joueurs notent de 1 à 5, modifient ou retirent leur note.
   Future<void> _ratings(FeedVideo video) async {
     final mine = video.ownerSubject == widget.session.profile?.subject;
     Map<String, SkillRating> ratings;
@@ -311,6 +363,7 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
     if (!mounted) return;
     await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       builder: (sheetContext) => StatefulBuilder(
         builder: (context, refresh) {
           Future<void> rate(String skillId, int? score) async {
@@ -330,65 +383,50 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
             }
           }
 
-          return Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+          return ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.8,
+            ),
+            child: ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
               children: [
                 Text(
-                  'Notes des compétences',
-                  style: Theme.of(context).textTheme.titleLarge,
+                  'Fiche du clip',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 4),
+                Text(video.title),
+                Text(
+                  'Clip de ${nameOf(video.ownerSubject)}',
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
                 if (mine)
-                  const Text(
-                    'Tu ne peux pas noter ta propre vidéo.',
-                    style: TextStyle(color: ScoutColors.muted),
-                  ),
-                const SizedBox(height: 8),
-                for (var i = 0; i < video.skillIds.length; i++)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(video.skills[i]),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          (ratings[video.skillIds[i]] ?? const SkillRating())
-                              .label,
-                        ),
-                        if (!mine)
-                          Wrap(
-                            children: [
-                              for (var score = 1; score <= 5; score++)
-                                IconButton(
-                                  visualDensity: VisualDensity.compact,
-                                  tooltip: '$score sur 5',
-                                  icon: Icon(
-                                    score <=
-                                            (ratings[video.skillIds[i]]
-                                                    ?.myScore ??
-                                                0)
-                                        ? Icons.star
-                                        : Icons.star_border,
-                                    color: ScoutColors.brand,
-                                  ),
-                                  onPressed: () =>
-                                      rate(video.skillIds[i], score),
-                                ),
-                              if (ratings[video.skillIds[i]]?.myScore != null)
-                                IconButton(
-                                  visualDensity: VisualDensity.compact,
-                                  tooltip: 'Retirer ma note',
-                                  icon: const Icon(Icons.close),
-                                  onPressed: () =>
-                                      rate(video.skillIds[i], null),
-                                ),
-                            ],
-                          ),
-                      ],
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Tu ne peux pas noter ta propre vidéo.',
+                      style: TextStyle(color: context.scout.gradin),
                     ),
                   ),
+                const SizedBox(height: 8),
+                for (var i = 0; i < video.skillIds.length; i++) ...[
+                  if (i > 0) const Divider(height: 1),
+                  Builder(
+                    builder: (context) {
+                      final id = video.skillIds[i];
+                      final rating = ratings[id] ?? const SkillRating();
+                      return FicheSkill(
+                        skill: video.skills[i],
+                        average: rating.average,
+                        count: rating.count,
+                        myScore: rating.myScore,
+                        onRate: mine ? null : (score) => rate(id, score),
+                        onClear: mine ? null : () => rate(id, null),
+                      );
+                    },
+                  ),
+                ],
               ],
             ),
           );
@@ -403,55 +441,112 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
       if (!mounted) return;
       await showDialog<void>(
         context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text(profile['displayName'] as String),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                (profile['biography'] as String?)?.isNotEmpty == true
-                    ? profile['biography'] as String
-                    : 'Aucune biographie.',
-              ),
-              const SizedBox(height: 14),
-              Text(
-                '${profile['followerCount']} abonnés · ${profile['followingCount']} abonnements',
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Fermer'),
+        builder: (dialogContext) {
+          final p = dialogContext.scout;
+          final biography = profile['biography'] as String? ?? '';
+          final following = profile['following'] == true;
+          return Dialog(
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  height: 150,
+                  child: PitchSurface(
+                    child: Stack(
+                      children: [
+                        Positioned(
+                          right: 4,
+                          top: 4,
+                          child: IconButton(
+                            tooltip: 'Fermer',
+                            color: p.surPelouse,
+                            onPressed: () => Navigator.pop(dialogContext),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ),
+                        Positioned(
+                          left: 20,
+                          right: 20,
+                          bottom: 16,
+                          child: Text(
+                            profile['displayName'] as String,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: scoutDisplay(40, p.surPelouse),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        biography.isNotEmpty ? biography : 'Aucune biographie.',
+                        style: TextStyle(
+                          color: biography.isNotEmpty ? p.encre : p.gradin,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        '${profile['followerCount']} abonnés, ${profile['followingCount']} abonnements',
+                        style: Theme.of(dialogContext).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.pop(dialogContext);
+                                widget.onMessage(video.ownerSubject);
+                              },
+                              icon: const Icon(Icons.chat_outlined, size: 18),
+                              label: const Text('Message'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: FilledButton(
+                              style: following
+                                  ? FilledButton.styleFrom(
+                                      backgroundColor: p.pelouse,
+                                      foregroundColor: p.surPelouse,
+                                    )
+                                  : null,
+                              onPressed: () async {
+                                try {
+                                  await widget.session.followUser(
+                                    video.ownerSubject,
+                                    follow: !following,
+                                  );
+                                  if (!dialogContext.mounted) return;
+                                  Navigator.pop(dialogContext);
+                                } catch (_) {
+                                  _message(
+                                    'Impossible de modifier cet abonnement.',
+                                  );
+                                }
+                              },
+                              child: Text(
+                                following ? 'Ne plus suivre' : 'Suivre',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            TextButton.icon(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-                widget.onMessage(video.ownerSubject);
-              },
-              icon: const Icon(Icons.chat_outlined),
-              label: const Text('Message'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                try {
-                  await widget.session.followUser(
-                    video.ownerSubject,
-                    follow: profile['following'] != true,
-                  );
-                  if (!dialogContext.mounted) return;
-                  Navigator.pop(dialogContext);
-                } catch (_) {
-                  _message('Impossible de modifier cet abonnement.');
-                }
-              },
-              child: Text(
-                profile['following'] == true ? 'Ne plus suivre' : 'Suivre',
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       );
     } catch (_) {
       _message('Profil public indisponible.');
@@ -496,208 +591,308 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
     reason.dispose();
   }
 
+  void _filter(bool following) {
+    setState(() {
+      followingOnly = following;
+      offset = 0;
+      hasMore = false;
+      videos = [];
+      selected = null;
+    });
+    load(firstPage: true);
+  }
+
   @override
   void dispose() {
     generation++;
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) => RefreshIndicator(
-    onRefresh: () => load(firstPage: true),
-    child: ListView(
-      padding: const EdgeInsets.all(20),
-      physics: const AlwaysScrollableScrollPhysics(),
+  Widget _clip(BuildContext context, FeedVideo video) {
+    final p = context.scout;
+    final mine = video.ownerSubject == widget.session.profile?.subject;
+    final liked = likeStates[video.id]?['liked'] == true;
+    final likes = likeStates[video.id]?['count'];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Le fil',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-            ),
-            IconButton(
-              tooltip: 'Actualiser le fil',
-              onPressed: loading ? null : () => load(firstPage: true),
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
-        ),
-        const Text(
-          'Les vidéos publiées par la communauté YouScout.',
-          style: TextStyle(color: ScoutColors.muted),
-        ),
-        Wrap(
-          spacing: 8,
-          children: [
-            ChoiceChip(
-              label: const Text('Tout'),
-              selected: !followingOnly,
-              onSelected: (_) {
-                setState(() {
-                  followingOnly = false;
-                  offset = 0;
-                  hasMore = false;
-                  videos = [];
-                  selected = null;
-                });
-                load(firstPage: true);
-              },
-            ),
-            ChoiceChip(
-              label: const Text('Abonnements'),
-              selected: followingOnly,
-              onSelected: (_) {
-                setState(() {
-                  followingOnly = true;
-                  offset = 0;
-                  hasMore = false;
-                  videos = [];
-                  selected = null;
-                });
-                load(firstPage: true);
-              },
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        if (loading) const LinearProgressIndicator(),
-        if (failed) ...[
-          const Text(
-            'Impossible de charger le fil. Vérifie ta connexion puis réessaie.',
-          ),
-          TextButton(
-            onPressed: loading ? null : () => load(firstPage: true),
-            child: const Text('Réessayer'),
-          ),
-        ],
-        if (!loading && !failed && videos.isEmpty && !followingOnly)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 32),
-            child: Text('Aucune vidéo publiée pour le moment.'),
-          ),
-        if (!loading && !failed && videos.isEmpty && followingOnly)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 24),
-            child: Text('Suis des joueurs pour voir leurs videos ici.'),
-          ),
-        if (selected != null) ...[
+        if (selected == video.id) ...[
           PrivateVideoPlayer(
-            key: ValueKey('public-$selected'),
-            id: selected!,
+            key: ValueKey('public-${video.id}'),
+            id: video.id,
             publicPlayback: true,
             request: (path, {query}) =>
                 widget.session.videoGet(path, query: query),
           ),
-          TextButton(
-            onPressed: () => setState(() => selected = null),
-            child: const Text('Fermer le lecteur'),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => setState(() => selected = null),
+              child: const Text('Fermer le lecteur'),
+            ),
+          ),
+        ] else
+          Semantics(
+            button: true,
+            label: 'Lire le clip ${video.title}',
+            excludeSemantics: true,
+            child: InkWell(
+              onTap: () => setState(() => selected = video.id),
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                height: 320,
+                child: PitchSurface(
+                  radius: 12,
+                  child: Stack(
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            color: p.surPelouse,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.play_arrow_rounded,
+                            size: 40,
+                            color: p.pelouse,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 26,
+                        right: 26,
+                        bottom: 24,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              nameOf(video.ownerSubject),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: scoutDisplay(32, p.surPelouse),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              frWhen(video.publishedAt),
+                              style: TextStyle(
+                                color: p.surPelouse,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        const SizedBox(height: 12),
+        Text(video.title, style: Theme.of(context).textTheme.titleMedium),
+        if (video.skills.isNotEmpty || video.hashtags.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              for (final skill in video.skills) ScoutTag(skill),
+              for (final tag in video.hashtags)
+                Text('#$tag', style: TextStyle(color: p.gradin, fontSize: 13)),
+            ],
           ),
         ],
-        for (final video in videos)
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.sports_soccer)),
-                  title: Text(
-                    video.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(
-                    video.publishedAt.toLocal().toString().substring(0, 16),
-                  ),
-                  trailing: const Icon(
-                    Icons.play_circle_outline,
-                    color: ScoutColors.brand,
-                  ),
-                  onTap: () => setState(() => selected = video.id),
-                ),
-                if (video.skills.isNotEmpty || video.hashtags.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        for (final skill in video.skills)
-                          Chip(
-                            avatar: const Icon(Icons.sports, size: 15),
-                            label: Text(skill),
-                          ),
-                        for (final tag in video.hashtags)
-                          Chip(avatar: const Text('#'), label: Text(tag)),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        for (final video in videos)
-          Padding(
-            padding: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
-            child: Row(
-              children: [
-                TextButton.icon(
-                  onPressed: () => _profile(video),
-                  icon: const Icon(Icons.person_outline),
-                  label: const Text('Profil'),
-                ),
-                TextButton.icon(
-                  onPressed: () => _like(video),
-                  icon: Icon(
-                    likeStates[video.id]?['liked'] == true
-                        ? Icons.favorite
-                        : Icons.favorite_border,
-                  ),
-                  label: Text('${likeStates[video.id]?['count'] ?? 'J’aime'}'),
-                ),
-                TextButton.icon(
-                  onPressed: () => _comments(video),
-                  icon: const Icon(Icons.mode_comment_outlined),
-                  label: const Text('Commenter'),
-                ),
-                if (video.skillIds.isNotEmpty)
-                  IconButton(
-                    tooltip: 'Noter les compétences',
-                    onPressed: () => _ratings(video),
-                    icon: const Icon(Icons.star_outline),
-                  ),
-                PopupMenuButton<String>(
-                  onSelected: (_) => _report(
-                    'videos/${video.id}/reports',
-                    'Signaler cette vidéo',
-                  ),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'report', child: Text('Signaler')),
-                  ],
-                  icon: const Icon(Icons.more_horiz),
-                ),
-              ],
-            ),
-          ),
-        if (offset > 0 || hasMore)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                onPressed: loading || offset == 0
-                    ? null
-                    : () => load(pageOffset: offset - 20),
-                child: const Text('Précédentes'),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            TextButton.icon(
+              onPressed: () => _like(video),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
-              TextButton(
-                onPressed: loading || !hasMore
-                    ? null
-                    : () => load(pageOffset: offset + 20),
-                child: const Text('Suivantes'),
+              icon: Icon(liked ? Icons.favorite : Icons.favorite_border),
+              label: Text('${likes ?? 'J’aime'}'),
+            ),
+            IconButton(
+              tooltip: 'Commenter',
+              onPressed: () => _comments(video),
+              icon: const Icon(Icons.mode_comment_outlined),
+            ),
+            const Spacer(),
+            if (video.skillIds.isNotEmpty)
+              mine
+                  ? OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(48, 44),
+                      ),
+                      onPressed: () => _ratings(video),
+                      child: const Text('Voir les notes'),
+                    )
+                  : Tooltip(
+                      message: 'Noter les compétences',
+                      child: RateButton(onPressed: () => _ratings(video)),
+                    ),
+            PopupMenuButton<String>(
+              tooltip: 'Options du clip',
+              onSelected: (value) => value == 'profile'
+                  ? _profile(video)
+                  : _report(
+                      'videos/${video.id}/reports',
+                      'Signaler cette vidéo',
+                    ),
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'profile',
+                  child: Text('Voir le profil'),
+                ),
+                if (!mine)
+                  const PopupMenuItem(value: 'report', child: Text('Signaler')),
+              ],
+              icon: Icon(Icons.more_vert, color: p.encre),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.scout;
+    return RefreshIndicator(
+      onRefresh: () => load(firstPage: true),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Le fil',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Actualiser le fil',
+                onPressed: loading ? null : () => load(firstPage: true),
+                icon: const Icon(Icons.refresh),
               ),
             ],
           ),
+          Text(
+            'Les vidéos publiées par la communauté YouScout.',
+            style: TextStyle(color: p.gradin),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text('Tout'),
+                selected: !followingOnly,
+                onSelected: (_) => _filter(false),
+              ),
+              ChoiceChip(
+                label: const Text('Abonnements'),
+                selected: followingOnly,
+                onSelected: (_) => _filter(true),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (loading) const LinearProgressIndicator(),
+          if (failed) ...[
+            const ScoutNotice(
+              'Impossible de charger le fil. Vérifie ta connexion puis réessaie.',
+              error: true,
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: loading ? null : () => load(firstPage: true),
+                child: const Text('Réessayer'),
+              ),
+            ),
+          ],
+          if (!loading && !failed && videos.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Text(
+                followingOnly
+                    ? 'Suis des joueurs pour voir leurs vidéos ici.'
+                    : 'Aucune vidéo publiée pour le moment.',
+                style: TextStyle(color: p.gradin),
+              ),
+            ),
+          for (var i = 0; i < videos.length; i++) ...[
+            if (i > 0) const Divider(height: 36),
+            _clip(context, videos[i]),
+          ],
+          if (offset > 0 || hasMore)
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: loading || offset == 0
+                        ? null
+                        : () => load(pageOffset: offset - 20),
+                    child: const Text('Précédentes'),
+                  ),
+                  TextButton(
+                    onPressed: loading || !hasMore
+                        ? null
+                        : () => load(pageOffset: offset + 20),
+                    child: const Text('Suivantes'),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommentRow extends StatelessWidget {
+  const _CommentRow({
+    required this.author,
+    required this.body,
+    required this.reply,
+    required this.actions,
+  });
+  final String author, body;
+  final bool reply;
+  final List<Widget> actions;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.only(left: reply ? 40 : 0, top: 8, bottom: 8),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        PlayerAvatar(author, size: reply ? 28 : 36),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                author,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+              Text(body),
+            ],
+          ),
+        ),
+        ...actions,
       ],
     ),
   );

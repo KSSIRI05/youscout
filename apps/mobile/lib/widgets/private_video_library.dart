@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../backend/private_video.dart';
+import '../core/theme.dart';
 import 'private_video_player.dart';
+import 'terrain.dart';
 
 typedef VideoPublish = Future<Map<String, dynamic>> Function(String id);
 typedef VideoDelete = Future<void> Function(String id);
@@ -161,13 +163,17 @@ class _PrivateVideoLibraryState extends State<PrivateVideoLibrary> {
   }
 
   Widget? status(PrivateVideo video) => video.removed
-      ? const Chip(label: Text('Retirée'))
+      ? const ScoutTag('Retirée', tone: TagTone.alerte)
       : video.ready
       ? video.published
-            ? const Chip(label: Text('Publié'))
+            ? const ScoutTag('Publié', tone: TagTone.valide)
             : widget.publish == null
             ? const Icon(Icons.chevron_right)
-            : OutlinedButton(
+            : FilledButton(
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(48, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                ),
                 onPressed: publishing.contains(video.id)
                     ? null
                     : () => publish(video),
@@ -189,112 +195,166 @@ class _PrivateVideoLibraryState extends State<PrivateVideoLibrary> {
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      const SizedBox(height: 24),
-      Row(
-        children: [
-          const Expanded(
-            child: Text(
-              'Mes vidéos',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-          ),
-          IconButton(
-            tooltip: 'Actualiser mes vidéos',
-            onPressed: loading ? null : load,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
-      if (loading) const LinearProgressIndicator(),
-      if (failed)
-        const Text(
-          'Impossible de charger tes vidéos. Actualise pour réessayer.',
-        ),
-      if (publicationMessage != null)
-        Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Text(
-            publicationMessage!,
-            key: const Key('publication-message'),
-          ),
-        ),
-      if (!loading && !failed && videos.isEmpty)
-        const Text('Tes clips apparaîtront ici après leur envoi.'),
-      if (selected != null) ...[
-        PrivateVideoPlayer(
-          key: ValueKey(selected),
-          id: selected!,
-          request: widget.request,
-        ),
-        TextButton(
-          onPressed: () => setState(() => selected = null),
-          child: const Text('Fermer le lecteur'),
-        ),
-      ],
-      for (final video in videos)
-        Card(
-          child: ListTile(
-            title: Text(video.title),
-            subtitle: Text(video.label),
-            leading: Icon(
-              video.removed
-                  ? Icons.block
-                  : video.ready
-                  ? Icons.play_circle_outline
-                  : video.processingStatus == 'FAILED'
-                  ? Icons.error_outline
-                  : Icons.schedule,
-            ),
-            trailing: widget.delete == null
-                ? status(video)
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ?status(video),
-                      IconButton(
-                        key: Key('delete-${video.id}'),
-                        tooltip: 'Supprimer la vidéo',
-                        onPressed: deleting.contains(video.id)
-                            ? null
-                            : () => delete(video),
-                        icon: const Icon(Icons.delete_outline),
-                      ),
-                    ],
-                  ),
-            onTap: video.ready && !video.removed
-                ? () => setState(() => selected = video.id)
-                : null,
-          ),
-        ),
-      if (offset > 0 || more)
+  Widget build(BuildContext context) {
+    final p = context.scout;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 28),
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            TextButton(
-              onPressed: loading || offset == 0
-                  ? null
-                  : () {
-                      offset -= 20;
-                      selected = null;
-                      load();
-                    },
-              child: const Text('Précédentes'),
+            Expanded(
+              child: Text(
+                'Mes vidéos',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
             ),
-            TextButton(
-              onPressed: loading || !more
-                  ? null
-                  : () {
-                      offset += 20;
-                      selected = null;
-                      load();
-                    },
-              child: const Text('Suivantes'),
+            IconButton(
+              tooltip: 'Actualiser mes vidéos',
+              onPressed: loading ? null : load,
+              icon: const Icon(Icons.refresh),
             ),
           ],
         ),
-    ],
-  );
+        const SizedBox(height: 4),
+        if (loading) const LinearProgressIndicator(),
+        if (failed)
+          const ScoutNotice(
+            'Impossible de charger tes vidéos. Actualise pour réessayer.',
+            error: true,
+          ),
+        if (publicationMessage != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: ScoutNotice(
+              publicationMessage!,
+              key: const Key('publication-message'),
+              error: publicationMessage!.contains('impossible'),
+            ),
+          ),
+        if (!loading && !failed && videos.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'Tes clips apparaîtront ici après leur envoi.',
+              style: TextStyle(color: p.gradin),
+            ),
+          ),
+        if (selected != null) ...[
+          const SizedBox(height: 8),
+          PrivateVideoPlayer(
+            key: ValueKey(selected),
+            id: selected!,
+            request: widget.request,
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => setState(() => selected = null),
+              child: const Text('Fermer le lecteur'),
+            ),
+          ),
+        ],
+        for (final video in videos) ...[
+          Divider(height: 1, color: p.ligne),
+          InkWell(
+            onTap: video.ready && !video.removed
+                ? () => setState(() => selected = video.id)
+                : null,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 52,
+                    height: 52,
+                    child: video.removed
+                        ? DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: p.raised,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(Icons.block, color: p.gradin),
+                          )
+                        : PitchSurface(
+                            marks: PitchMarks.none,
+                            radius: 8,
+                            stripe: 13,
+                            child: Icon(
+                              video.ready
+                                  ? Icons.play_arrow_rounded
+                                  : video.processingStatus == 'FAILED'
+                                  ? Icons.error_outline
+                                  : Icons.schedule,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          video.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                        Text(
+                          video.label,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: video.processingStatus == 'FAILED'
+                                    ? p.alerte
+                                    : null,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ?status(video),
+                  if (widget.delete != null)
+                    IconButton(
+                      key: Key('delete-${video.id}'),
+                      tooltip: 'Supprimer la vidéo',
+                      onPressed: deleting.contains(video.id)
+                          ? null
+                          : () => delete(video),
+                      icon: const Icon(Icons.delete_outline),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+        if (offset > 0 || more)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              TextButton(
+                onPressed: loading || offset == 0
+                    ? null
+                    : () {
+                        offset -= 20;
+                        selected = null;
+                        load();
+                      },
+                child: const Text('Précédentes'),
+              ),
+              TextButton(
+                onPressed: loading || !more
+                    ? null
+                    : () {
+                        offset += 20;
+                        selected = null;
+                        load();
+                      },
+                child: const Text('Suivantes'),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
 }

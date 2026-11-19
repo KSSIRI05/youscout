@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../backend/api.dart';
 import '../backend/connected_session.dart';
 import '../core/theme.dart';
+import '../widgets/terrain.dart';
 
 /// Texte de chaque notification ; le nom de l'auteur est lu auprès de User.
 String notificationText(String type, String actor, int occurrences) =>
@@ -122,51 +123,41 @@ class _ConnectedNotificationsScreenState
     body: RefreshIndicator(
       onRefresh: _load,
       child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
         children: [
           if (loading) const LinearProgressIndicator(),
           if (error != null)
             Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                error!,
-                style: const TextStyle(color: Colors.orangeAccent),
-              ),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: ScoutNotice(error!, error: true),
             ),
           if (!loading && items.isEmpty && error == null)
-            const Padding(
-              padding: EdgeInsets.all(32),
-              child: Center(child: Text('Aucune notification pour l’instant.')),
+            Padding(
+              padding: const EdgeInsets.all(32),
+              child: Center(
+                child: Text(
+                  'Aucune notification pour l’instant.',
+                  style: TextStyle(color: context.scout.gradin),
+                ),
+              ),
             ),
-          for (final item in items)
-            ListTile(
+          for (final item in items) ...[
+            Divider(height: 1, color: context.scout.ligne),
+            _NotificationRow(
               key: ValueKey(item['id']),
-              leading: Icon(
-                item['read'] == true
-                    ? Icons.notifications_none
-                    : Icons.notifications_active,
-                color: item['read'] == true
-                    ? ScoutColors.muted
-                    : ScoutColors.brand,
+              text: notificationText(
+                item['type'] as String,
+                names[item['actorSubject']] ?? 'Un joueur',
+                (item['occurrences'] as num).toInt(),
               ),
-              title: Text(
-                notificationText(
-                  item['type'] as String,
-                  names[item['actorSubject']] ?? 'Un joueur',
-                  (item['occurrences'] as num).toInt(),
-                ),
-                style: TextStyle(
-                  fontWeight: item['read'] == true
-                      ? FontWeight.normal
-                      : FontWeight.bold,
-                ),
+              actor: names[item['actorSubject']] ?? 'Un joueur',
+              when: MaterialLocalizations.of(context).formatShortDate(
+                DateTime.parse(item['updatedAt'] as String).toLocal(),
               ),
-              subtitle: Text(
-                MaterialLocalizations.of(context).formatShortDate(
-                  DateTime.parse(item['updatedAt'] as String).toLocal(),
-                ),
-              ),
+              unread: item['read'] != true,
               onTap: () => _open(item),
             ),
+          ],
           if (more && !loading)
             Center(
               child: TextButton(
@@ -178,4 +169,60 @@ class _ConnectedNotificationsScreenState
       ),
     ),
   );
+}
+
+class _NotificationRow extends StatelessWidget {
+  const _NotificationRow({
+    required this.text,
+    required this.actor,
+    required this.when,
+    required this.unread,
+    required this.onTap,
+    super.key,
+  });
+  final String text, actor, when;
+  final bool unread;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final p = context.scout;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            PlayerAvatar(actor, size: 40),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    text,
+                    style: TextStyle(
+                      fontWeight: unread ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                  Text(when, style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+            ),
+            if (unread)
+              Semantics(
+                label: 'Non lue',
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: p.pelouse,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }

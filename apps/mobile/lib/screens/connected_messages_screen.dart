@@ -260,143 +260,204 @@ class _ConnectedMessagesScreenState extends State<ConnectedMessagesScreen> {
     String? status,
     bool failed = false,
     VoidCallback? onRetry,
-  }) => Align(
-    alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-    child: Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
+  }) {
+    final p = context.scout;
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 320),
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        decoration: BoxDecoration(
+          color: mine ? p.pelouse : p.surface,
+          border: mine ? null : Border.all(color: p.ligne, width: 1.5),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(mine ? 16 : 4),
+            bottomRight: Radius.circular(mine ? 4 : 16),
+          ),
+        ),
         child: Column(
           crossAxisAlignment: mine
               ? CrossAxisAlignment.end
               : CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(body),
+            Text(body, style: TextStyle(color: mine ? p.surPelouse : p.encre)),
             if (status != null)
               Text(
                 status,
                 style: TextStyle(
                   fontSize: 12,
-                  color: failed ? Colors.redAccent : ScoutColors.muted,
+                  color: mine
+                      ? p.surPelouse.withValues(alpha: failed ? 1 : 0.8)
+                      : (failed ? p.alerte : p.gradin),
+                  fontWeight: failed ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),
             if (onRetry != null)
-              TextButton(onPressed: onRetry, child: const Text('Réessayer')),
+              TextButton(
+                style: TextButton.styleFrom(foregroundColor: p.surPelouse),
+                onPressed: onRetry,
+                child: const Text('Réessayer'),
+              ),
           ],
         ),
       ),
-    ),
-  );
+    );
+  }
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(20),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Messages', style: Theme.of(context).textTheme.headlineSmall),
-        Text(
-          switch (chat.link) {
-            ChatLink.live => 'En direct · messages enregistrés sur YouScout',
-            ChatLink.connecting => 'Connexion à la messagerie…',
-            ChatLink.offline =>
-              'Hors ligne · reprise automatique, les envois passent par le serveur',
-          },
-          key: const Key('chat-link'),
-          style: const TextStyle(color: ScoutColors.muted),
-        ),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: recipient,
-                decoration: const InputDecoration(
-                  labelText: 'Identifiant public du joueur',
+  Widget build(BuildContext context) {
+    final p = context.scout;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Messages', style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: switch (chat.link) {
+                    ChatLink.live => p.valide,
+                    ChatLink.connecting => p.gradin,
+                    ChatLink.offline => p.alerte,
+                  },
                 ),
-                onSubmitted: (_) => load(),
               ),
-            ),
-            IconButton(onPressed: load, icon: const Icon(Icons.arrow_forward)),
-          ],
-        ),
-        if (loading) const LinearProgressIndicator(),
-        const SizedBox(height: 8),
-        Expanded(
-          child: activeRecipient == null
-              ? (conversations.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'Ouvre une conversation avec l’identifiant du joueur.',
-                        ),
-                      )
-                    : ListView(
-                        children: [
-                          for (final c in conversations)
-                            ListTile(
-                              title: Text(c['peerSubject'] as String),
-                              subtitle: Text(
-                                (c['lastMessage'] as Map)['redacted'] == true
-                                    ? deletedText
-                                    : (c['lastMessage'] as Map)['body']
-                                          as String,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              onTap: () => load(c['peerSubject'] as String),
-                            ),
-                        ],
-                      ))
-              : messages.isEmpty && outgoing.isEmpty
-              ? const Center(child: Text('Aucun message pour l’instant.'))
-              : ListView(
-                  children: [
-                    if (hasOlder)
-                      Center(
-                        child: TextButton(
-                          onPressed: loadOlder,
-                          child: const Text('Messages plus anciens'),
-                        ),
-                      ),
-                    for (final m in messages)
-                      _bubble(
-                        mine: m.senderSubject == me,
-                        body: m.redacted ? deletedText : m.body,
-                        status: m.senderSubject != me
-                            ? null
-                            : m.seq <= peerDeliveredSeq
-                            ? 'Reçu'
-                            : 'Envoyé',
-                      ),
-                    for (final o in outgoing)
-                      _bubble(
-                        mine: true,
-                        body: o.body,
-                        status: o.failure ?? 'Envoi…',
-                        failed: o.failure != null,
-                        onRetry: o.failure == null ? null : () => _deliver(o),
-                      ),
-                  ],
+              Expanded(
+                child: Text(
+                  switch (chat.link) {
+                    ChatLink.live =>
+                      'En direct · messages enregistrés sur YouScout',
+                    ChatLink.connecting => 'Connexion à la messagerie…',
+                    ChatLink.offline =>
+                      'Hors ligne · reprise automatique, les envois passent par le serveur',
+                  },
+                  key: const Key('chat-link'),
+                  style: TextStyle(color: p.gradin, fontSize: 13),
                 ),
-        ),
-        if (activeRecipient != null)
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
                 child: TextField(
-                  controller: message,
-                  maxLength: 2000,
+                  controller: recipient,
                   decoration: const InputDecoration(
-                    hintText: 'Écrire un message',
-                    counterText: '',
+                    labelText: 'Identifiant public du joueur',
                   ),
-                  onSubmitted: (_) => send(),
+                  onSubmitted: (_) => load(),
                 ),
               ),
-              IconButton.filled(onPressed: send, icon: const Icon(Icons.send)),
+              const SizedBox(width: 8),
+              IconButton.filled(
+                tooltip: 'Ouvrir la conversation',
+                onPressed: load,
+                icon: const Icon(Icons.arrow_forward),
+              ),
             ],
           ),
-      ],
-    ),
-  );
+          if (loading) const LinearProgressIndicator(),
+          const SizedBox(height: 8),
+          Expanded(
+            child: activeRecipient == null
+                ? (conversations.isEmpty
+                      ? Center(
+                          child: Text(
+                            'Ouvre une conversation avec l’identifiant du joueur.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: p.gradin),
+                          ),
+                        )
+                      : ListView(
+                          children: [
+                            for (final c in conversations)
+                              ListTile(
+                                title: Text(c['peerSubject'] as String),
+                                subtitle: Text(
+                                  (c['lastMessage'] as Map)['redacted'] == true
+                                      ? deletedText
+                                      : (c['lastMessage'] as Map)['body']
+                                            as String,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                onTap: () => load(c['peerSubject'] as String),
+                              ),
+                          ],
+                        ))
+                : messages.isEmpty && outgoing.isEmpty
+                ? Center(
+                    child: Text(
+                      'Aucun message pour l’instant.',
+                      style: TextStyle(color: p.gradin),
+                    ),
+                  )
+                : ListView(
+                    children: [
+                      if (hasOlder)
+                        Center(
+                          child: TextButton(
+                            onPressed: loadOlder,
+                            child: const Text('Messages plus anciens'),
+                          ),
+                        ),
+                      for (final m in messages)
+                        _bubble(
+                          mine: m.senderSubject == me,
+                          body: m.redacted ? deletedText : m.body,
+                          status: m.senderSubject != me
+                              ? null
+                              : m.seq <= peerDeliveredSeq
+                              ? 'Reçu'
+                              : 'Envoyé',
+                        ),
+                      for (final o in outgoing)
+                        _bubble(
+                          mine: true,
+                          body: o.body,
+                          status: o.failure ?? 'Envoi…',
+                          failed: o.failure != null,
+                          onRetry: o.failure == null ? null : () => _deliver(o),
+                        ),
+                    ],
+                  ),
+          ),
+          if (activeRecipient != null)
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: message,
+                    maxLength: 2000,
+                    decoration: const InputDecoration(
+                      hintText: 'Écrire un message',
+                      counterText: '',
+                    ),
+                    onSubmitted: (_) => send(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  tooltip: 'Envoyer le message',
+                  onPressed: send,
+                  icon: const Icon(Icons.send),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
 }

@@ -2,11 +2,18 @@ import 'package:flutter/material.dart';
 import '../backend/api.dart';
 import '../backend/connected_session.dart';
 import '../core/theme.dart';
+import '../widgets/scout_widgets.dart';
+import '../widgets/terrain.dart';
 import 'connected_upload_screen.dart';
 import 'connected_feed_screen.dart';
 import 'connected_messages_screen.dart';
 import 'connected_notifications_screen.dart';
 import 'dart:async';
+
+/// Onglets du mode connecté, dans le même ordre que la démo.
+abstract final class ConnectedTab {
+  static const feed = 0, explore = 1, upload = 2, messages = 3, profile = 4;
+}
 
 class ConnectedScreen extends StatefulWidget {
   const ConnectedScreen({required this.session, super.key});
@@ -16,7 +23,7 @@ class ConnectedScreen extends StatefulWidget {
 }
 
 class _ConnectedScreenState extends State<ConnectedScreen> {
-  int tab = 0;
+  int tab = ConnectedTab.feed;
   String? messageRecipient;
   int unread = 0;
   Timer? _unreadPoll;
@@ -59,7 +66,7 @@ class _ConnectedScreenState extends State<ConnectedScreen> {
     if (peer != null) {
       setState(() {
         messageRecipient = peer;
-        tab = 4;
+        tab = ConnectedTab.messages;
       });
     }
     await _refreshUnread();
@@ -68,6 +75,7 @@ class _ConnectedScreenState extends State<ConnectedScreen> {
   @override
   Widget build(BuildContext context) {
     final session = widget.session;
+    final ready = session.profile != null;
     return Scaffold(
       appBar: AppBar(
         title: const Text('YouScout'),
@@ -100,54 +108,54 @@ class _ConnectedScreenState extends State<ConnectedScreen> {
             if (session.busy) const LinearProgressIndicator(),
             if (session.error != null)
               Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+                child: ScoutNotice(
                   session.error!,
+                  error: true,
                   key: const Key('connected-error'),
-                  style: const TextStyle(color: Colors.orangeAccent),
                 ),
               ),
             Expanded(
               child: IndexedStack(
                 index: tab,
                 children: [
-                  session.profile == null
-                      ? Center(
+                  ready
+                      ? ConnectedFeedScreen(
+                          session: session,
+                          active: tab == ConnectedTab.feed,
+                          onMessage: (recipient) => setState(() {
+                            messageRecipient = recipient;
+                            tab = ConnectedTab.messages;
+                          }),
+                        )
+                      : const SizedBox.shrink(),
+                  CataloguePanel(session: session),
+                  ready
+                      ? ConnectedUploadScreen(
+                          active: tab == ConnectedTab.upload,
+                          key: ValueKey(session.profile!.subject),
+                          session: session,
+                        )
+                      : const SizedBox.shrink(),
+                  ready
+                      ? ConnectedMessagesScreen(
+                          key: ValueKey(messageRecipient ?? 'messages'),
+                          active: tab == ConnectedTab.messages,
+                          session: session,
+                          initialRecipient: messageRecipient,
+                        )
+                      : const SizedBox.shrink(),
+                  ready
+                      ? ProfileEditor(
+                          key: ValueKey(session.profile!.subject),
+                          session: session,
+                          profile: session.profile!,
+                        )
+                      : Center(
                           child: FilledButton(
                             onPressed: session.busy ? null : session.reload,
                             child: const Text('Recharger mon profil'),
                           ),
-                        )
-                      : ProfileEditor(
-                          key: ValueKey(session.profile!.subject),
-                          session: session,
-                          profile: session.profile!,
-                        ),
-                  CataloguePanel(session: session),
-                  if (session.profile != null)
-                    ConnectedUploadScreen(
-                      active: tab == 2,
-                      key: ValueKey(session.profile!.subject),
-                      session: session,
-                    ),
-                  if (session.profile == null) const SizedBox.shrink(),
-                  session.profile == null
-                      ? const SizedBox.shrink()
-                      : ConnectedFeedScreen(
-                          session: session,
-                          active: tab == 3,
-                          onMessage: (recipient) => setState(() {
-                            messageRecipient = recipient;
-                            tab = 4;
-                          }),
-                        ),
-                  session.profile == null
-                      ? const SizedBox.shrink()
-                      : ConnectedMessagesScreen(
-                          key: ValueKey(messageRecipient ?? 'messages'),
-                          active: tab == 4,
-                          session: session,
-                          initialRecipient: messageRecipient,
                         ),
                 ],
               ),
@@ -155,28 +163,9 @@ class _ConnectedScreenState extends State<ConnectedScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: tab,
-        onDestinationSelected: (value) => setState(() => tab = value),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            label: 'Mon profil',
-          ),
-          NavigationDestination(icon: Icon(Icons.tag), label: 'Catalogue'),
-          NavigationDestination(
-            icon: Icon(Icons.video_call_outlined),
-            label: 'Vidéo',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.dynamic_feed_outlined),
-            label: 'Fil',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.chat_bubble_outline),
-            label: 'Messages',
-          ),
-        ],
+      bottomNavigationBar: ScoutTabs(
+        selected: tab,
+        onSelected: (value) => setState(() => tab = value),
       ),
     );
   }
@@ -218,106 +207,137 @@ class _ProfileEditorState extends State<ProfileEditor> {
   }
 
   @override
-  Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(24),
-    children: [
-      Text(
-        widget.profile.name,
-        style: Theme.of(context).textTheme.headlineMedium,
-      ),
-      const SizedBox(height: 8),
-      const Text(
-        'Ton profil est enregistré dans ton compte.',
-        style: TextStyle(color: ScoutColors.muted),
-      ),
-      const SizedBox(height: 24),
-      Form(
-        key: form,
-        child: Column(
-          children: [
-            TextFormField(
-              key: const Key('account-name'),
-              controller: name,
-              enabled: !widget.session.busy,
-              maxLength: 80,
-              onChanged: (_) => setState(() => saved = false),
-              decoration: const InputDecoration(labelText: 'Nom'),
-              validator: (value) =>
-                  value == null ||
-                      value.trim().isEmpty ||
-                      value.trim().runes.length > 80
-                  ? 'Indique un nom de 1 à 80 caractères.'
-                  : null,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              key: const Key('account-biography'),
-              controller: bio,
-              enabled: !widget.session.busy,
-              maxLength: 500,
-              maxLines: 5,
-              onChanged: (_) => setState(() => saved = false),
-              decoration: const InputDecoration(labelText: 'Biographie'),
-              validator: (value) => (value?.runes.length ?? 0) > 500
-                  ? '500 caractères maximum.'
-                  : null,
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              key: const Key('save-account'),
-              onPressed: widget.session.busy
-                  ? null
-                  : () async {
-                      if (!form.currentState!.validate()) return;
-                      await widget.session.saveProfile(name.text, bio.text);
-                      if (mounted) {
-                        setState(() => saved = widget.session.error == null);
-                      }
-                    },
-              child: const Text('Enregistrer mon profil'),
-            ),
-            if (saved)
-              const Padding(
-                padding: EdgeInsets.only(top: 16),
-                child: Text(
-                  'Profil enregistré.',
-                  style: TextStyle(color: ScoutColors.brand),
-                ),
+  Widget build(BuildContext context) {
+    final p = context.scout;
+    final text = Theme.of(context).textTheme;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+      children: [
+        SizedBox(
+          height: 168,
+          child: PitchSurface(
+            radius: 14,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    widget.profile.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: scoutDisplay(44, p.surPelouse),
+                  ),
+                ],
               ),
-          ],
+            ),
+          ),
         ),
-      ),
-      const SizedBox(height: 40),
-      const Divider(),
-      const SizedBox(height: 16),
-      Text('Fermer mon compte', style: Theme.of(context).textTheme.titleMedium),
-      const SizedBox(height: 8),
-      const Text(
-        'La fermeture est définitive : tu es déconnecté partout et tes données '
-        'sont effacées de chaque service.',
-        style: TextStyle(color: ScoutColors.muted),
-      ),
-      const SizedBox(height: 12),
-      OutlinedButton(
-        key: const Key('close-account'),
-        style: OutlinedButton.styleFrom(foregroundColor: Colors.redAccent),
-        onPressed: widget.session.busy
-            ? null
-            : () async {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => const CloseAccountDialog(),
-                );
-                if (confirmed == true) {
-                  await widget.session.closeAccount(
-                    CloseAccountDialog.confirmation,
+        const SizedBox(height: 12),
+        Text(
+          widget.profile.biography.isEmpty
+              ? 'Ajoute une biographie pour dire qui tu es sur le terrain.'
+              : widget.profile.biography,
+          style: TextStyle(
+            color: widget.profile.biography.isEmpty ? p.gradin : p.encre,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Ton profil est enregistré dans ton compte.',
+          style: text.bodySmall,
+        ),
+        const SizedBox(height: 28),
+        Text('Modifier mon profil', style: text.titleLarge),
+        const SizedBox(height: 14),
+        Form(
+          key: form,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                key: const Key('account-name'),
+                controller: name,
+                enabled: !widget.session.busy,
+                maxLength: 80,
+                onChanged: (_) => setState(() => saved = false),
+                decoration: const InputDecoration(labelText: 'Nom'),
+                validator: (value) =>
+                    value == null ||
+                        value.trim().isEmpty ||
+                        value.trim().runes.length > 80
+                    ? 'Indique un nom de 1 à 80 caractères.'
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                key: const Key('account-biography'),
+                controller: bio,
+                enabled: !widget.session.busy,
+                maxLength: 500,
+                maxLines: 5,
+                onChanged: (_) => setState(() => saved = false),
+                decoration: const InputDecoration(labelText: 'Biographie'),
+                validator: (value) => (value?.runes.length ?? 0) > 500
+                    ? '500 caractères maximum.'
+                    : null,
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                key: const Key('save-account'),
+                onPressed: widget.session.busy
+                    ? null
+                    : () async {
+                        if (!form.currentState!.validate()) return;
+                        await widget.session.saveProfile(name.text, bio.text);
+                        if (mounted) {
+                          setState(() => saved = widget.session.error == null);
+                        }
+                      },
+                child: const Text('Enregistrer mon profil'),
+              ),
+              if (saved)
+                const Padding(
+                  padding: EdgeInsets.only(top: 14),
+                  child: ScoutNotice('Profil enregistré.'),
+                ),
+            ],
+          ),
+        ),
+        const Divider(height: 56),
+        Text('Fermer mon compte', style: text.titleLarge),
+        const SizedBox(height: 8),
+        Text(
+          'La fermeture est définitive : tu es déconnecté partout et tes données '
+          'sont effacées de chaque service.',
+          style: TextStyle(color: p.gradin),
+        ),
+        const SizedBox(height: 14),
+        OutlinedButton(
+          key: const Key('close-account'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: p.alerte,
+            side: BorderSide(color: p.alerte, width: 1.5),
+          ),
+          onPressed: widget.session.busy
+              ? null
+              : () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (_) => const CloseAccountDialog(),
                   );
-                }
-              },
-        child: const Text('Fermer mon compte'),
-      ),
-    ],
-  );
+                  if (confirmed == true) {
+                    await widget.session.closeAccount(
+                      CloseAccountDialog.confirmation,
+                    );
+                  }
+                },
+          child: const Text('Fermer mon compte'),
+        ),
+      ],
+    );
+  }
 }
 
 /// U22 : explique les conséquences puis exige la saisie de FERMER avant d'activer la confirmation.
@@ -337,45 +357,52 @@ class _CloseAccountDialogState extends State<CloseAccountDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Fermer ton compte ?'),
-    content: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Tes vidéos, likes, commentaires, notes et abonnements seront '
-          'supprimés. Le texte de tes messages sera effacé chez tes '
-          'interlocuteurs. Ton profil disparaîtra et ton adresse e-mail sera '
-          'libérée. Cette action est irréversible.',
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          key: const Key('close-account-confirmation'),
-          controller: typed,
-          autofocus: true,
-          onChanged: (_) => setState(() {}),
-          decoration: const InputDecoration(
-            labelText: 'Saisis FERMER pour confirmer',
+  Widget build(BuildContext context) {
+    final p = context.scout;
+    return AlertDialog(
+      title: const Text('Fermer ton compte ?'),
+      scrollable: true,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Tes vidéos, likes, commentaires, notes et abonnements seront '
+            'supprimés. Le texte de tes messages sera effacé chez tes '
+            'interlocuteurs. Ton profil disparaîtra et ton adresse e-mail sera '
+            'libérée. Cette action est irréversible.',
           ),
+          const SizedBox(height: 16),
+          TextField(
+            key: const Key('close-account-confirmation'),
+            controller: typed,
+            autofocus: true,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+              labelText: 'Saisis FERMER pour confirmer',
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Annuler'),
+        ),
+        FilledButton(
+          key: const Key('close-account-confirm'),
+          style: FilledButton.styleFrom(
+            backgroundColor: p.alerte,
+            foregroundColor: Theme.of(context).colorScheme.onError,
+          ),
+          onPressed: typed.text == CloseAccountDialog.confirmation
+              ? () => Navigator.pop(context, true)
+              : null,
+          child: const Text('Fermer définitivement'),
         ),
       ],
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context, false),
-        child: const Text('Annuler'),
-      ),
-      FilledButton(
-        key: const Key('close-account-confirm'),
-        style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
-        onPressed: typed.text == CloseAccountDialog.confirmation
-            ? () => Navigator.pop(context, true)
-            : null,
-        child: const Text('Fermer définitivement'),
-      ),
-    ],
-  );
+    );
+  }
 }
 
 class CataloguePanel extends StatefulWidget {
@@ -400,18 +427,27 @@ class _CataloguePanelState extends State<CataloguePanel> {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.scout;
     final session = widget.session;
     final search = tags ? tagSearch : skillSearch;
     final items = tags ? session.hashtags : session.skills;
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
       children: [
         Text(
           'Découvre ton terrain.',
-          style: Theme.of(context).textTheme.headlineSmall,
+          style: Theme.of(context).textTheme.headlineMedium,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
+        Text(
+          tags
+              ? 'Suis des hashtags pour retrouver les clips qui t’intéressent.'
+              : 'Les compétences que les joueurs montrent et que la communauté note.',
+          style: TextStyle(color: p.gradin),
+        ),
+        const SizedBox(height: 18),
         SegmentedButton<bool>(
+          showSelectedIcon: false,
           segments: const [
             ButtonSegment(value: false, label: Text('Compétences')),
             ButtonSegment(value: true, label: Text('Hashtags')),
@@ -426,6 +462,7 @@ class _CataloguePanelState extends State<CataloguePanel> {
           maxLength: 80,
           decoration: InputDecoration(
             labelText: 'Rechercher',
+            counterText: '',
             suffixIcon: IconButton(
               tooltip: 'Lancer la recherche',
               onPressed: session.busy
@@ -439,11 +476,12 @@ class _CataloguePanelState extends State<CataloguePanel> {
               : (value) => session.search(tags: tags, query: value),
         ),
         if (tags) ...[
+          const SizedBox(height: 18),
           Text(
             '${session.following.length} hashtag(s) suivi(s)',
-            style: const TextStyle(color: ScoutColors.brand),
+            style: TextStyle(color: p.valide, fontWeight: FontWeight.w500),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           TextField(
             key: const Key('new-hashtag'),
             controller: newTag,
@@ -452,52 +490,59 @@ class _CataloguePanelState extends State<CataloguePanel> {
               hintText: '#football',
             ),
           ),
-          TextButton(
-            onPressed: session.busy
-                ? null
-                : () async {
-                    await session.createAndFollow(newTag.text);
-                    if (mounted && session.error == null) {
-                      newTag.clear();
-                      tagSearch.clear();
-                    }
-                  },
-            child: const Text('Créer ou retrouver et suivre'),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: session.busy
+                  ? null
+                  : () async {
+                      await session.createAndFollow(newTag.text);
+                      if (mounted && session.error == null) {
+                        newTag.clear();
+                        tagSearch.clear();
+                      }
+                    },
+              icon: const Icon(Icons.add),
+              label: const Text('Créer ou retrouver et suivre'),
+            ),
           ),
         ],
+        const SizedBox(height: 12),
         if (items.isEmpty && !session.busy)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
             child: Text('Aucun résultat.'),
           ),
-        for (final item in items)
-          Card(
-            child: ListTile(
-              title: Text(tags ? '#${item.name}' : item.name),
-              subtitle: item.description.isEmpty
-                  ? null
-                  : Text(item.description),
-              trailing: tags
-                  ? IconButton(
-                      key: Key('follow-${item.id}'),
-                      tooltip: session.following.contains(item.id)
-                          ? 'Ne plus suivre #${item.name}'
-                          : 'Suivre #${item.name}',
-                      onPressed: session.busy
-                          ? null
-                          : () => session.toggleHashtag(item),
-                      icon: Icon(
-                        session.following.contains(item.id)
-                            ? Icons.check_circle
-                            : Icons.add_circle_outline,
-                        color: session.following.contains(item.id)
-                            ? ScoutColors.brand
-                            : null,
+        for (final item in items) ...[
+          Divider(height: 1, color: p.ligne),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tags ? '#${item.name}' : item.name,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    )
-                  : null,
+                      if (item.description.isNotEmpty)
+                        Text(
+                          item.description,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    ],
+                  ),
+                ),
+                if (tags) _FollowTagButton(session: session, item: item),
+              ],
             ),
           ),
+        ],
         if (tags ? session.moreHashtags : session.moreSkills)
           TextButton(
             onPressed: session.busy
@@ -510,6 +555,41 @@ class _CataloguePanelState extends State<CataloguePanel> {
             child: const Text('Afficher la suite'),
           ),
       ],
+    );
+  }
+}
+
+class _FollowTagButton extends StatelessWidget {
+  const _FollowTagButton({required this.session, required this.item});
+  final ConnectedSession session;
+  final CatalogueItem item;
+  @override
+  Widget build(BuildContext context) {
+    final p = context.scout;
+    final followed = session.following.contains(item.id);
+    final onPressed = session.busy ? null : () => session.toggleHashtag(item);
+    return Tooltip(
+      message: followed
+          ? 'Ne plus suivre #${item.name}'
+          : 'Suivre #${item.name}',
+      child: followed
+          ? FilledButton.icon(
+              key: Key('follow-${item.id}'),
+              style: FilledButton.styleFrom(
+                backgroundColor: p.pelouse,
+                foregroundColor: p.surPelouse,
+                minimumSize: const Size(48, 40),
+              ),
+              onPressed: onPressed,
+              icon: const Icon(Icons.check, size: 18),
+              label: const Text('Suivi'),
+            )
+          : OutlinedButton(
+              key: Key('follow-${item.id}'),
+              style: OutlinedButton.styleFrom(minimumSize: const Size(48, 40)),
+              onPressed: onPressed,
+              child: const Text('Suivre'),
+            ),
     );
   }
 }

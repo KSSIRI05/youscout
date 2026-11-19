@@ -25,7 +25,7 @@ class _InboxScreenState extends State<InboxScreen> {
           )
           .toList();
       return ListView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
         children: [
           const SectionHeading(
             'Les bonnes connexions.',
@@ -42,7 +42,7 @@ class _InboxScreenState extends State<InboxScreen> {
           const SizedBox(height: 18),
           for (final t in people)
             Padding(
-              padding: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.only(bottom: 4),
               child: TalentTile(
                 t,
                 subtitle:
@@ -63,9 +63,9 @@ class _InboxScreenState extends State<InboxScreen> {
               'Essaie un autre nom.',
             ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Démo locale : les messages ne sont pas transmis à une autre personne.',
-            style: TextStyle(color: ScoutColors.muted, fontSize: 12),
+            style: TextStyle(color: context.scout.gradin, fontSize: 12),
           ),
         ],
       );
@@ -117,11 +117,11 @@ class _ChatScreenState extends State<ChatScreen> {
           final messages = widget.store.conversations[widget.recipient] ?? [];
           return Column(
             children: [
-              const Padding(
-                padding: EdgeInsets.all(12),
+              Padding(
+                padding: const EdgeInsets.all(12),
                 child: Text(
-                  'Conversation de démonstration · enregistrement local uniquement',
-                  style: TextStyle(fontSize: 11, color: ScoutColors.muted),
+                  'Conversation de démonstration, enregistrée sur cet appareil uniquement.',
+                  style: TextStyle(fontSize: 12, color: context.scout.gradin),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -132,28 +132,45 @@ class _ChatScreenState extends State<ChatScreen> {
                   itemCount: messages.length,
                   itemBuilder: (_, i) {
                     final m = messages[i];
+                    final p = context.scout;
                     return Align(
                       alignment: m.fromMe
                           ? Alignment.centerRight
                           : Alignment.centerLeft,
                       child: Container(
                         constraints: const BoxConstraints(maxWidth: 310),
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(16),
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
                         decoration: BoxDecoration(
-                          color: m.fromMe
-                              ? ScoutColors.raised
-                              : ScoutColors.surface,
-                          borderRadius: BorderRadius.circular(16),
+                          color: m.fromMe ? p.pelouse : p.surface,
+                          border: m.fromMe
+                              ? null
+                              : Border.all(color: p.ligne, width: 1.5),
+                          borderRadius: BorderRadius.only(
+                            topLeft: const Radius.circular(16),
+                            topRight: const Radius.circular(16),
+                            bottomLeft: Radius.circular(m.fromMe ? 16 : 4),
+                            bottomRight: Radius.circular(m.fromMe ? 4 : 16),
+                          ),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(m.text),
-                            const SizedBox(height: 6),
                             Text(
-                              '${m.at.hour.toString().padLeft(2, '0')}:${m.at.minute.toString().padLeft(2, '0')}${m.fromMe ? ' · Local' : ''}',
-                              style: Theme.of(context).textTheme.bodySmall,
+                              m.text,
+                              style: TextStyle(
+                                color: m.fromMe ? p.surPelouse : p.encre,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${m.at.hour.toString().padLeft(2, '0')}:${m.at.minute.toString().padLeft(2, '0')}${m.fromMe ? ', local' : ''}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: m.fromMe
+                                    ? p.surPelouse.withValues(alpha: 0.8)
+                                    : p.gradin,
+                              ),
                             ),
                           ],
                         ),
@@ -193,7 +210,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       IconButton.filled(
                         tooltip: 'Envoyer le message',
                         onPressed: send,
-                        icon: const Icon(Icons.send_outlined),
+                        icon: const Icon(Icons.send),
                       ),
                     ],
                   ),

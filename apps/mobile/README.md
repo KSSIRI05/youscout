@@ -45,7 +45,7 @@ Les jetons restent **en mémoire**, sans localStorage, sessionStorage ni fichier
 
 ## Fil connecté
 
-L'onglet Fil charge les publications réelles via `GET /v1/feed` avec le jeton Keycloak de la session. « Tout » affiche le fil communautaire ; « Abonnements » envoie `following=true`. Le backend applique aussi les exclusions de blocage. Les pages contiennent 20 vidéos ; tirer vers le bas recharge la première page. La lecture passe par l'API de lecture publique temporaire et ne stocke pas les URL signées.
+L'onglet Accueil (le fil) charge les publications réelles via `GET /v1/feed` avec le jeton Keycloak de la session. « Tout » affiche le fil communautaire ; « Abonnements » envoie `following=true`. Le backend applique aussi les exclusions de blocage. Les pages contiennent 20 vidéos ; tirer vers le bas recharge la première page. La lecture passe par l'API de lecture publique temporaire et ne stocke pas les URL signées.
 
 ## Envoyer une vidéo depuis le compte connecté
 
@@ -63,7 +63,7 @@ Se connecter à YouScout, ouvrir **Vidéo**, choisir un fichier MP4, WebM ou MOV
 
 La progression distingue préparation, envoi et confirmation. Après une erreur, le bouton réessaie avec la même clé et le même titre ; une nouvelle préparation renouvelle le lien PUT. Si le PUT a réussi, seule la confirmation est répétée. Une sélection d'un autre fichier commence une nouvelle demande. Changer d'onglet conserve la tentative ; recharger l'application ou se déconnecter la perd. Un PUT interrompu n'est pas repris par morceaux : le fichier est renvoyé en entier. Le web charge au plus la taille autorisée en mémoire ; le natif utilise un flux.
 
-Le message « Vidéo reçue et enregistrée » apparaît après confirmation `UPLOADED`. Avant l'envoi, tu peux choisir jusqu'à dix compétences et dix hashtags depuis le catalogue; Video en vérifie les identifiants auprès de Skill et garde les références sélectionnées. À la publication, le fil reçoit les libellés canoniques. Mes vidéos affiche ensuite l'état du traitement, permet de lire les clips prêts et de publier ceux-ci. L'onglet Fil récupère les publications par pages et lit une vidéo via le endpoint public authentifié de Video. Les liens S3 temporaires sont renouvelés automatiquement et ne sont pas enregistrés sur disque. Activer les fichiers Compose décrits dans [le guide du traitement](../../docs/MEDIA_PROCESSING.md) pour exécuter FFmpeg et Kafka. Voir [le guide de lecture privée](../../docs/PRIVATE_PLAYBACK.md) et le [service Feed](../../services/feed/README.md).
+Le message « Vidéo reçue et enregistrée » apparaît après confirmation `UPLOADED`. Avant l'envoi, tu peux choisir jusqu'à dix compétences et dix hashtags depuis le catalogue; Video en vérifie les identifiants auprès de Skill et garde les références sélectionnées. À la publication, le fil reçoit les libellés canoniques. Mes vidéos affiche ensuite l'état du traitement, permet de lire les clips prêts et de publier ceux-ci. L'onglet Accueil récupère les publications par pages et lit une vidéo via le endpoint public authentifié de Video. Les liens S3 temporaires sont renouvelés automatiquement et ne sont pas enregistrés sur disque. Activer les fichiers Compose décrits dans [le guide du traitement](../../docs/MEDIA_PROCESSING.md) pour exécuter FFmpeg et Kafka. Voir [le guide de lecture privée](../../docs/PRIVATE_PLAYBACK.md) et le [service Feed](../../services/feed/README.md).
 
 Validation automatisée : 41 tests Flutter réussis, analyse statique sans problème et build web release réussi. Les nouveaux tests couvrent le contrôleur, l'interface, le renouvellement Keycloak simulé et le transfert natif vers un serveur HTTP de test ; ils ne nécessitent aucun identifiant AWS. Le 28 octobre 2026, le parcours complet Flutter web → Gateway → S3 réel a également été validé dans Edge avec un clip MP4 synthétique de deux secondes : message de réception dans l'interface, état `UPLOADED`, taille et confirmation persistés en PostgreSQL. Le test backend réel a confirmé le rejeu idempotent après redémarrage. Voir [le compte rendu](../../docs/validation/video-upload-2026-10-28.md). Les parcours Android/iOS restent à valider sur appareils.
 
@@ -102,8 +102,17 @@ flutter test
 flutter build web --release --no-web-resources-cdn
 ```
 
-`lib/backend` contient les clients HTTP, l’authentification par plateforme, PKCE et l’état du compte connecté. `lib/screens/connected_screen.dart` affiche les profils et le catalogue réels. Le store et les écrans historiques restent dédiés à la démo. Les tests couvrent l’état de session, les refus d’accès, la rotation, les modifications confirmées, la pagination, PKCE et les interactions d’interface ; leurs API simulées complètent les essais avec la pile locale réelle.
+`lib/backend` contient les clients HTTP, l’authentification par plateforme, PKCE et l’état du compte connecté. `lib/screens/connected_screen.dart` porte les onglets du mode connecté (Accueil, Explorer, Publier, Messages, Profil, dans le même ordre que la démo) avec le profil et le catalogue réels. Le store et les écrans historiques restent dédiés à la démo. Les tests couvrent l’état de session, les refus d’accès, la rotation, les modifications confirmées, la pagination, PKCE et les interactions d’interface ; leurs API simulées complètent les essais avec la pile locale réelle.
 
-Les illustrations Figma et la licence de police sont décrites dans [assets/README.md](assets/README.md).
+## Interface « Terrain de détection »
+
+L'interface reprend le terrain d'entraînement, là où se passent les détections : fond craie, pelouse tondue en bandes, lignes de craie et plot orange. Elle suit le thème clair ou sombre de l'appareil.
+
+- `lib/core/theme.dart` : palette `ScoutPalette` (clair et sombre, extension de thème lue par `context.scout`) et thème Material.
+- `lib/widgets/terrain.dart` : pelouse (`PitchSurface`), poste sur le terrain (`PitchPosition`, démo uniquement car le profil connecté n'a pas de poste), plots de notation (`ConeScore`, `ConeRatingInput`, `FicheSkill`), avatar, étiquettes et messages d'état.
+- Règles : l'orange est réservé aux notes et au bouton « Noter » ; les lignes de craie indiquent un poste ou séparent les clips ; les noms de joueurs et les titres sont en Big Shoulders Display, le reste en Readex Pro ; les moyennes s'écrivent avec une virgule (4,2).
+- Le fil connecté lit le nom public de chaque auteur de clip ou de commentaire via `GET /v1/users/{subject}`, une fois par compte, au lieu d'afficher un identifiant.
+
+Les polices et leurs licences sont décrites dans [assets/README.md](assets/README.md).
 
 Validation locale de cette intégration : 29 tests Flutter réussis, analyse statique sans problème et build web release réussi. Un parcours navigateur avec la pile Docker réelle a confirmé l’inscription, le retour PKCE, la modification du profil, le catalogue, la création et le suivi/désabonnement d’un hashtag, puis leur persistance après déconnexion/reconnexion. Un 401 unique injecté dans le navigateur a déclenché un véritable renouvellement Keycloak et le rejeu réussi de la requête. Un callback sans état PKCE a été refusé avant tout appel API. Le compte temporaire, son profil, ses abonnements et son hashtag de test ont été supprimés. Ces essais ne remplacent pas une validation sur appareils Android/iOS.

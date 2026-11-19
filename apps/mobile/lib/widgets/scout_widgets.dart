@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import '../data/models.dart';
+import 'terrain.dart';
 
+/// Bouton pleine largeur : l'encre pour l'action principale, un contour pour l'action secondaire.
 class ScoutButton extends StatelessWidget {
   const ScoutButton(
     this.label, {
@@ -15,28 +17,77 @@ class ScoutButton extends StatelessWidget {
   final bool secondary;
   final IconData? icon;
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: double.infinity,
-    child: FilledButton(
-      style: secondary
-          ? FilledButton.styleFrom(
-              backgroundColor: ScoutColors.raised,
-              foregroundColor: ScoutColors.ink,
+  Widget build(BuildContext context) {
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (icon != null) ...[Icon(icon, size: 20), const SizedBox(width: 8)],
+        Flexible(child: Text(label, textAlign: TextAlign.center)),
+      ],
+    );
+    return SizedBox(
+      width: double.infinity,
+      child: secondary
+          ? OutlinedButton(
+              style: OutlinedButton.styleFrom(minimumSize: const Size(48, 52)),
+              onPressed: onPressed,
+              child: content,
             )
-          : null,
-      onPressed: onPressed,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (icon != null) ...[Icon(icon, size: 20), const SizedBox(width: 8)],
-          Flexible(child: Text(label, textAlign: TextAlign.center)),
-        ],
-      ),
+          : FilledButton(onPressed: onPressed, child: content),
+    );
+  }
+}
+
+/// Barre d'onglets commune aux deux modes, séparée du contenu par une ligne de craie.
+class ScoutTabs extends StatelessWidget {
+  const ScoutTabs({
+    required this.selected,
+    required this.onSelected,
+    super.key,
+  });
+  final int selected;
+  final ValueChanged<int> onSelected;
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      border: Border(top: BorderSide(color: context.scout.ligne, width: 1.5)),
+    ),
+    child: NavigationBar(
+      selectedIndex: selected,
+      onDestinationSelected: onSelected,
+      destinations: const [
+        NavigationDestination(
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home),
+          label: 'Accueil',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.explore_outlined),
+          selectedIcon: Icon(Icons.explore),
+          label: 'Explorer',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.add_circle_outline),
+          selectedIcon: Icon(Icons.add_circle),
+          label: 'Publier',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.chat_bubble_outline),
+          selectedIcon: Icon(Icons.chat_bubble),
+          label: 'Messages',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.person_outline),
+          selectedIcon: Icon(Icons.person),
+          label: 'Profil',
+        ),
+      ],
     ),
   );
 }
 
+/// Titre d'écran en lettrage de maillot, avec une phrase d'explication.
 class SectionHeading extends StatelessWidget {
   const SectionHeading(this.title, {this.subtitle, super.key});
   final String title;
@@ -45,35 +96,16 @@ class SectionHeading extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(title, style: Theme.of(context).textTheme.headlineSmall),
+      Text(title, style: Theme.of(context).textTheme.headlineMedium),
       if (subtitle != null) ...[
         const SizedBox(height: 8),
-        Text(subtitle!, style: const TextStyle(color: ScoutColors.muted)),
+        Text(subtitle!, style: TextStyle(color: context.scout.gradin)),
       ],
     ],
   );
 }
 
-class FootballArt extends StatelessWidget {
-  const FootballArt({this.variant = 'demo', this.height = 230, super.key});
-  final String variant;
-  final double height;
-  @override
-  Widget build(BuildContext context) => Semantics(
-    label: 'Illustration football de la maquette, pas une vidéo',
-    image: true,
-    child: SizedBox(
-      width: double.infinity,
-      height: height,
-      child: Image.asset(
-        'assets/images/football-$variant.png',
-        fit: BoxFit.contain,
-        excludeFromSemantics: true,
-      ),
-    ),
-  );
-}
-
+/// Ligne d'un joueur : initiales, nom, poste et ville.
 class TalentTile extends StatelessWidget {
   const TalentTile(
     this.talent, {
@@ -87,49 +119,52 @@ class TalentTile extends StatelessWidget {
   final Widget? trailing;
   final String? subtitle;
   @override
-  Widget build(BuildContext context) => Material(
-    color: ScoutColors.surface,
-    borderRadius: BorderRadius.circular(16),
-    child: ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-      leading: CircleAvatar(
-        backgroundColor: ScoutColors.raised,
-        foregroundColor: ScoutColors.brand,
-        child: Text(
-          talent.initials,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-        ),
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(10),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+      child: Row(
+        children: [
+          PlayerAvatar(talent.name, size: 44),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  talent.name,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle ?? '${talent.position}, ${talent.city}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          ?trailing,
+        ],
       ),
-      title: Text(
-        talent.name,
-        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-      ),
-      subtitle: Text(
-        subtitle ?? '${talent.position} · ${talent.city}',
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
-      onTap: onTap,
-      trailing: trailing,
     ),
   );
 }
 
+/// Compétences d'un joueur ou d'un clip, en contour de craie : l'orange reste réservé aux notes.
 class SkillChips extends StatelessWidget {
   const SkillChips(this.skills, {super.key});
   final List<String> skills;
   @override
   Widget build(BuildContext context) => Wrap(
-    spacing: 8,
+    spacing: 6,
     runSpacing: 6,
-    children: skills
-        .map(
-          (s) => Chip(
-            label: Text(s, style: const TextStyle(color: ScoutColors.brand)),
-          ),
-        )
-        .toList(),
+    children: [for (final s in skills) ScoutTag(s)],
   );
 }
 
@@ -139,24 +174,24 @@ class EmptyState extends StatelessWidget {
   final Widget? action;
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 40),
+    padding: const EdgeInsets.symmetric(vertical: 36),
     child: Column(
       children: [
-        const Icon(
+        Icon(
           Icons.sports_soccer_outlined,
-          color: ScoutColors.brand,
-          size: 42,
+          color: context.scout.gradin,
+          size: 36,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
         Text(
           title,
-          style: Theme.of(context).textTheme.titleMedium,
+          style: Theme.of(context).textTheme.titleLarge,
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 8),
         Text(
           description,
-          style: const TextStyle(color: ScoutColors.muted),
+          style: TextStyle(color: context.scout.gradin),
           textAlign: TextAlign.center,
         ),
         if (action != null) ...[const SizedBox(height: 20), action!],

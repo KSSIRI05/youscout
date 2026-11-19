@@ -7,6 +7,7 @@ import 'screens/social_screens.dart';
 import 'screens/upload_screen.dart';
 import 'screens/messages_screen.dart';
 import 'widgets/scout_widgets.dart';
+import 'widgets/terrain.dart';
 import 'backend/api.dart';
 import 'backend/auth_driver.dart';
 import 'backend/config.dart';
@@ -50,11 +51,14 @@ class _YouScoutAppState extends State<YouScoutApp> {
     initialRoute: '/',
     debugShowCheckedModeBanner: false,
     theme: scoutTheme(),
+    darkTheme: scoutTheme(Brightness.dark),
     locale: const Locale('fr'),
     supportedLocales: const [Locale('fr')],
     localizationsDelegates: GlobalMaterialLocalizations.delegates,
-    builder: (context, child) => ColoredBox(
-      color: const Color(0xFF060A08),
+    // Sur un grand écran, la colonne de l'application est posée sur la pelouse.
+    builder: (context, child) => PitchSurface(
+      marks: PitchMarks.none,
+      stripe: 64,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480),
@@ -78,107 +82,117 @@ class WelcomeScreen extends StatelessWidget {
   final ScoutStore store;
   final ConnectedSession? session;
   @override
-  Widget build(BuildContext context) => Scaffold(
-    body: SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          if (session?.notice != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                session!.notice!,
-                key: const Key('session-notice'),
-                style: const TextStyle(color: ScoutColors.brand),
+  Widget build(BuildContext context) {
+    final p = context.scout;
+    final busy = session?.busy == true;
+    return Scaffold(
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+          children: [
+            if (session?.notice != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ScoutNotice(
+                  session!.notice!,
+                  key: const Key('session-notice'),
+                ),
+              ),
+            if (session?.error != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ScoutNotice(session!.error!, error: true),
+              ),
+            SizedBox(
+              height: 300,
+              child: PitchSurface(
+                radius: 16,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 0, 22, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text('YouScout', style: scoutDisplay(64, p.surPelouse)),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Ton talent mérite le terrain.',
+                        style: TextStyle(color: p.surPelouse, fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          if (session?.error != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                session!.error!,
-                style: const TextStyle(color: Colors.orangeAccent),
-              ),
-            ),
-          const SizedBox(height: 20),
-          Text(
-            'YOUSCOUT',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(color: ScoutColors.brand),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'TON TALENT MÉRITE LE TERRAIN.',
-            style: TextStyle(
-              color: ScoutColors.muted,
-              fontSize: 12,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 20),
-          const FootballArt(variant: 'upload', height: 275),
-          const SizedBox(height: 24),
-          Text(
-            'Le prochain talent,\nc’est peut-être toi.',
-            style: Theme.of(context).textTheme.headlineLarge,
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Partage ton jeu. Inspire la communauté. Fais-toi découvrir.',
-            style: TextStyle(color: ScoutColors.muted),
-          ),
-          const SizedBox(height: 28),
-          if (session != null) ...[
-            if (session!.busy) const LinearProgressIndicator(),
-            FilledButton(
-              key: const Key('login'),
-              onPressed: session!.busy ? null : () => session!.login(),
-              child: const Text('Se connecter'),
-            ),
-            TextButton(
-              onPressed: session!.busy
-                  ? null
-                  : () => session!.login(register: true),
-              child: const Text('Créer mon compte'),
+            const SizedBox(height: 28),
+            Text(
+              'Le prochain talent, c’est peut-être toi.',
+              style: Theme.of(context).textTheme.headlineLarge,
             ),
             const SizedBox(height: 12),
-          ],
-          ScoutButton(
-            'Explorer la démo',
-            key: const Key('enter-demo'),
-            onPressed: session?.busy == true ? null : store.enterDemo,
-          ),
-          const SizedBox(height: 12),
-          ScoutButton(
-            'À propos de cette version',
-            secondary: true,
-            onPressed: () => showDialog<void>(
-              context: context,
-              builder: (_) => AlertDialog(
-                title: const Text('Choisis ton expérience'),
-                content: const Text(
-                  'Le mode connecté enregistre ton profil et tes abonnements dans ton compte. La démo propose des talents fictifs et des interactions locales. Aucun fichier vidéo n’est envoyé.',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Compris'),
-                  ),
-                ],
-              ),
+            Text(
+              'Partage ton jeu. Inspire la communauté. Fais-toi découvrir.',
+              style: TextStyle(color: p.gradin, fontSize: 16),
             ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Compte connecté ou démo locale, à toi de choisir.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: ScoutColors.muted, fontSize: 12),
-          ),
-        ],
+            const SizedBox(height: 28),
+            if (session != null) ...[
+              if (busy)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: LinearProgressIndicator(),
+                ),
+              ScoutButton(
+                'Se connecter',
+                key: const Key('login'),
+                onPressed: busy ? null : () => session!.login(),
+              ),
+              const SizedBox(height: 10),
+              ScoutButton(
+                'Créer mon compte',
+                secondary: true,
+                onPressed: busy ? null : () => session!.login(register: true),
+              ),
+              const SizedBox(height: 24),
+              Divider(height: 1, color: p.ligne),
+              const SizedBox(height: 20),
+            ],
+            Text(
+              session != null
+                  ? 'Pas encore prêt ? La démo montre des talents fictifs, sans compte et sans rien envoyer.'
+                  : 'La démo montre des talents fictifs, sans compte et sans rien envoyer.',
+              style: TextStyle(color: p.gradin),
+            ),
+            const SizedBox(height: 12),
+            ScoutButton(
+              'Explorer la démo',
+              key: const Key('enter-demo'),
+              secondary: session != null,
+              onPressed: busy ? null : store.enterDemo,
+            ),
+            const SizedBox(height: 4),
+            TextButton(
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('Choisis ton expérience'),
+                  content: const Text(
+                    'Le mode connecté enregistre ton profil et tes abonnements dans ton compte. La démo propose des talents fictifs et des interactions locales. Aucun fichier vidéo n’est envoyé.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Compris'),
+                    ),
+                  ],
+                ),
+              ),
+              child: const Text('À propos de cette version'),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class ScoutShell extends StatefulWidget {
@@ -205,36 +219,6 @@ class _ScoutShellState extends State<ScoutShell> {
         ],
       ),
     ),
-    bottomNavigationBar: NavigationBar(
-      selectedIndex: tab,
-      onDestinationSelected: go,
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home, color: ScoutColors.brand),
-          label: 'Accueil',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.explore_outlined),
-          selectedIcon: Icon(Icons.explore, color: ScoutColors.brand),
-          label: 'Explorer',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.add_circle_outline),
-          selectedIcon: Icon(Icons.add_circle, color: ScoutColors.brand),
-          label: 'Publier',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.chat_bubble_outline),
-          selectedIcon: Icon(Icons.chat_bubble, color: ScoutColors.brand),
-          label: 'Messages',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.person_outline),
-          selectedIcon: Icon(Icons.person, color: ScoutColors.brand),
-          label: 'Profil',
-        ),
-      ],
-    ),
+    bottomNavigationBar: ScoutTabs(selected: tab, onSelected: go),
   );
 }

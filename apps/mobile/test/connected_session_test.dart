@@ -73,6 +73,8 @@ class ApiFixture {
         'displayName': name,
         'biography': biography,
       };
+    } else if (path == '/v1/feed') {
+      body = {'items': [], 'hasMore': false};
     } else if (path == '/v1/notifications/unread-count') {
       body = {'count': unread};
     } else if (path == '/v1/notifications/read-all') {

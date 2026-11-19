@@ -66,7 +66,7 @@ class _LocalVideoState extends State<LocalVideo> {
       );
     }
     return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(12),
       child: ColoredBox(
         color: Colors.black,
         child: Column(
@@ -82,7 +82,10 @@ class _LocalVideoState extends State<LocalVideo> {
             VideoProgressIndicator(
               _controller,
               allowScrubbing: true,
-              colors: const VideoProgressColors(playedColor: ScoutColors.brand),
+              colors: VideoProgressColors(
+                playedColor: context.scout.surPelouse,
+                bufferedColor: context.scout.surPelouse.withValues(alpha: 0.35),
+              ),
             ),
             IconButton(
               tooltip: _controller.value.isPlaying
@@ -94,6 +97,7 @@ class _LocalVideoState extends State<LocalVideo> {
                     : await _controller.play();
                 if (mounted) setState(() {});
               },
+              color: context.scout.surPelouse,
               icon: Icon(
                 _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
               ),
