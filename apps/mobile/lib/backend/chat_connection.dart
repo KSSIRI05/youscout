@@ -41,6 +41,7 @@ class ChatConnection extends ChangeNotifier {
     ChatConnector? connector,
     Duration Function(int attempt)? backoff,
     this.acceptTimeout = const Duration(seconds: 8),
+    this.readyTimeout = const Duration(seconds: 3),
   }) : connector = connector ?? connectChatChannel,
        backoff =
            backoff ?? ((attempt) => Duration(seconds: min(30, 1 << attempt)));
@@ -57,13 +58,16 @@ class ChatConnection extends ChangeNotifier {
   final Duration Function(int attempt) backoff;
   final Duration acceptTimeout;
 
+  /// Délai sans « ready » après lequel la trame d'authentification est renvoyée.
+  final Duration readyTimeout;
+
   ChatLink link = ChatLink.connecting;
   final _messages = StreamController<DirectMessage>.broadcast();
   final _delivered = StreamController<({String peer, int seq})>.broadcast();
   final _reconnected = StreamController<void>.broadcast();
   final Map<String, Completer<DirectMessage>> _pending = {};
   ChatChannel? _channel;
-  Timer? _ping, _renew, _retry;
+  Timer? _ping, _renew, _retry, _authRetry;
   bool _ready = false, _everReady = false, _disposed = false;
   int _attempt = 0;
 
@@ -106,6 +110,16 @@ class ChatConnection extends ChangeNotifier {
     final current = await token();
     if (_disposed || _channel != channel) return;
     channel.send(jsonEncode({'type': 'auth', 'token': current.access}));
+    // La Gateway peut perdre une trame envoyée juste après l'ouverture : sans « ready », on la renvoie
+    // plutôt que d'attendre la fermeture 4401 de Chat (10 s). Chat répond « ready » à un renvoi du même compte.
+    if (!_ready) {
+      _authRetry?.cancel();
+      _authRetry = Timer(readyTimeout, () {
+        if (!_ready && _channel == channel) {
+          _authenticate(channel).catchError((_) {});
+        }
+      });
+    }
     // Renouvelle avant l'expiration : Chat ferme la connexion d'un jeton expiré.
     var wait =
         current.expiresAt.difference(DateTime.now()) -
@@ -125,6 +139,7 @@ class ChatConnection extends ChangeNotifier {
     switch (frame['type']) {
       case 'ready':
         _ready = true;
+        _authRetry?.cancel();
         _attempt = 0;
         _ping ??= Timer.periodic(
           const Duration(seconds: 30),
@@ -167,6 +182,7 @@ class ChatConnection extends ChangeNotifier {
     _ping?.cancel();
     _ping = null;
     _renew?.cancel();
+    _authRetry?.cancel();
     if (_disposed) return;
     _setLink(ChatLink.offline);
     // 4403 : rôle absent ou changement de compte, une reconnexion ne changerait rien.
@@ -227,6 +243,7 @@ class ChatConnection extends ChangeNotifier {
     _disposed = true;
     _ping?.cancel();
     _renew?.cancel();
+    _authRetry?.cancel();
     _retry?.cancel();
     _channel?.close();
     for (final pending in _pending.values) {
