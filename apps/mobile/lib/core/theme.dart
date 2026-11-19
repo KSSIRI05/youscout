@@ -276,9 +276,6 @@ ThemeData scoutTheme([Brightness brightness = Brightness.light]) {
         textStyle: text.copyWith(fontSize: 15, fontWeight: FontWeight.w500),
       ),
     ),
-    iconButtonTheme: IconButtonThemeData(
-      style: IconButton.styleFrom(foregroundColor: p.encre),
-    ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: p.surface,

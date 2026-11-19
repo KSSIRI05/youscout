@@ -278,7 +278,10 @@ class _ProfileEditorState extends State<ProfileEditor> {
                 maxLength: 500,
                 maxLines: 5,
                 onChanged: (_) => setState(() => saved = false),
-                decoration: const InputDecoration(labelText: 'Biographie'),
+                decoration: const InputDecoration(
+                  labelText: 'Biographie',
+                  alignLabelWithHint: true,
+                ),
                 validator: (value) => (value?.runes.length ?? 0) > 500
                     ? '500 caractères maximum.'
                     : null,

@@ -110,21 +110,21 @@ class _ConnectedNotificationsScreenState
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Notifications'),
-      actions: [
-        TextButton(
-          key: const Key('notifications-read-all'),
-          onPressed: items.any((n) => n['read'] != true) ? _readAll : null,
-          child: const Text('Tout marquer comme lu'),
-        ),
-      ],
-    ),
+    appBar: AppBar(title: const Text('Notifications')),
     body: RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
         children: [
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              key: const Key('notifications-read-all'),
+              onPressed: items.any((n) => n['read'] != true) ? _readAll : null,
+              icon: const Icon(Icons.done_all, size: 18),
+              label: const Text('Tout marquer comme lu'),
+            ),
+          ),
           if (loading) const LinearProgressIndicator(),
           if (error != null)
             Padding(

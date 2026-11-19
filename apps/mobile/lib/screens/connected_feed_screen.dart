@@ -719,7 +719,7 @@ class _ConnectedFeedScreenState extends State<ConnectedFeedScreen> {
             IconButton(
               tooltip: 'Commenter',
               onPressed: () => _comments(video),
-              icon: const Icon(Icons.mode_comment_outlined),
+              icon: Icon(Icons.mode_comment_outlined, color: p.encre),
             ),
             const Spacer(),
             if (video.skillIds.isNotEmpty)
