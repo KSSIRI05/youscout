@@ -8,6 +8,7 @@ const STEP_LABELS: Record<string, string> = {
   RATING: "Notes effacées",
   CHAT: "Texte des messages effacé",
   SKILL: "Abonnements aux hashtags retirés",
+  NOTIFICATION: "Notifications et appareils effacés",
   IDENTITY: "Compte Keycloak supprimé",
 };
 const STATUS_LABELS: Record<Account["status"], string> = {

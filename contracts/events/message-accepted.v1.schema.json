@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://youscout.example/contracts/events/message-accepted.v1.schema.json",
+  "title": "MessageAccepted v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "eventType",
+    "eventVersion",
+    "occurredAt",
+    "producer",
+    "data"
+  ],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "eventType": {
+      "const": "MessageAccepted"
+    },
+    "eventVersion": {
+      "const": 1
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "producer": {
+      "const": "chat-service"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "messageId",
+        "conversationId",
+        "seq",
+        "senderSubject",
+        "recipientSubject",
+        "acceptedAt"
+      ],
+      "properties": {
+        "messageId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "conversationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "senderSubject": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "recipientSubject": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "acceptedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  },
+  "description": "Topic chat.messages.v1, key conversationId. Written in the message's MongoDB transaction; carries no message text."
+}

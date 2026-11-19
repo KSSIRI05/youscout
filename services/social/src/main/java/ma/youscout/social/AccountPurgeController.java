@@ -31,6 +31,11 @@ class AccountPurgeController {
              WHERE author_subject = ? AND (body <> '' OR deleted_at IS NULL)
             """, subject);
         jdbc.update("DELETE FROM direct_messages WHERE sender_subject = ? OR recipient_subject = ?", subject, subject);
+        // Les événements déjà publiés n'ont plus d'usage ; ceux en attente partent encore, Notification les ignore.
+        jdbc.update("""
+            DELETE FROM social_event_outbox WHERE published_at IS NOT NULL
+               AND ? IN (payload->'data'->>'actorSubject', payload->'data'->>'authorSubject')
+            """, subject);
         return ResponseEntity.noContent().build();
     }
 }

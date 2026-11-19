@@ -84,12 +84,14 @@ services:
       # Désactivation de comptes (A04) via l'API d'administration Keycloak.
       KEYCLOAK_ADMIN_URL: http://keycloak:8080
       USER_ADMIN_CLIENT_SECRET: ${USER_ADMIN_CLIENT_SECRET:?Run init-env.py --upgrade first}
-      # Fermeture de compte (U22) : chaque service efface ses données ; sans le profil video, l'étape VIDEO reste en attente.
+      # Fermeture de compte (U22) : chaque service efface ses données ; sans les profils video et feed,
+      # les étapes VIDEO et NOTIFICATION restent en attente.
       VIDEO_SERVICE_URL: http://video:8080
       SOCIAL_SERVICE_URL: http://social:8080
       RATING_SERVICE_URL: http://rating:8080
       CHAT_SERVICE_URL: http://chat:8080
       SKILL_SERVICE_URL: http://skill:8080
+      NOTIFICATION_SERVICE_URL: http://notification:8080
       ACCOUNT_CLOSURE_PURGE_DELAY: ${ACCOUNT_CLOSURE_PURGE_DELAY:-PT6M}
     depends_on:
       user-db: {condition: service_healthy}
@@ -320,6 +322,39 @@ services:
       chat-mongo-init: {condition: service_completed_successfully}
       chat-redis: {condition: service_healthy}
       keycloak: {condition: service_healthy}
+  notification-db:
+    profiles: [feed]
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: youscout_notification
+      POSTGRES_USER: youscout_notification
+      POSTGRES_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?Run init-env.py --upgrade first}
+    volumes: [notification-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U youscout_notification -d youscout_notification']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  # Notifications : consomme les événements Kafka (profil feed, comme Feed) et tient la boîte de chaque joueur.
+  # Push FCM désactivé tant que FCM_PROJECT_ID et FCM_CREDENTIALS_FILE ne sont pas fournis.
+  notification:
+    profiles: [feed]
+    build:
+      context: ../..
+      dockerfile: infra/docker/service.Dockerfile
+      args: {MODULE: notification}
+    environment:
+      SERVER_PORT: '8080'
+      NOTIFICATION_DB_URL: jdbc:postgresql://notification-db:5432/youscout_notification
+      NOTIFICATION_DB_USERNAME: youscout_notification
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?Run init-env.py --upgrade first}
+      NOTIFICATION_DEVICE_KEY: ${NOTIFICATION_DEVICE_KEY:?Run init-env.py --upgrade first}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      OIDC_ISSUER: http://localhost:8180/realms/youscout
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
+    depends_on:
+      notification-db: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
   # Point d’entrée des API sur localhost ; attend que les services dépendants soient sains.
   gateway:
     build:
@@ -334,6 +369,7 @@ services:
       SOCIAL_SERVICE_URL: http://social:8080
       RATING_SERVICE_URL: http://rating:8080
       CHAT_SERVICE_URL: http://chat:8080
+      NOTIFICATION_SERVICE_URL: http://notification:8080
       OIDC_ISSUER: http://localhost:8180/realms/youscout
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
     ports: ['127.0.0.1:8080:8080']
@@ -356,3 +392,4 @@ volumes:
   social-data:
   rating-data:
   chat-mongo-data:
+  notification-data:

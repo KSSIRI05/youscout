@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: notification-service
+  datasource:
+    url: ${NOTIFICATION_DB_URL:jdbc:postgresql://localhost:5440/youscout_notification}
+    username: ${NOTIFICATION_DB_USERNAME:youscout_notification}
+    password: ${NOTIFICATION_DB_PASSWORD}
+    hikari:
+      connection-timeout: 5000
+      maximum-pool-size: 5
+  flyway:
+    enabled: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER:http://localhost:8180/realms/youscout}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:http://localhost:8180/realms/youscout/protocol/openid-connect/certs}
+          audiences: youscout-api
+server:
+  port: ${SERVER_PORT:8089}
+notification:
+  # Événements consommés : relations User, publications et suppressions Video, interactions Social, messages Chat.
+  ingestion:
+    enabled: ${NOTIFICATION_INGESTION_ENABLED:true}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    group-id: ${NOTIFICATION_GROUP_ID:youscout-notification-v1}
+    topics: ${USER_RELATIONSHIPS_TOPIC:user.relationships.v1},${VIDEO_PUBLISHED_TOPIC:video.published.v2},${VIDEO_DELETED_TOPIC:video.deleted.v1},${INTERACTION_EVENTS_TOPIC:interaction.events.v1},${CHAT_MESSAGES_TOPIC:chat.messages.v1}
+  # Un événement plus ancien met à jour les projections sans notifier (rattrapage, historique relu au démarrage).
+  max-event-age: ${NOTIFICATION_MAX_EVENT_AGE:PT24H}
+  # Jetons d'appareil chiffrés (AES-GCM, clé dérivée de ce secret) ; sans secret, l'enregistrement répond 503.
+  device-key: ${NOTIFICATION_DEVICE_KEY:}
+  push:
+    poll-ms: 2000
+    # Firebase Cloud Messaging (Android, web et iOS via APNs configuré dans Firebase). Sans projet ni fichier de
+    # compte de service, le push reste désactivé : les notifications restent dans la boîte de l'application.
+    fcm:
+      project-id: ${FCM_PROJECT_ID:}
+      credentials-file: ${FCM_CREDENTIALS_FILE:}
+      api-url: https://fcm.googleapis.com
+management:
+  endpoints.web.exposure.include: health
+  endpoint.health.show-details: never
+  endpoint.health.probes.enabled: true
+  endpoint.health.group.readiness.include: readinessState,db

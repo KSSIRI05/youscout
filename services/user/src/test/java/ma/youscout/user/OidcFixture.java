@@ -61,7 +61,7 @@ final class OidcFixture {
                 if (status == 204) keycloakCalls.add(e.getRequestMethod() + " " + e.getRequestURI().getPath().substring("/admin/realms/youscout".length()) + " " + body);
                 e.sendResponseHeaders(status, -1); e.close();
             });
-            for (String service : java.util.List.of("video", "social", "rating", "chat", "skill")) {
+            for (String service : java.util.List.of("video", "social", "rating", "chat", "skill", "notification")) {
                 server.createContext("/" + service + "/internal/accounts/", e -> {
                     String name = service.toUpperCase(java.util.Locale.ROOT);
                     String subject = e.getRequestURI().getPath().substring(("/" + service + "/internal/accounts/").length());

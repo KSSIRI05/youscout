@@ -33,6 +33,7 @@ import org.springframework.web.server.ResponseStatusException;
 class ChatStore {
     static final String CONVERSATIONS = "conversations";
     static final String MESSAGES = "messages";
+    static final String OUTBOX = "chat_outbox";
     private static final Pattern CLIENT_ID = Pattern.compile("[A-Za-z0-9_-]{1,64}");
     // Les écritures simultanées d'une même conversation se disputent son compteur : MongoDB annule les perdantes.
     private static final int MAX_ATTEMPTS = 10;
@@ -127,6 +128,8 @@ class ChatStore {
             new Update().set("body", "").set("redacted", true), MESSAGES);
         mongo.updateMulti(query(where("members.subject").is(subject).and("lastMessage.senderSubject").is(subject)),
             new Update().set("lastMessage.body", "").set("lastMessage.redacted", true), CONVERSATIONS);
+        // Les événements déjà publiés ne servent plus ; ceux en attente partent encore et sont ignorés par Notification.
+        mongo.remove(query(where("senderSubject").is(subject).and("publishedAt").ne(null)), OUTBOX);
     }
 
     /** Le destinataire confirme avoir reçu la conversation jusqu'à {@code seq} ; la valeur ne fait que croître. */
@@ -173,6 +176,16 @@ class ChatStore {
             .append("senderSubject", sender).append("recipientSubject", recipient).append("clientMessageId", clientId)
             .append("body", body).append("acceptedAt", now);
         mongo.insert(message, MESSAGES);
+        // MessageAccepted v1 part dans la même transaction que le message ; sans texte, pour Notification.
+        String eventId = UUID.randomUUID().toString();
+        var event = new Document("eventId", eventId).append("eventType", "MessageAccepted").append("eventVersion", 1)
+            .append("occurredAt", now.toInstant().toString()).append("producer", "chat-service")
+            .append("data", new Document("messageId", message.getString("_id")).append("conversationId", conversation)
+                .append("seq", seq).append("senderSubject", sender).append("recipientSubject", recipient)
+                .append("acceptedAt", now.toInstant().toString()));
+        mongo.insert(new Document("_id", eventId).append("key", conversation).append("payload", event)
+            .append("senderSubject", sender).append("createdAt", now).append("nextAttemptAt", now)
+            .append("publishedAt", null).append("attempts", 0), OUTBOX);
         mongo.updateFirst(query(where("_id").is(conversation)), new Update().set("lastMessageAt", now)
             .set("lastMessage", new Document("senderSubject", sender).append("body", body).append("seq", seq).append("acceptedAt", now)),
             CONVERSATIONS);

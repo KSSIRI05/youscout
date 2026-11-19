@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:youscout_mobile/app.dart';
+import 'package:youscout_mobile/screens/connected_notifications_screen.dart';
 import 'package:youscout_mobile/screens/connected_screen.dart';
 import 'package:youscout_mobile/state/scout_store.dart';
 import 'connected_session_test.dart' show FakeAuth, ApiFixture;
@@ -109,6 +110,57 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('the bell shows unread notifications and marks them read', (
+    tester,
+  ) async {
+    final fixture = ApiFixture()
+      ..unread = 2
+      ..notifications = [
+        {
+          'id': 'n-1',
+          'type': 'FOLLOWED',
+          'actorSubject': 'bob',
+          'occurrences': 1,
+          'createdAt': '2026-11-19T10:00:00Z',
+          'updatedAt': '2026-11-19T10:00:00Z',
+          'read': false,
+        },
+        {
+          'id': 'n-2',
+          'type': 'MESSAGE',
+          'actorSubject': 'bob',
+          'conversationId': 'c-1',
+          'occurrences': 3,
+          'createdAt': '2026-11-19T09:00:00Z',
+          'updatedAt': '2026-11-19T09:30:00Z',
+          'read': false,
+        },
+      ];
+    final session = fixture.session(FakeAuth());
+    final demo = ScoutStore();
+    addTearDown(session.dispose);
+    addTearDown(demo.dispose);
+    await tester.pumpWidget(YouScoutApp(store: demo, session: session));
+    await tester.pumpAndSettle();
+    await tester.runAsync(session.login);
+    await tester.pumpAndSettle();
+    expect(find.text('2'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('notifications')));
+    await tester.pumpAndSettle();
+    expect(find.text('Bob te suit désormais.'), findsOneWidget);
+    expect(find.text('Bob t’a envoyé 3 messages.'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('notifications-read-all')));
+    await tester.pumpAndSettle();
+    expect(fixture.unread, 0);
+    Navigator.of(
+      tester.element(find.byType(ConnectedNotificationsScreen)),
+    ).pop();
+    await tester.pumpAndSettle();
+    expect(find.text('2'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'expired session returns to welcome and never displays demo profile',

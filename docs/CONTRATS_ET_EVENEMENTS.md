@@ -33,7 +33,8 @@ Pas de binaire vidéo, jeton d'accès ou mot de passe dans Kafka. Minimiser les 
 | `video.lifecycle.v1` | videoId | Video | Feed, analytics, indexeur, notification |
 | `media.processing.requests.v1` | videoId | Relais outbox Video | Groupe workers FFmpeg |
 | `media.processing.results.v1` | videoId | Workers | Video |
-| `interaction.events.v1` | videoId | Interaction | Feed, analytics, notification |
+| `interaction.events.v1` | videoId | Interaction (Social : VideoLiked, CommentAdded) | Notification ; Feed et analytics à venir |
+| `chat.messages.v1` | conversationId | Chat (MessageAccepted, sans texte) | Notification |
 | `user.events.v1` | userId | User | Feed, Chat, analytics, indexeur |
 | `user.relationships.v1` | clé fixe du flux (MVP, une partition) | User | projection relation Feed/Redis |
 | `rating.events.v1` | videoId | Rating | Feed, analytics |

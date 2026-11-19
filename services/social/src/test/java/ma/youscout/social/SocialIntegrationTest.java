@@ -37,7 +37,7 @@ class SocialIntegrationTest {
     }
     @BeforeEach void clear() {
         oidc.reset();
-        jdbc.update("TRUNCATE moderation_decisions, comment_reports, video_likes, video_comments, video_reports");
+        jdbc.update("TRUNCATE moderation_decisions, comment_reports, video_likes, video_comments, video_reports, social_event_outbox");
     }
     @AfterAll static void cleanup() { client.close(); oidc.server.stop(0); }
 
@@ -141,6 +141,28 @@ class SocialIntegrationTest {
         String alice = oidc.token("alice");
         assertThat(send("POST", "/v1/social/videos/" + UUID.randomUUID() + "/reports", alice, "{\"reason\":\"Spam\"}").statusCode()).isEqualTo(404);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM video_reports", Integer.class)).isZero();
+    }
+
+    @Test void newLikesAndCommentsWriteOneEventEachWithoutTheText() throws Exception {
+        UUID video = UUID.randomUUID();
+        oidc.publishedVideos.put(video.toString(), "bob");
+        for (int attempt = 0; attempt < 2; attempt++) send("PUT", likes(video), oidc.token("alice"), null);
+        String root = JsonPath.parse(send("POST", comments(video), oidc.token("alice"), "{\"body\":\"Bravo\"}").body()).read("$.id");
+        send("POST", comments(video), oidc.token("carol"), "{\"body\":\"Merci\",\"parentId\":\"" + root + "\"}");
+        send("DELETE", likes(video), oidc.token("alice"), null);
+
+        var events = jdbc.queryForList("SELECT message_key, event_type, payload::text FROM social_event_outbox ORDER BY event_sequence");
+        assertThat(events).extracting(e -> e.get("event_type")).containsExactly("VideoLiked", "CommentAdded", "CommentAdded");
+        assertThat(events).allSatisfy(e -> assertThat(e.get("message_key")).isEqualTo(video.toString()));
+        var liked = JsonPath.parse((String) events.get(0).get("payload"));
+        assertThat(liked.read("$.producer", String.class)).isEqualTo("social-service");
+        assertThat(liked.read("$.data.videoOwnerSubject", String.class)).isEqualTo("bob");
+        assertThat(liked.read("$.data.actorSubject", String.class)).isEqualTo("alice");
+        var reply = JsonPath.parse((String) events.get(2).get("payload"));
+        assertThat(reply.read("$.data.parentId", String.class)).isEqualTo(root);
+        assertThat(reply.read("$.data.parentAuthorSubject", String.class)).isEqualTo("alice");
+        assertThat(reply.read("$.data.authorSubject", String.class)).isEqualTo("carol");
+        assertThat(events).noneSatisfy(e -> assertThat((String) e.get("payload")).contains("Merci"));
     }
 
     @Test void accountClosureErasesLikesAndCommentTextButKeepsReplies() throws Exception {

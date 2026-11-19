@@ -184,7 +184,7 @@ paths:
       description: |-
         The account becomes CLOSING at once: User refuses its actions (403), hides its profile and asks Keycloak to
         disable it and end its sessions. Once access tokens issued before the request have expired (6 minutes),
-        User asks Video, Social, Rating, Chat and Skill to erase the account's data, deletes the Keycloak account,
+        User asks Video, Social, Rating, Chat, Skill and Notification to erase the account's data, deletes the Keycloak account,
         removes follows and blocks, and keeps an anonymised CLOSED row. Failed steps are retried and logged.
         A repeated request returns the existing closure.
       security: [{bearerAuth: []}]
@@ -305,12 +305,12 @@ components:
         completedAt: {type: string, format: date-time, nullable: true}
         steps:
           type: array
-          description: In order SESSIONS, VIDEO, SOCIAL, RATING, CHAT, SKILL, IDENTITY
+          description: In order SESSIONS, VIDEO, SOCIAL, RATING, CHAT, SKILL, NOTIFICATION, IDENTITY
           items:
             type: object
             required: [name, status, attempts, lastError, completedAt]
             properties:
-              name: {type: string, enum: [SESSIONS, VIDEO, SOCIAL, RATING, CHAT, SKILL, IDENTITY]}
+              name: {type: string, enum: [SESSIONS, VIDEO, SOCIAL, RATING, CHAT, SKILL, NOTIFICATION, IDENTITY]}
               status: {type: string, enum: [PENDING, DONE]}
               attempts: {type: integer, minimum: 0}
               lastError: {type: string, nullable: true, description: HTTP status or "Service injoignable"; no remote detail}

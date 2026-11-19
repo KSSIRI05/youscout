@@ -10,10 +10,10 @@ L'architecture cible reste celle de [ARCHITECTURE.md](ARCHITECTURE.md). Ce table
 | Skill/Hashtag | Catalogue, recherche, suivi de hashtags | Outbox/evenements catalogue et interface admin |
 | Video et media-worker | MongoDB en replica set pour metadonnees, etats et outbox (tests d'integration sur replica set Testcontainers) ; upload S3 prive, traitement FFmpeg, publication, suppression par le proprietaire avec `VideoDeleted`, retrait du fil par Feed, nettoyage S3 par le worker et bouton de suppression dans Flutter | HLS, CDN prive, reconciliation |
 | Feed | Projection VideoPublished, projection Redis des suivis/blocages, cache de pages versionne | Fan-out des publications par utilisateur, retrait de contenus, reconstruction automatisee de Redis |
-| Chat | Implemente (U21) : service dedie, MongoDB (sequence par conversation, deduplication par identifiant client), WebSocket via la Gateway, relais Redis entre instances, blocages verifies aupres de User | Evenements MessageAccepted/MessageDelivered, etat « lu », notifications push |
+| Chat | Implemente (U21) : service dedie, MongoDB (sequence par conversation, deduplication par identifiant client), WebSocket via la Gateway, relais Redis entre instances, blocages verifies aupres de User | Evenement MessageDelivered, etat « lu » ; MessageAccepted publie pour Notification |
 | Interaction, Moderation | Social agrege likes, commentaires avec reponses et signalements ; ecritures verifiees aupres de Video (publication) et User (blocages), suppression par le proprietaire de la video (U13), pagination par curseur ; moderation : signalement des commentaires, file admin, retrait de commentaires et de videos (VideoModerated, masquage dans Feed) avec decisions journalisees | Frontieres separees, migration MongoDB |
 | Rating | Implemente (U15) | Evenement RatingChanged et prise en compte dans le classement du fil |
-| Notification | Absent | Service, appareils et push FCM/APNs |
+| Notification | Implemente : service dedie (PostgreSQL), consommation Kafka de User, Video, Social (outbox VideoLiked/CommentAdded) et Chat (outbox MessageAccepted), boite et badge dans Flutter, appareils chiffres, envoi FCM pret mais desactive sans identifiants | Projet Firebase et jeton FCM dans Flutter, preferences de notification |
 | Admin/Analytics | Absent | Dashboard, projections et mesures definies |
 | Exploitation | Compose local, CI, S3 Terraform, Kafka local | Kubernetes/staging, OTel/metrics/logs/traces, sauvegardes, restauration et charge |
 

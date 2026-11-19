@@ -49,6 +49,8 @@ class ApiFixture {
   bool unauthorizedUntilRefresh = false;
   int skillCount = 1, followingCount = 0;
   final closures = <Object?>[];
+  int unread = 0;
+  List<Map<String, Object?>> notifications = [];
   http.Response respond(http.Request request) {
     requests.add(request);
     expect(request.headers['Authorization'], startsWith('Bearer access-'));
@@ -70,6 +72,26 @@ class ApiFixture {
         'subject': 'verified-account',
         'displayName': name,
         'biography': biography,
+      };
+    } else if (path == '/v1/notifications/unread-count') {
+      body = {'count': unread};
+    } else if (path == '/v1/notifications/read-all') {
+      unread = 0;
+      return http.Response('', 204);
+    } else if (path == '/v1/notifications') {
+      return http.Response(
+        jsonEncode(notifications),
+        200,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+    } else if (path.startsWith('/v1/users/') && path.split('/').length == 4) {
+      body = {
+        'subject': request.url.pathSegments[2],
+        'displayName': 'Bob',
+        'biography': '',
+        'followingCount': 0,
+        'followerCount': 0,
+        'following': false,
       };
     } else if (path == '/v1/users/me/closure') {
       closures.add(jsonDecode(request.body));

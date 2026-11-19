@@ -25,6 +25,8 @@ class ChatMongoConfiguration {
             var messages = mongo.indexOps(ChatStore.MESSAGES);
             messages.createIndex(new Index().on("conversationId", Sort.Direction.ASC).on("seq", Sort.Direction.ASC).unique());
             messages.createIndex(new Index().on("senderSubject", Sort.Direction.ASC).on("clientMessageId", Sort.Direction.ASC).unique());
+            mongo.indexOps(ChatStore.OUTBOX)
+                .createIndex(new Index().on("publishedAt", Sort.Direction.ASC).on("nextAttemptAt", Sort.Direction.ASC));
             mongo.indexOps(ChatStore.CONVERSATIONS)
                 .createIndex(new Index().on("members.subject", Sort.Direction.ASC).on("lastMessageAt", Sort.Direction.DESC));
         };

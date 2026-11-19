@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://youscout.example/contracts/events/comment-added.v1.schema.json",
+  "title": "CommentAdded v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "eventType",
+    "eventVersion",
+    "occurredAt",
+    "producer",
+    "data"
+  ],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "eventType": {
+      "const": "CommentAdded"
+    },
+    "eventVersion": {
+      "const": 1
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "producer": {
+      "const": "social-service"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commentId",
+        "videoId",
+        "videoOwnerSubject",
+        "authorSubject",
+        "parentId",
+        "parentAuthorSubject",
+        "createdAt"
+      ],
+      "properties": {
+        "commentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "videoId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "videoOwnerSubject": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "authorSubject": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "parentId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "parentAuthorSubject": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  },
+  "description": "Topic interaction.events.v1, key videoId. Carries no comment text; consumers read it from Social if needed."
+}
