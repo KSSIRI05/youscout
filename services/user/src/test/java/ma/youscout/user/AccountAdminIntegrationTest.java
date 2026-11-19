@@ -84,6 +84,15 @@ class AccountAdminIntegrationTest {
         assertThat(events()).isEmpty();
     }
 
+    @Test void aRevokedCachedServiceTokenIsReplacedOnce() {
+        post("/v1/users/admin/accounts/alice/deactivate", admin, null).expectStatus().isOk();
+        int issued = oidc.tokensIssued.get();
+        oidc.rejectNextAdminCalls.set(1);
+        post("/v1/users/admin/accounts/alice/reactivate", admin, null).expectStatus().isOk();
+        assertThat(oidc.tokensIssued.get()).isEqualTo(issued + 1);
+        assertThat(oidc.keycloakCalls).endsWith("PUT /users/alice {\"enabled\":true}");
+    }
+
     @Test void anAdminCannotDeactivateTheirOwnAccount() {
         client.get().uri("/v1/users/me").headers(h -> h.setBearerAuth(admin)).exchange().expectStatus().isOk();
         post("/v1/users/admin/accounts/role-test/deactivate", admin, null).expectStatus().isBadRequest();

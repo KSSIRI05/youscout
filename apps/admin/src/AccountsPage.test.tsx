@@ -15,6 +15,7 @@ function backend() {
     { name: "CHAT", status: "PENDING", attempts: 3, lastError: "HTTP 503", completedAt: null },
   ] };
   const calls: { method: string; path: string; body?: unknown }[] = [];
+  let closureDown = false;
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
@@ -22,12 +23,14 @@ function backend() {
     const [, , , , , subject, action] = url.pathname.split("/");
     const account = accounts[decodeURIComponent(subject)];
     if (!account) return new Response(JSON.stringify({ detail: "Profil introuvable." }), { status: 404 });
-    if (action === "closure") return new Response(JSON.stringify(closure));
+    if (action === "closure") return closureDown ? new Response(JSON.stringify({ detail: "Service indisponible." }), { status: 503 })
+                                                 : new Response(JSON.stringify(closure));
     if (action) Object.assign(account, { status: action === "deactivate" ? "DEACTIVATED" : "ACTIVE",
       statusChangedAt: "2026-11-18T12:00:00Z", statusChangedBy: "moderator", statusNote: body?.note ?? null });
     return new Response(JSON.stringify(account));
   });
-  return { api: new AdminApi(async () => "admin-token", fetchImpl, "http://gateway.test"), calls };
+  return { api: new AdminApi(async () => "admin-token", fetchImpl, "http://gateway.test"), calls,
+           breakClosure: () => { closureDown = true; } };
 }
 
 it("looks up an account and requires confirmation before deactivating it", async () => {
@@ -73,4 +76,13 @@ it("shows the closure log of an account closed by its owner, without deactivatio
   expect(screen.getByText(/Texte des messages effacé : en attente \(3 essais, HTTP 503\)/)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /activer le compte/ })).not.toBeInTheDocument();
   expect(calls.map(call => call.path)).toContain("/v1/users/admin/accounts/player-2/closure");
+});
+
+it("keeps a closing account visible when its closure log cannot be read", async () => {
+  const { api, breakClosure } = backend();
+  breakClosure();
+  render(<AccountsPage api={api} initialSubject="player-2" />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("Journal de fermeture indisponible : Service indisponible.");
+  expect(screen.getByText("Compte fermé")).toBeInTheDocument();
+  expect(screen.getByText("Fermeture en cours")).toBeInTheDocument();
 });

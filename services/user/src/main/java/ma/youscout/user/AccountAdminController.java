@@ -65,7 +65,13 @@ class AccountAdminController {
         // Réactiver dans Keycloak un compte en cours de fermeture rouvrirait ses sessions : refusé avant tout appel.
         requireNotClosing(accounts.find(target));
         keycloak.setEnabled(target, true);
-        return noStore(accounts.change(target, "ACTIVE", jwt.getSubject(), note));
+        try {
+            return noStore(accounts.change(target, "ACTIVE", jwt.getSubject(), note));
+        } catch (ResponseStatusException closing) {
+            // Le joueur a demandé la fermeture entre la vérification et Keycloak : son compte est désactivé de nouveau.
+            if (closing.getStatusCode() == HttpStatus.CONFLICT) keycloak.setEnabled(target, false);
+            throw closing;
+        }
     }
 
     private static void requireNotClosing(AdminAccount account) {
@@ -117,7 +123,10 @@ class AccountStore {
         return rows.getFirst();
     }
 
-    /** Un appel qui ne change pas l'état ne crée ni ligne d'audit ni événement. */
+    /**
+     * Un appel qui ne change pas l'état ne crée ni ligne d'audit ni événement. Un compte passé en fermeture après
+     * la vérification du contrôleur est refusé ici, sous le verrou, par un 409.
+     */
     @Transactional
     public AccountAdminController.AdminAccount change(String subject, String status, String admin, String note) {
         // Même verrou que les relations : l'événement de compte est ordonné avec les suivis et blocages.
@@ -127,6 +136,11 @@ class AccountStore {
                    status_note = ?, updated_at = clock_timestamp()
              WHERE subject = ? AND account_status <> ? AND account_status IN ('ACTIVE', 'DEACTIVATED')
             """, status, admin, note, subject, status);
+        if (changed == 0) {
+            String current = profiles.accountStatus(subject);
+            if ("CLOSING".equals(current) || "CLOSED".equals(current))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Ce compte est fermé ou en cours de fermeture.");
+        }
         if (changed == 1) {
             jdbc.update("INSERT INTO account_audit(id, subject, actor_subject, action, note) VALUES (?, ?, ?, ?, ?)",
                 UUID.randomUUID(), subject, admin, status.equals("ACTIVE") ? "REACTIVATE" : "DEACTIVATE", note);

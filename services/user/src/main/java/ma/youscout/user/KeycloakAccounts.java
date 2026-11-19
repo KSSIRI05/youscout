@@ -72,10 +72,21 @@ class KeycloakAccounts {
         }
     }
 
+    /** Oublie un jeton refusé (401) pour que l'appel suivant en demande un nouveau ; sans effet s'il a déjà changé. */
+    void forgetToken(String rejected) {
+        if (rejected.equals(cachedToken)) cachedToken = null;
+    }
+
     private void admin(java.util.function.Consumer<String> calls) {
         String token = serviceToken();
         try {
-            calls.accept(token);
+            try {
+                calls.accept(token);
+            } catch (HttpClientErrorException.Unauthorized rejected) {
+                // Jeton mis en cache révoqué (redémarrage, rotation des clés) : un seul nouvel essai avec un jeton neuf.
+                forgetToken(token);
+                calls.accept(serviceToken());
+            }
         } catch (HttpClientErrorException.NotFound missing) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Compte introuvable dans Keycloak.");
         } catch (RestClientException unavailable) {

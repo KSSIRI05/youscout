@@ -35,9 +35,9 @@ class AccountClosures {
         this.events = events;
     }
 
-    /** Un second appel ne crée rien et renvoie la fermeture déjà enregistrée. */
+    /** Un second appel ne crée rien. */
     @Transactional
-    public Closure request(String subject) {
+    public void request(String subject) {
         // Même verrou que les relations et la désactivation : l'événement est ordonné avec eux.
         profiles.lockRelationship(subject, subject);
         String status = profiles.accountStatus(subject);
@@ -56,7 +56,6 @@ class AccountClosures {
                 UUID.randomUUID(), subject, subject);
             events.appendAccount(subject, "CLOSING");
         }
-        return find(subject);
     }
 
     @Transactional(readOnly = true)
@@ -74,11 +73,14 @@ class AccountClosures {
         return new Closure(subject, closure.status(), closure.requestedAt(), closure.completedAt(), steps);
     }
 
-    /** Fermetures dues, réservées une minute : une seule instance de User traite chacune à la fois. */
+    /**
+     * Fermetures dues, réservées deux minutes : une seule instance de User traite chacune à la fois.
+     * Le worker prolonge ce bail avant chaque étape (renewLease), si bien qu'un passage long ne le perd pas.
+     */
     @Transactional
     public List<String> claimDue(int limit) {
         return jdbc.queryForList("""
-            UPDATE account_closures SET lease_until = clock_timestamp() + interval '60 seconds'
+            UPDATE account_closures SET lease_until = clock_timestamp() + interval '2 minutes'
              WHERE subject IN (SELECT subject FROM account_closures
                                 WHERE status = 'IN_PROGRESS' AND next_attempt_at <= clock_timestamp()
                                   AND (lease_until IS NULL OR lease_until < clock_timestamp())
@@ -122,6 +124,20 @@ class AccountClosures {
             """, error.length() > 200 ? error.substring(0, 200) : error, subject, step);
     }
 
+    @Transactional
+    public void renewLease(String subject) {
+        jdbc.update("UPDATE account_closures SET lease_until = clock_timestamp() + interval '2 minutes' WHERE subject = ? AND status = 'IN_PROGRESS'",
+            subject);
+    }
+
+    /** Déplace l'échéance sans toucher au bail : utilisé par la demande, qui ne réserve pas la fermeture. */
+    @Transactional
+    public void postpone(String subject, Instant next) {
+        jdbc.update("UPDATE account_closures SET next_attempt_at = ? WHERE subject = ? AND status = 'IN_PROGRESS'",
+            java.sql.Timestamp.from(next), subject);
+    }
+
+    /** Fin d'un passage du worker : prochaine échéance et libération du bail. */
     @Transactional
     public void reschedule(String subject, Instant next) {
         jdbc.update("UPDATE account_closures SET next_attempt_at = ?, lease_until = NULL WHERE subject = ? AND status = 'IN_PROGRESS'",

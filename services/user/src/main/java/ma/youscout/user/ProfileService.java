@@ -47,8 +47,10 @@ class ProfileService {
 
     @Transactional(readOnly = true)
     public FeedRelations feedRelations(Jwt jwt) {
-        String viewer = requireActive(subject(jwt));
-        return new FeedRelations(profiles.following(viewer), profiles.blocked(viewer), profiles.blockedBy(viewer));
+        var relations = profiles.relations(subject(jwt));
+        if (relations.status() != null && !relations.status().equals("ACTIVE"))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Ce compte n'est plus actif.");
+        return new FeedRelations(relations.following(), relations.blocked(), relations.blockedBy());
     }
 
     @Transactional

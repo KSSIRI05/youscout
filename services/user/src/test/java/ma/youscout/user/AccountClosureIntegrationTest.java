@@ -15,6 +15,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 /** U22 : confirmation, révocation, effacements par service (doublures), reprise après échec et anonymisation. */
 // Testcontainers est déclaré avant Spring : le contexte (et son worker) se ferme avant l'arrêt de PostgreSQL.
@@ -26,6 +27,7 @@ class AccountClosureIntegrationTest {
     static final String CONFIRM = "{\"confirmation\":\"FERMER\"}";
     @Container static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17.11-alpine");
     @Autowired JdbcTemplate jdbc;
+    @Autowired AccountStore accountStore;
     @LocalServerPort int port;
     WebTestClient client;
     final String admin = oidc.roleToken("admin"), alice = oidc.profileToken("alice", "Alice", "alice"),
@@ -156,6 +158,11 @@ class AccountClosureIntegrationTest {
                 .expectStatus().isEqualTo(409);
         assertThat(oidc.keycloakCalls).isEmpty();
         assertThat(status("alice")).isEqualTo("CLOSING");
+        // Même si la fermeture arrive après la vérification du contrôleur, l'écriture sous verrou la refuse.
+        assertThatThrownBy(() -> accountStore.change("alice", "DEACTIVATED", "role-test", null))
+            .isInstanceOfSatisfying(org.springframework.web.server.ResponseStatusException.class,
+                e -> assertThat(e.getStatusCode().value()).isEqualTo(409));
+        assertThat(audit("alice")).containsExactly("CLOSE_REQUESTED");
 
         client.post().uri("/v1/users/admin/accounts/bob/deactivate").headers(h -> h.setBearerAuth(admin)).exchange().expectStatus().isOk();
         close(bob, CONFIRM).expectStatus().isForbidden();

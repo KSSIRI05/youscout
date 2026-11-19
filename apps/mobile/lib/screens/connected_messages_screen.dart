@@ -28,10 +28,10 @@ class ConnectedMessagesScreen extends StatefulWidget {
       _ConnectedMessagesScreenState();
 }
 
-/// Message tapé par l'appelant, pas encore accusé par Chat ; le même identifiant sert au renvoi.
 /// Remplace le texte d'un message dont l'expéditeur a fermé son compte (U22).
 const deletedText = 'Message supprimé (compte fermé)';
 
+/// Message tapé par l'appelant, pas encore accusé par Chat ; le même identifiant sert au renvoi.
 class _Outgoing {
   _Outgoing(this.clientMessageId, this.body);
   final String clientMessageId, body;

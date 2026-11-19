@@ -37,14 +37,16 @@ export function AccountsPage({ api, initialSubject = "" }: { api: AdminApi; init
     setNotice(null);
     setConfirming(false);
     setClosure(null);
-    try {
-      const found = await api.getAccount(value.trim());
-      setAccount(found);
-      // U22 : un compte fermé par son titulaire montre son journal ; il ne se désactive ni ne se réactive plus.
-      if (found.status === "CLOSING" || found.status === "CLOSED") setClosure(await api.getAccountClosure(found.subject));
+    let found: Account;
+    try { found = await api.getAccount(value.trim()); setAccount(found); }
+    catch (failure) { setAccount(null); setError(message(failure)); setBusy(false); return; }
+    // U22 : un compte fermé par son titulaire montre son journal ; il ne se désactive ni ne se réactive plus.
+    // Un journal illisible n'efface pas le compte affiché : seule l'erreur s'ajoute.
+    if (found.status === "CLOSING" || found.status === "CLOSED") {
+      try { setClosure(await api.getAccountClosure(found.subject)); }
+      catch (failure) { setError(`Journal de fermeture indisponible : ${message(failure)}`); }
     }
-    catch (failure) { setAccount(null); setError(message(failure)); }
-    finally { setBusy(false); }
+    setBusy(false);
   }, [api]);
 
   useEffect(() => { if (initialSubject) void lookup(initialSubject); }, [initialSubject, lookup]);

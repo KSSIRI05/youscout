@@ -134,7 +134,7 @@ class SocialController {
     }
     private static void validateLimit(int limit, int max) { if (limit < 1 || limit > max) throw bad("La taille de page doit être comprise entre 1 et " + max + "."); }
     private static String subject(Jwt jwt) { String s = jwt.getSubject(); validateSubject(s); return s; }
-    private static void validateSubject(String s) { if (s == null || s.isBlank() || s.length() > 255 || s.indexOf('\0') >= 0) throw bad("Identifiant utilisateur invalide."); }
+    static void validateSubject(String s) { if (s == null || s.isBlank() || s.length() > 255 || s.indexOf('\0') >= 0) throw bad("Identifiant utilisateur invalide."); }
     private static ResponseStatusException bad(String message) { return new ResponseStatusException(HttpStatus.BAD_REQUEST, message); }
     private static ResponseStatusException blockedInteraction() { return new ResponseStatusException(HttpStatus.FORBIDDEN, "Un blocage empêche cette interaction."); }
     private static <T> ResponseEntity<T> noStore(T body) { return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(body); }

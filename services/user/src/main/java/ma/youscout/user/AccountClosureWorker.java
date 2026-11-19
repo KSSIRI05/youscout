@@ -15,6 +15,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -81,13 +82,16 @@ class AccountClosureWorker {
      */
     void revokeSessions(String subject) {
         if (!closures.pendingSteps(subject).contains("SESSIONS")) return;
-        if (attempt(subject, "SESSIONS", () -> disable(subject))) closures.reschedule(subject, closures.purgeAfter(subject));
-        else closures.reschedule(subject, Instant.now().plus(backoff(subject)));
+        // Ce thread ne détient pas de bail : il déplace l'échéance sans libérer celui d'un worker éventuel.
+        // purge_after peut rester nul si un worker a terminé l'étape juste avant : il reprendra alors lui-même.
+        Instant purgeAfter = attempt(subject, "SESSIONS", () -> disable(subject)) ? closures.purgeAfter(subject)
+            : Instant.now().plus(backoff(subject));
+        closures.postpone(subject, purgeAfter == null ? Instant.now() : purgeAfter);
     }
 
     private void process(String subject) {
         List<String> pending = closures.pendingSteps(subject);
-        if (pending.contains("SESSIONS") && !attempt(subject, "SESSIONS", () -> disable(subject))) {
+        if (pending.contains("SESSIONS") && !leased(subject, "SESSIONS", () -> disable(subject))) {
             closures.reschedule(subject, Instant.now().plus(backoff(subject)));
             return;
         }
@@ -99,9 +103,15 @@ class AccountClosureWorker {
         }
         boolean purged = true;
         for (String step : AccountClosures.SERVICE_STEPS)
-            if (pending.contains(step) && !attempt(subject, step, () -> purge(step, subject))) purged = false;
-        if (purged && pending.contains("IDENTITY") && !attempt(subject, "IDENTITY", () -> keycloak.delete(subject))) purged = false;
+            if (pending.contains(step) && !leased(subject, step, () -> purge(step, subject))) purged = false;
+        if (purged && pending.contains("IDENTITY") && !leased(subject, "IDENTITY", () -> keycloak.delete(subject))) purged = false;
         if (!purged || !closures.complete(subject)) closures.reschedule(subject, Instant.now().plus(backoff(subject)));
+    }
+
+    /** Étape exécutée par le worker : chacune peut durer ~40 s (connexion, lecture, jeton), le bail est prolongé avant. */
+    private boolean leased(String subject, String step, Runnable action) {
+        closures.renewLease(subject);
+        return attempt(subject, step, action);
     }
 
     private boolean attempt(String subject, String step, Runnable action) {
@@ -126,8 +136,14 @@ class AccountClosureWorker {
 
     private void purge(String step, String subject) {
         String token = keycloak.serviceToken();
-        services.get(step).delete().uri("/internal/accounts/{subject}", subject).headers(h -> h.setBearerAuth(token))
-            .retrieve().toBodilessEntity();
+        try {
+            services.get(step).delete().uri("/internal/accounts/{subject}", subject).headers(h -> h.setBearerAuth(token))
+                .retrieve().toBodilessEntity();
+        } catch (HttpClientErrorException.Unauthorized rejected) {
+            // Jeton révoqué ou clés changées : le prochain essai en demandera un nouveau.
+            keycloak.forgetToken(token);
+            throw rejected;
+        }
     }
 
     private Duration backoff(String subject) {
