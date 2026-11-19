@@ -1,4 +1,5 @@
 package ma.youscout.gateway;
+import java.util.List;
 import java.time.Instant;
 import org.junit.jupiter.api.*;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,6 +32,7 @@ class SecurityIntegrationTest {
         r.add("RATING_SERVICE_URL", oidc::base);
         r.add("CHAT_SERVICE_URL", oidc::base);
         r.add("NOTIFICATION_SERVICE_URL", oidc::base);
+        r.add("ANALYTICS_SERVICE_URL", oidc::base);
     }
     @Test void uploadPostRequiresRoleAndAllowsIdempotencyCorsHeader() {
         client.post().uri("/v1/videos/uploads").exchange().expectStatus().isUnauthorized();
@@ -178,6 +180,16 @@ class SecurityIntegrationTest {
         String user = oidc.roleToken("user");
         client.get().uri("/v1/notifications/unread-count").headers(h -> h.setBearerAuth(user)).exchange().expectStatus().isOk();
         assertThat(oidc.authorization.get()).isEqualTo("Bearer " + user);
+    }
+    @Test void adminListsStatisticsAndAnalyticsAreReservedToAdmins() {
+        String user = oidc.roleToken("user"), admin = oidc.roleToken("admin");
+        for (String path : List.of("/v1/analytics/activity", "/v1/videos/admin", "/v1/ratings/admin/stats", "/v1/users/admin/accounts", "/v1/social/admin/comments")) {
+            client.get().uri(path).exchange().expectStatus().isUnauthorized();
+            client.get().uri(path).headers(h -> h.setBearerAuth(user)).exchange().expectStatus().isForbidden();
+        }
+        client.get().uri("/v1/analytics/activity").headers(h -> h.setBearerAuth(admin)).exchange().expectStatus().isOk();
+        client.get().uri("/v1/videos/admin").headers(h -> h.setBearerAuth(admin)).exchange().expectStatus().isOk();
+        assertThat(oidc.authorization.get()).isEqualTo("Bearer " + admin);
     }
     // U22 : les effacements internes ne passent jamais par la Gateway, même avec le rôle du compte de service.
     @Test void accountClosureIsForwardedForPlayers() {

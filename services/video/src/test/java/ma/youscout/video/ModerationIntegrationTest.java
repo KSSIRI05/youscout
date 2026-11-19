@@ -99,6 +99,36 @@ class ModerationIntegrationTest {
         assertThat(send("GET", "/v1/videos/admin/" + id, admin, null).statusCode()).isEqualTo(404);
     }
 
+    // A02/A06 : liste paginée de toutes les vidéos avec leur auteur, filtres et totaux, réservés aux administrateurs.
+    @Test void adminsListAndCountEveryVideo() throws Exception {
+        UUID oldest = create("alice", "PUBLISHED"), middle = create("bob", "UNPUBLISHED"), newest = create("alice", "PUBLISHED"),
+            gone = create("bob", "PUBLISHED");
+        long at = 1_700_000_000_000L;
+        for (UUID id : List.of(oldest, middle, newest, gone))
+            mongo.updateFirst(Query.query(Criteria.where("_id").is(id.toString())),
+                new org.springframework.data.mongodb.core.query.Update().set("createdAt", new Date(at += 1000)), "videos");
+        send("POST", "/v1/videos/admin/" + newest + "/takedown", admin, null);
+        send("DELETE", "/v1/videos/" + gone, bob, null);
+
+        var page = JsonPath.parse(send("GET", "/v1/videos/admin?limit=2", admin, null).body());
+        assertThat(page.read("$[*].id", List.class)).containsExactly(newest.toString(), middle.toString());
+        assertThat(page.read("$[0].ownerSubject", String.class)).isEqualTo("alice");
+        assertThat(page.read("$[0].moderationStatus", String.class)).isEqualTo("REMOVED");
+        assertThat(JsonPath.parse(send("GET", "/v1/videos/admin?before=" + middle, admin, null).body()).read("$[*].id", List.class))
+            .containsExactly(oldest.toString());
+        assertThat(JsonPath.parse(send("GET", "/v1/videos/admin?owner=alice&publication=PUBLISHED", admin, null).body()).read("$.length()", Integer.class))
+            .isEqualTo(2);
+        assertThat(JsonPath.parse(send("GET", "/v1/videos/admin?removed=true", admin, null).body()).read("$[*].id", List.class))
+            .containsExactly(newest.toString());
+        assertThat(send("GET", "/v1/videos/admin?publication=DRAFT", admin, null).statusCode()).isEqualTo(400);
+        var totals = JsonPath.parse(send("GET", "/v1/videos/admin/stats", admin, null).body());
+        assertThat(totals.read("$.videos", Integer.class)).isEqualTo(3);
+        assertThat(totals.read("$.published", Integer.class)).isEqualTo(2);
+        assertThat(totals.read("$.removed", Integer.class)).isEqualTo(1);
+        for (String path : List.of("/v1/videos/admin", "/v1/videos/admin/stats"))
+            assertThat(send("GET", path, alice, null).statusCode()).isEqualTo(403);
+    }
+
     // U22 : la fermeture d'un compte supprime toutes ses vidéos, retirées ou non, avec un VideoDeleted chacune.
     @Test void accountClosureDeletesEveryVideoOfTheAccountOnce() throws Exception {
         UUID published = create("alice", "PUBLISHED"), draft = create("alice", "UNPUBLISHED"), other = create("bob", "PUBLISHED");

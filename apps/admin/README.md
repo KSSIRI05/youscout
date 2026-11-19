@@ -4,6 +4,8 @@ Console web React + TypeScript (ADR-011) pour l'exigence **A05** : ajouter, modi
 
 La page **Signalements** couvre **A03/A04** : vidéos et commentaires signalés, regroupés par contenu avec le nombre de signalements et les derniers motifs, filtrés par état (à traiter, action prise, classés sans suite). Pour une vidéo : la regarder (lien temporaire), la retirer (Video la masque partout, Social ferme les signalements) ou la rétablir ; pour un commentaire : le retirer. Chaque décision peut porter une note et est journalisée côté serveur avec l'administrateur.
 
+Le **Tableau de bord** couvre **A06** : totaux exacts lus auprès de chaque service (comptes par statut, vidéos publiées et retirées, commentaires, likes, notes, signalements ouverts) et activité des 30 derniers jours (nouveaux comptes, vidéos publiées, likes, commentaires, messages) comptée par Analytics ; une source indisponible n'empêche pas d'afficher les autres. **Utilisateurs** (**A01**) liste tous les comptes, plus récents d'abord, avec recherche par nom ou identifiant et filtre de statut. **Contenus** (**A02**) liste toutes les vidéos et tous les commentaires, y compris supprimés ou retirés, avec le nom de leur auteur ; chaque auteur s'ouvre dans la page Comptes.
+
 Les pages **Hashtags** et **Comptes** complètent A04 : désactiver un hashtag le retire des recherches, des abonnements et des nouvelles vidéos ; désactiver un compte (après confirmation) bloque sa connexion dans Keycloak, ferme ses sessions et masque son profil et ses vidéos. Les deux actions sont réversibles et journalisées. Depuis la file des signalements, « Voir le compte » ouvre directement le propriétaire ou l'auteur.
 
 ## Connexion

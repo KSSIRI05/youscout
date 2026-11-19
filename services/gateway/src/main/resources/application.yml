@@ -72,6 +72,13 @@ spring:
               filters:
                 - RemoveRequestHeader=X-User-Id
                 - RemoveRequestHeader=X-User-Roles
+            - id: analytics-service
+              uri: ${ANALYTICS_SERVICE_URL:http://localhost:8090}
+              predicates:
+                - Path=/v1/analytics/**
+              filters:
+                - RemoveRequestHeader=X-User-Id
+                - RemoveRequestHeader=X-User-Roles
             - id: notification-service
               uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8089}
               predicates:

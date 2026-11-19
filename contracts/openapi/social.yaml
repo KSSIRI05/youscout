@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: YouScout Social API
-  version: 0.3.0
+  version: 0.4.0
   description: >-
     Likes, comments and reports; direct messages moved to Chat (chat.yaml). Writes check with Video that the
     video is published and with User that no block exists between the caller and the other
@@ -194,6 +194,25 @@ paths:
       responses:
         '200': {description: 'Comment removed: targetType, targetId, decision COMMENT_REMOVED, reportsClosed'}
         '404': {description: Comment unknown}
+  /v1/social/admin/comments:
+    get:
+      summary: 'A02: every comment, newest first, with its author, including deleted or removed ones'
+      description: Admin role only (Gateway and service).
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: query, name: videoId, schema: {type: string, format: uuid}}
+        - {in: query, name: author, schema: {type: string, maxLength: 255}}
+        - {in: query, name: before, schema: {type: string, format: uuid}}
+        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+      responses:
+        '200': {description: 'Comments: id, videoId, parentId, authorSubject, body, createdAt, deleted, removedByModeration'}
+        '400': {description: Invalid filter, cursor or limit}
+  /v1/social/admin/stats:
+    get:
+      summary: 'A06: visible comments, likes, open reports (videos and comments)'
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: '{"comments": n, "likes": n, "openReports": n}'}
 components:
   parameters:
     videoId:

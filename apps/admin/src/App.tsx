@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { AdminApi } from "./api";
 import { AuthError, Session, completeLogin, loginUrl } from "./auth";
 import { AccountsPage } from "./AccountsPage";
+import { ContentPage } from "./ContentPage";
+import { DashboardPage } from "./DashboardPage";
+import { UsersPage } from "./UsersPage";
 import { HashtagsPage } from "./HashtagsPage";
 import { ModerationPage } from "./ModerationPage";
 import { SkillsPage } from "./SkillsPage";
@@ -27,7 +30,7 @@ const browser: AppDeps = {
 
 export function App({ deps = browser }: { deps?: AppDeps }) {
   const [state, setState] = useState<State>({ kind: "loading" });
-  const [page, setPage] = useState<"skills" | "hashtags" | "moderation" | "accounts">("skills");
+  const [page, setPage] = useState<"dashboard" | "users" | "content" | "skills" | "hashtags" | "moderation" | "accounts">("skills");
   const [accountSubject, setAccountSubject] = useState("");
 
   useEffect(() => {
@@ -79,12 +82,19 @@ export function App({ deps = browser }: { deps?: AppDeps }) {
   }
 
   const { session } = state;
+  const openAccount = (subject: string) => { setAccountSubject(subject); setPage("accounts"); };
   return (
     <>
       <header className="bar">
         <h1>YouScout Admin</h1>
         {session.isAdmin && (
           <nav aria-label="Sections">
+            <button className={page === "dashboard" ? undefined : "secondary"} aria-current={page === "dashboard" ? "page" : undefined}
+                    onClick={() => setPage("dashboard")}>Tableau de bord</button>
+            <button className={page === "users" ? undefined : "secondary"} aria-current={page === "users" ? "page" : undefined}
+                    onClick={() => setPage("users")}>Utilisateurs</button>
+            <button className={page === "content" ? undefined : "secondary"} aria-current={page === "content" ? "page" : undefined}
+                    onClick={() => setPage("content")}>Contenus</button>
             <button className={page === "skills" ? undefined : "secondary"} aria-current={page === "skills" ? "page" : undefined}
                     onClick={() => setPage("skills")}>Compétences</button>
             <button className={page === "hashtags" ? undefined : "secondary"} aria-current={page === "hashtags" ? "page" : undefined}
@@ -98,9 +108,12 @@ export function App({ deps = browser }: { deps?: AppDeps }) {
         <span className="muted">{session.displayName}</span>
         <button className="secondary" onClick={() => logout(session)}>Se déconnecter</button>
       </header>
-      {session.isAdmin && api ? (page === "skills" ? <SkillsPage api={api} /> : page === "hashtags" ? <HashtagsPage api={api} />
+      {session.isAdmin && api ? (page === "dashboard" ? <DashboardPage api={api} />
+        : page === "users" ? <UsersPage api={api} onOpenAccount={openAccount} />
+        : page === "content" ? <ContentPage api={api} onOpenAccount={openAccount} />
+        : page === "skills" ? <SkillsPage api={api} /> : page === "hashtags" ? <HashtagsPage api={api} />
         : page === "accounts" ? <AccountsPage key={accountSubject} api={api} initialSubject={accountSubject} />
-        : <ModerationPage api={api} onOpenAccount={subject => { setAccountSubject(subject); setPage("accounts"); }} />) : (
+        : <ModerationPage api={api} onOpenAccount={openAccount} />) : (
         <main className="center">
           <div className="panel login">
             <h2>Accès refusé</h2>

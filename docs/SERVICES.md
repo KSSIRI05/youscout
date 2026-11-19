@@ -14,7 +14,7 @@ Ces services constituent la cible. La Gateway et les profils personnels persista
 | Skill/Hashtag | `/v1/skills`, `/v1/hashtags`, catalogue et abonnements hashtags | PostgreSQL `skill` | SkillChanged, HashtagFollowed, HashtagDisabled |
 | Moderation | `/v1/reports`, décisions admin, suivi d'application | PostgreSQL `moderation`, journal de décisions | ModerationActionRequested, ModerationActionApplied |
 | Notification | `/v1/notifications`, boîte, non lus, appareils, envoi push ([service](../services/notification/README.md)) | PostgreSQL `notification`, jetons chiffrés/accès restreint | Consomme UserRelationChanged, UserAccountChanged, VideoPublished, VideoDeleted, VideoLiked, CommentAdded, MessageAccepted ; conserve statut de livraison |
-| Admin/Analytics | `/v1/admin/dashboard`, vues de gestion en lecture | PostgreSQL `analytics`, projections | Consomme les événements nécessaires au dashboard |
+| Admin/Analytics | `/v1/analytics/activity` ([service](../services/analytics/README.md)) ; listes et totaux servis par les propriétaires (`/v1/users/admin/accounts`, `/v1/videos/admin`, `/v1/social/admin/comments`, routes `stats`) | PostgreSQL `analytics`, compteurs agrégés par jour | Consomme UserProfileCreated, VideoPublished, VideoLiked, CommentAdded, MessageAccepted |
 
 Le tableau décrit la cible. Les contrats des profils et du catalogue sont dans `contracts/openapi` ; les autres API et événements restent à formaliser. Les rôles ne suffisent pas : contrôler aussi propriétaire de la ressource, conversation et blocages.
 

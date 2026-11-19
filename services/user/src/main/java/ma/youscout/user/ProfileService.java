@@ -21,7 +21,7 @@ class ProfileService {
     public UserProfile getOrCreate(Jwt jwt) {
         String subject = subject(jwt);
         requireActive(subject);
-        profiles.createIfAbsent(subject, initialName(jwt));
+        created(subject, jwt);
         return profiles.find(subject);
     }
 
@@ -29,7 +29,7 @@ class ProfileService {
     public UserProfile patch(Jwt jwt, ProfilePatch patch) {
         String subject = subject(jwt);
         requireActive(subject);
-        profiles.createIfAbsent(subject, initialName(jwt));
+        created(subject, jwt);
         return profiles.patch(subject, patch);
     }
 
@@ -95,6 +95,11 @@ class ProfileService {
         profiles.unblock(viewer, target);
         relationEvents.append("UNBLOCK", viewer, target);
         return new BlockResult(false);
+    }
+
+    // A06 : UserProfileCreated part dans la transaction de création ; Analytics compte les nouveaux comptes par jour.
+    private void created(String subject, Jwt jwt) {
+        if (profiles.createIfAbsent(subject, initialName(jwt))) relationEvents.appendProfileCreated(subject);
     }
 
     // Un compte désactivé ou en cours de fermeture n'agit plus, même avec un jeton d'accès encore valide.

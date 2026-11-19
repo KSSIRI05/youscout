@@ -31,13 +31,14 @@ class SecurityConfig {
                     "/v1/users/me/following", "/v1/users/me/feed-relations", "/v1/users/me/closure").hasAnyRole("user", "admin")
                 .pathMatchers("/v1/social/admin/**").hasRole("admin")
                 .pathMatchers("/v1/social/**").hasAnyRole("user", "admin")
+                .pathMatchers("/v1/ratings/admin/**", "/v1/analytics/**").hasRole("admin")
                 .pathMatchers("/v1/ratings/videos/**").hasAnyRole("user", "admin")
                 .pathMatchers("/v1/conversations", "/v1/conversations/**").hasAnyRole("user", "admin")
                 .pathMatchers("/v1/notifications", "/v1/notifications/**").hasAnyRole("user", "admin")
                 // Un navigateur ne peut pas joindre de Bearer à une poignée de main WebSocket : Chat valide le jeton
                 // reçu dans la première trame et ferme la connexion sans lui.
                 .pathMatchers(org.springframework.http.HttpMethod.GET, "/v1/chat/ws").permitAll()
-                .pathMatchers("/v1/videos/admin/**").hasRole("admin")
+                .pathMatchers("/v1/videos/admin", "/v1/videos/admin/**").hasRole("admin")
                 .pathMatchers(org.springframework.http.HttpMethod.GET, "/v1/videos/session").hasAnyRole("user", "admin")
                 .pathMatchers(org.springframework.http.HttpMethod.GET, "/v1/videos", "/v1/videos/{id:[0-9a-fA-F-]+}", "/v1/videos/{id:[0-9a-fA-F-]+}/playback", "/v1/videos/{id:[0-9a-fA-F-]+}/public-playback", "/v1/videos/{id:[0-9a-fA-F-]+}/publication").hasAnyRole("user", "admin")
                 .pathMatchers(org.springframework.http.HttpMethod.POST, "/v1/videos/uploads").hasAnyRole("user", "admin")

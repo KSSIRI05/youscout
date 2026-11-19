@@ -61,6 +61,26 @@ export type AdminVideo = {
 };
 export type Playback = { videoUrl: string; thumbnailUrl: string; expiresAt: string };
 
+/** A01/A02/A06 : listes d'administration et tableau de bord. */
+export type AccountStatus = Account["status"];
+export type AdminVideoRow = {
+  id: string; title: string; ownerSubject: string; processingStatus: string | null; publicationStatus: string | null;
+  moderationStatus: "ACTIVE" | "REMOVED"; createdAt: string | null; publishedAt: string | null;
+};
+export type AdminComment = {
+  id: string; videoId: string; parentId: string | null; authorSubject: string; body: string; createdAt: string;
+  deleted: boolean; removedByModeration: boolean;
+};
+export type ActivityDay = { day: string; newAccounts: number; videosPublished: number; likes: number; comments: number; messages: number };
+export type Activity = { from: string; to: string; coverageStart: string | null; days: ActivityDay[] };
+export type Totals = {
+  accounts: Record<AccountStatus, number>;
+  videos: { videos: number; published: number; removed: number };
+  interactions: { comments: number; likes: number; openReports: number };
+  ratings: { ratings: number; raters: number; ratedVideos: number };
+};
+export const LIST_SIZE = 50;
+
 export const PAGE_SIZE = 20;
 export const NAME_MAX = 80;
 export const DESCRIPTION_MAX = 500;
@@ -117,6 +137,33 @@ export class AdminApi {
     return this.request("POST", `/v1/users/admin/accounts/${encodeURIComponent(subject)}/reactivate`, withNote({}, note));
   }
 
+  listAccounts(filter: { q?: string; status?: AccountStatus | ""; before?: string }): Promise<Account[]> {
+    return this.request("GET", `/v1/users/admin/accounts?${query({ ...filter, limit: String(LIST_SIZE) })}`);
+  }
+
+  /** Noms des auteurs ; les identifiants inconnus (compte supprimé) sont absents de la réponse. */
+  async accountNames(subjects: string[]): Promise<Record<string, string>> {
+    const unique = [...new Set(subjects)];
+    if (unique.length === 0) return {};
+    const params = new URLSearchParams();
+    unique.slice(0, 100).forEach(subject => params.append("subject", subject));
+    return this.request("GET", `/v1/users/admin/accounts/names?${params}`);
+  }
+
+  listVideos(filter: { owner?: string; publication?: "" | "PUBLISHED" | "UNPUBLISHED"; removed?: boolean; before?: string }): Promise<AdminVideoRow[]> {
+    return this.request("GET", `/v1/videos/admin?${query({ ...filter, removed: filter.removed ? "true" : undefined, limit: String(LIST_SIZE) })}`);
+  }
+
+  listComments(filter: { videoId?: string; author?: string; before?: string }): Promise<AdminComment[]> {
+    return this.request("GET", `/v1/social/admin/comments?${query({ ...filter, limit: String(LIST_SIZE) })}`);
+  }
+
+  accountTotals(): Promise<{ accounts: Totals["accounts"] }> { return this.request("GET", "/v1/users/admin/accounts/stats"); }
+  videoTotals(): Promise<Totals["videos"]> { return this.request("GET", "/v1/videos/admin/stats"); }
+  interactionTotals(): Promise<Totals["interactions"]> { return this.request("GET", "/v1/social/admin/stats"); }
+  ratingTotals(): Promise<Totals["ratings"]> { return this.request("GET", "/v1/ratings/admin/stats"); }
+  activity(days: number): Promise<Activity> { return this.request("GET", `/v1/analytics/activity?days=${days}`); }
+
   // Modération : file de Social, actions sur les vidéos dans Video.
   listReports(type: ReportType, status: ReportStatus, offset: number): Promise<ReportPage> {
     const params = new URLSearchParams({ type, status, offset: String(offset) });
@@ -163,6 +210,14 @@ export class AdminApi {
   }
 }
 
+/** Paramètres de requête sans les filtres vides. */
+function query(values: Record<string, string | boolean | undefined>): URLSearchParams {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(values))
+    if (value !== undefined && value !== "" && value !== false) params.set(key, String(value).trim());
+  return params;
+}
+
 async function problem(response: Response): Promise<string> {
   if (response.status === 401) return "Session expirée. Reconnecte-toi.";
   if (response.status === 403) return "Ce compte n'a pas le rôle admin.";
@@ -170,7 +225,7 @@ async function problem(response: Response): Promise<string> {
     const data = (await response.json()) as { detail?: unknown };
     if (typeof data.detail === "string" && data.detail.trim()) return data.detail;
   } catch { /* Corps absent ou non JSON. */ }
-  return response.status >= 500 ? "Le catalogue est momentanément indisponible." : `Requête refusée (${response.status}).`;
+  return response.status >= 500 ? "Ce service est momentanément indisponible." : `Requête refusée (${response.status}).`;
 }
 
 /** Les limites du serveur portent sur les points de code Unicode, pas sur les unités UTF-16. */

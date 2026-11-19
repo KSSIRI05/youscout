@@ -165,6 +165,35 @@ class SocialIntegrationTest {
         assertThat(events).noneSatisfy(e -> assertThat((String) e.get("payload")).contains("Merci"));
     }
 
+    @Test void adminsListEveryCommentWithItsAuthorAndCountInteractions() throws Exception {
+        UUID video = UUID.randomUUID(), other = UUID.randomUUID();
+        oidc.publishedVideos.put(video.toString(), "bob");
+        oidc.publishedVideos.put(other.toString(), "bob");
+        String first = JsonPath.parse(send("POST", comments(video), oidc.token("alice"), "{\"body\":\"Un\"}").body()).read("$.id");
+        String second = JsonPath.parse(send("POST", comments(video), oidc.token("carol"), "{\"body\":\"Deux\"}").body()).read("$.id");
+        send("POST", comments(other), oidc.token("alice"), "{\"body\":\"Trois\"}");
+        send("DELETE", "/v1/social/comments/" + second, oidc.token("carol"), null);
+        send("PUT", likes(video), oidc.token("alice"), null);
+        send("POST", "/v1/social/videos/" + video + "/reports", oidc.token("carol"), "{\"reason\":\"Spam\"}");
+        String admin = oidc.token("moderator", "admin");
+
+        var page = JsonPath.parse(send("GET", "/v1/social/admin/comments?limit=2", admin, null).body());
+        assertThat(page.read("$[*].body", List.class)).containsExactly("Trois", "Deux");
+        assertThat(page.read("$[1].deleted", Boolean.class)).isTrue();
+        assertThat(page.read("$[1].authorSubject", String.class)).isEqualTo("carol");
+        String last = page.read("$[1].id", String.class);
+        assertThat(JsonPath.parse(send("GET", "/v1/social/admin/comments?before=" + last, admin, null).body()).read("$[*].id", List.class))
+            .containsExactly(first);
+        assertThat(JsonPath.parse(send("GET", "/v1/social/admin/comments?videoId=" + video + "&author=alice", admin, null).body())
+            .read("$[*].id", List.class)).containsExactly(first);
+        assertThat(send("GET", "/v1/social/admin/comments?before=" + UUID.randomUUID(), admin, null).statusCode()).isEqualTo(400);
+        var totals = JsonPath.parse(send("GET", "/v1/social/admin/stats", admin, null).body());
+        assertThat(totals.read("$.comments", Integer.class)).isEqualTo(2);
+        assertThat(totals.read("$.likes", Integer.class)).isEqualTo(1);
+        assertThat(totals.read("$.openReports", Integer.class)).isEqualTo(1);
+        assertThat(send("GET", "/v1/social/admin/comments", oidc.token("alice"), null).statusCode()).isEqualTo(403);
+    }
+
     @Test void accountClosureErasesLikesAndCommentTextButKeepsReplies() throws Exception {
         UUID video = UUID.randomUUID();
         oidc.publishedVideos.put(video.toString(), "bob");

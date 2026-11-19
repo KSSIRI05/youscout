@@ -2,7 +2,7 @@
 
 Un frontend Flutter de démonstration locale existe désormais (voir [FRONTEND.md](FRONTEND.md)). Un [socle backend local](BACKEND.md) existe aussi : Gateway, profils personnels persistants, inscription/connexion Keycloak, rôles user/admin, catalogue Skill/Hashtag, abonnements hashtags, bases séparées, migrations et CI. Les cases ci-dessous portent sur la livraison intégrée complète : une case n'est cochée qu'après vérification sur la pile intégrée. La cible de onze services est retenue ; l'ordre de livraison réduit le travail simultané sans fusionner les domaines.
 
-Implementation status (2026-11-19): the connected Flutter feed reads Feed pages and persists likes/comments through Social. User now writes follow/block changes to an ordered Kafka outbox; Feed projects those relationships into Redis and caches versioned pages. Video now uses MongoDB transactions for documents and outbox; Social still uses PostgreSQL. Rating (U15) has its own service and PostgreSQL database; Chat (U21) has its own service, MongoDB history and WebSocket delivery. Account closure (U22) is orchestrated by User with a logged step per owning service. Notification consumes User, Video, Social and Chat events into an in-app inbox; push is ready but disabled without FCM credentials. The Analytics domain remains roadmap work. A checked box below was verified on the integrated local stack; the others stay open until that verification.
+Implementation status (2026-11-19): the connected Flutter feed reads Feed pages and persists likes/comments through Social. User now writes follow/block changes to an ordered Kafka outbox; Feed projects those relationships into Redis and caches versioned pages. Video now uses MongoDB transactions for documents and outbox; Social still uses PostgreSQL. Rating (U15) has its own service and PostgreSQL database; Chat (U21) has its own service, MongoDB history and WebSocket delivery. Account closure (U22) is orchestrated by User with a logged step per owning service. Notification consumes User, Video, Social and Chat events into an in-app inbox; push is ready but disabled without FCM credentials. Admin lists (A01/A02) and dashboard totals (A06) are served by the owning services; a new Analytics service counts daily activity from Kafka events (history starts with Kafka's 7-day retention). A checked box below was verified on the integrated local stack; the others stay open until that verification.
 
 ## Phase 0 : valider le socle
 
@@ -35,7 +35,7 @@ Ce MVP sert à valider le socle ; il ne couvre pas encore tout le périmètre pr
 
 ## Phase 3 : administration complète puis évolutions
 
-- [ ] Admin/Analytics : A01/A02/A06 avec pagination, auteurs et métriques définies.
+- [ ] Admin/Analytics : A01/A02/A06 avec pagination, auteurs et métriques définies. Livré et vérifié sur la pile intégrée (`scripts/smoke-admin.py`) : listes paginées des comptes, vidéos et commentaires avec auteurs (User, Video, Social), totaux exacts par service propriétaire, service Analytics alimenté par Kafka pour l'activité quotidienne, pages de la console React. Reste : validation de la console dans un navigateur sur la pile intégrée ; l'historique d'activité commence à la rétention Kafka (7 jours).
 - [ ] Vérifier tous les U01-U22 et A01-A06 lors de la validation fonctionnelle.
 - [ ] OpenSearch, feed hybride et métriques d'exposition si besoin confirmé.
 - [ ] Multi-région seulement après décision sur réplication, résidence des données, écritures et conflits.

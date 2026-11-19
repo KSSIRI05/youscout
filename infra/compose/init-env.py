@@ -11,7 +11,7 @@ options = parser.parse_args()
 # Cible le fichier voisin du script, quel que soit le répertoire courant de la commande.
 path = Path(__file__).with_name(".env")
 # Chaque base et chaque accès technique possèdent un secret séparé.
-keys = ("KEYCLOAK_DB_PASSWORD", "USER_DB_PASSWORD", "KEYCLOAK_ADMIN_PASSWORD", "SMOKE_CLIENT_SECRET", "SKILL_DB_PASSWORD", "VIDEO_DB_PASSWORD", "MEDIA_WORKER_DB_PASSWORD", "FEED_DB_PASSWORD", "SOCIAL_DB_PASSWORD", "USER_ADMIN_CLIENT_SECRET", "RATING_DB_PASSWORD", "NOTIFICATION_DB_PASSWORD", "NOTIFICATION_DEVICE_KEY")
+keys = ("KEYCLOAK_DB_PASSWORD", "USER_DB_PASSWORD", "KEYCLOAK_ADMIN_PASSWORD", "SMOKE_CLIENT_SECRET", "SKILL_DB_PASSWORD", "VIDEO_DB_PASSWORD", "MEDIA_WORKER_DB_PASSWORD", "FEED_DB_PASSWORD", "SOCIAL_DB_PASSWORD", "USER_ADMIN_CLIENT_SECRET", "RATING_DB_PASSWORD", "NOTIFICATION_DB_PASSWORD", "NOTIFICATION_DEVICE_KEY", "ANALYTICS_DB_PASSWORD")
 if options.upgrade and path.exists():
     # utf-8-sig ignore le BOM qu'ajoutent certains éditeurs Windows ; sinon la première clé passerait pour absente
     # et un nouveau secret, différent de celui des bases existantes, serait ajouté pour elle.

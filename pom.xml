@@ -23,6 +23,7 @@
     <module>services/rating</module>
     <module>services/chat</module>
     <module>services/notification</module>
+    <module>services/analytics</module>
   </modules>
   <properties>
     <java.version>21</java.version>

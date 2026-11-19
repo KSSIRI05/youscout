@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: YouScout Rating API
-  version: 0.1.0
+  version: 0.2.0
   description: >-
     Skill ratings (U15). A player rates each skill of a published video from 1 to 5, and can
     change or remove that rating. One rating per rater, video and skill. Writes check with Video
@@ -59,6 +59,13 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/VideoRatings'}
+  /v1/ratings/admin/stats:
+    get:
+      summary: 'A06: ratings, distinct raters and rated videos'
+      description: Admin role only (Gateway and service).
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: '{"ratings": n, "raters": n, "ratedVideos": n}'}
 components:
   securitySchemes:
     bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}

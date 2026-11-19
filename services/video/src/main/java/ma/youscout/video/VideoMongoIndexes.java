@@ -24,6 +24,8 @@ class VideoMongoIndexes implements ApplicationRunner {
         }
         mongo.getCollection("videos").createIndex(new Document("ownerSubject", 1)
                 .append("createdAt", -1).append("_id", -1), new IndexOptions().name("video_owner_created"));
+        // A02 : liste d'administration de toutes les vidéos, plus récentes d'abord.
+        mongo.getCollection("videos").createIndex(new Document("createdAt", -1).append("_id", -1), new IndexOptions().name("video_created"));
         mongo.getCollection("videos").createIndex(new Document("ownerSubject", 1).append("idempotencyKey", 1),
                 new IndexOptions().unique(true).name("video_owner_idempotency_unique"));
         mongo.getCollection("videos").createIndex(new Document("s3Bucket", 1).append("s3Key", 1),

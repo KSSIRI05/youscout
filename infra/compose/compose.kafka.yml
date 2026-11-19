@@ -128,5 +128,11 @@ services:
       kafka-user-relations-init: {condition: service_completed_successfully}
       kafka-interaction-init: {condition: service_completed_successfully}
       kafka-chat-init: {condition: service_completed_successfully}
+  analytics:
+    depends_on:
+      kafka-published-init: {condition: service_completed_successfully}
+      kafka-user-relations-init: {condition: service_completed_successfully}
+      kafka-interaction-init: {condition: service_completed_successfully}
+      kafka-chat-init: {condition: service_completed_successfully}
 volumes:
   kafka-data:
