@@ -21,6 +21,8 @@ import org.springframework.web.server.ResponseStatusException;
 class AccountAdminController {
     record AdminAccount(String subject, String displayName, String status, Instant statusChangedAt, String statusChangedBy,
                         String statusNote, Instant createdAt) {}
+    record AccountTotals(Map<String, Long> accounts) {}
+    private static final java.util.Set<String> STATUSES = java.util.Set.of("ACTIVE", "DEACTIVATED", "CLOSING", "CLOSED");
 
     private final AccountStore accounts;
     private final KeycloakAccounts keycloak;
@@ -30,6 +32,32 @@ class AccountAdminController {
         this.accounts = accounts;
         this.keycloak = keycloak;
         this.closures = closures;
+    }
+
+    /**
+     * A01 : tous les comptes, plus récents d'abord. {@code q} cherche dans le nom (sans casse) ou l'identifiant exact ;
+     * {@code before} reprend après le dernier compte reçu.
+     */
+    @GetMapping
+    ResponseEntity<List<AdminAccount>> list(@RequestParam(required = false) String q, @RequestParam(required = false) String status,
+                                            @RequestParam(required = false) String before, @RequestParam(defaultValue = "50") int limit) {
+        if (limit < 1 || limit > 100) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La taille de page doit être comprise entre 1 et 100.");
+        if (status != null && !STATUSES.contains(status)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Statut inconnu.");
+        if (q != null && (q.strip().length() > 80 || q.indexOf('\0') >= 0)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Recherche invalide.");
+        return noStore(accounts.list(q == null || q.isBlank() ? null : q.strip(), status, before == null ? null : validate(before), limit));
+    }
+
+    /** Noms d'au plus 100 comptes, pour afficher les auteurs des listes de contenus (A02). */
+    @GetMapping("/names")
+    ResponseEntity<Map<String, String>> names(@RequestParam(name = "subject") List<String> subjects) {
+        if (subjects.isEmpty() || subjects.size() > 100) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "De 1 à 100 identifiants.");
+        return noStore(accounts.names(subjects.stream().map(AccountAdminController::validate).distinct().toList()));
+    }
+
+    /** A06 : nombre de comptes par statut. */
+    @GetMapping("/stats")
+    ResponseEntity<AccountTotals> stats() {
+        return noStore(new AccountTotals(accounts.totals()));
     }
 
     @GetMapping("/{subject}")
@@ -109,6 +137,48 @@ class AccountStore {
         this.jdbc = jdbc;
         this.profiles = profiles;
         this.events = events;
+    }
+
+    private static final String ACCOUNT_COLUMNS =
+        "subject, display_name, account_status, status_changed_at, status_changed_by, status_note, created_at";
+    private static final org.springframework.jdbc.core.RowMapper<AccountAdminController.AdminAccount> ACCOUNT = (r, n) ->
+        new AccountAdminController.AdminAccount(r.getString(1), r.getString(2), r.getString(3),
+            r.getTimestamp(4) == null ? null : r.getTimestamp(4).toInstant(), r.getString(5), r.getString(6), r.getTimestamp(7).toInstant());
+
+    @Transactional(readOnly = true)
+    public List<AccountAdminController.AdminAccount> list(String q, String status, String before, int limit) {
+        var sql = new StringBuilder("SELECT " + ACCOUNT_COLUMNS + " FROM user_profiles WHERE TRUE");
+        var args = new java.util.ArrayList<Object>();
+        if (q != null) {
+            sql.append(" AND (display_name ILIKE ? ESCAPE '\\' OR subject = ?)");
+            args.add("%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
+            args.add(q);
+        }
+        if (status != null) { sql.append(" AND account_status = ?"); args.add(status); }
+        if (before != null) {
+            find(before);
+            sql.append(" AND (created_at, subject) < (SELECT created_at, subject FROM user_profiles WHERE subject = ?)");
+            args.add(before);
+        }
+        sql.append(" ORDER BY created_at DESC, subject DESC LIMIT ?");
+        args.add(limit);
+        return jdbc.query(sql.toString(), ACCOUNT, args.toArray());
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, String> names(List<String> subjects) {
+        var names = new java.util.LinkedHashMap<String, String>();
+        jdbc.query("SELECT subject, display_name FROM user_profiles WHERE subject = ANY (?)",
+            (java.sql.ResultSet r) -> { names.put(r.getString(1), r.getString(2)); }, (Object) subjects.toArray(String[]::new));
+        return names;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Long> totals() {
+        var totals = new java.util.TreeMap<String, Long>(Map.of("ACTIVE", 0L, "DEACTIVATED", 0L, "CLOSING", 0L, "CLOSED", 0L));
+        jdbc.query("SELECT account_status, count(*) FROM user_profiles GROUP BY account_status",
+            (java.sql.ResultSet r) -> { totals.put(r.getString(1), r.getLong(2)); });
+        return totals;
     }
 
     @Transactional(readOnly = true)

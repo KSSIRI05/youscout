@@ -355,6 +355,37 @@ services:
     depends_on:
       notification-db: {condition: service_healthy}
       keycloak: {condition: service_healthy}
+  analytics-db:
+    profiles: [feed]
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: youscout_analytics
+      POSTGRES_USER: youscout_analytics
+      POSTGRES_PASSWORD: ${ANALYTICS_DB_PASSWORD:?Run init-env.py --upgrade first}
+    volumes: [analytics-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U youscout_analytics -d youscout_analytics']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  # Activité quotidienne du tableau de bord (A06), comptée depuis les événements Kafka (profil feed).
+  analytics:
+    profiles: [feed]
+    build:
+      context: ../..
+      dockerfile: infra/docker/service.Dockerfile
+      args: {MODULE: analytics}
+    environment:
+      SERVER_PORT: '8080'
+      ANALYTICS_DB_URL: jdbc:postgresql://analytics-db:5432/youscout_analytics
+      ANALYTICS_DB_USERNAME: youscout_analytics
+      ANALYTICS_DB_PASSWORD: ${ANALYTICS_DB_PASSWORD:?Run init-env.py --upgrade first}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      OIDC_ISSUER: http://localhost:8180/realms/youscout
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
+    depends_on:
+      analytics-db: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
   # Point d’entrée des API sur localhost ; attend que les services dépendants soient sains.
   gateway:
     build:
@@ -370,6 +401,7 @@ services:
       RATING_SERVICE_URL: http://rating:8080
       CHAT_SERVICE_URL: http://chat:8080
       NOTIFICATION_SERVICE_URL: http://notification:8080
+      ANALYTICS_SERVICE_URL: http://analytics:8080
       OIDC_ISSUER: http://localhost:8180/realms/youscout
       OIDC_JWK_SET_URI: http://keycloak:8080/realms/youscout/protocol/openid-connect/certs
     ports: ['127.0.0.1:8080:8080']
@@ -393,3 +425,4 @@ volumes:
   rating-data:
   chat-mongo-data:
   notification-data:
+  analytics-data:

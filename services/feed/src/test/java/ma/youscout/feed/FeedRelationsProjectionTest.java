@@ -71,6 +71,15 @@ class FeedRelationsProjectionTest {
         assertThat(projection.videoVersion()).isEqualTo("3");
     }
 
+    @Test void profileCreationEventsAreAcceptedWithoutEffect() {
+        var handler = new UserRelationEventHandler(new UserRelationEventDecoder(), projection);
+        handler.handle(new org.apache.kafka.clients.consumer.ConsumerRecord<>("user.relationships.v1", 0, 0, "youscout-user-relationships-v1",
+            "{\"eventId\":\"" + java.util.UUID.randomUUID() + "\",\"eventType\":\"UserProfileCreated\",\"eventVersion\":1,"
+            + "\"occurredAt\":\"2026-11-19T10:00:00Z\",\"producer\":\"user-service\",\"data\":{\"subject\":\"alice\"}}"));
+        assertThat(projection.deactivated()).isEmpty();
+        assertThat(projection.following("alice")).isEmpty();
+    }
+
     @Test void aClosingOrClosedAccountStaysHidden() {
         var handler = new UserRelationEventHandler(new UserRelationEventDecoder(), projection);
         handler.handle(account("alice", "CLOSING"));

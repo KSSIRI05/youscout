@@ -151,7 +151,52 @@
           }
         }
       }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eventId",
+        "eventType",
+        "eventVersion",
+        "occurredAt",
+        "producer",
+        "data"
+      ],
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "eventType": {
+          "const": "UserProfileCreated"
+        },
+        "eventVersion": {
+          "const": 1
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "producer": {
+          "const": "user-service"
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "subject"
+          ],
+          "properties": {
+            "subject": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        }
+      }
     }
   ],
-  "description": "UserAccountChanged (A04) shares the topic and key, so it is ordered with relationship events; consumers hide a DEACTIVATED account's content. U22 adds CLOSING (closure requested, content hidden at once) and CLOSED (closure finished, the account never returns); Feed accepts both since this release, and a consumer must be updated before User emits them."
+  "description": "UserAccountChanged (A04) shares the topic and key, so it is ordered with relationship events; consumers hide a DEACTIVATED account's content. U22 adds CLOSING (closure requested, content hidden at once) and CLOSED (closure finished, the account never returns); Feed accepts both since this release, and a consumer must be updated before User emits them. UserProfileCreated (A06) is emitted once, in the transaction that creates a profile, with the subject only; Analytics counts it, Feed and Notification ignore it and must be updated before User emits it."
 }

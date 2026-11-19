@@ -10,6 +10,7 @@ import tools.jackson.databind.json.JsonMapper;
 class UserRelationEventDecoder {
     static final String SNAPSHOT_COMPLETE = "UserRelationshipsSnapshotComplete";
     static final String ACCOUNT_CHANGED = "UserAccountChanged";
+    static final String PROFILE_CREATED = "UserProfileCreated";
     private static final int MAX_EVENT_BYTES = 8192;
     private final JsonMapper json = JsonMapper.builder()
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
@@ -28,6 +29,12 @@ class UserRelationEventDecoder {
             String type = root.path("eventType").asText();
             var occurredAt = java.time.Instant.parse(root.path("occurredAt").asText());
             var data = root.path("data");
+            // UserProfileCreated v1 (Analytics) : sans effet sur les relations, validé puis ignoré.
+            if (PROFILE_CREATED.equals(type)) {
+                if (!data.isObject() || data.size() != 1 || !data.has("subject")) invalid();
+                subject(data.path("subject").asText());
+                return new UserRelationEvent(id, type, 1, occurredAt, "user-service", null);
+            }
             if (SNAPSHOT_COMPLETE.equals(type)) {
                 if (!data.isObject() || data.size() != 0) invalid();
                 return new UserRelationEvent(id, type, 1, occurredAt, "user-service", null);

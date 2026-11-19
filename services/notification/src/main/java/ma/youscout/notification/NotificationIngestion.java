@@ -78,7 +78,7 @@ class NotificationIngestion {
             case "user-service/UserRelationChanged" -> relation(data, at);
             case "user-service/UserAccountChanged" -> account(data);
             // Le marqueur de fin de rattrapage est inutile : les suivis rejoués sont trop anciens pour notifier.
-            case "user-service/UserRelationshipsSnapshotComplete" -> { }
+            case "user-service/UserRelationshipsSnapshotComplete", "user-service/UserProfileCreated" -> { }
             case "video-service/VideoPublished" -> published(data, at);
             case "video-service/VideoDeleted" -> jdbc.update("DELETE FROM notifications WHERE video_id = ?", uuid(data.get("videoId")));
             case "social-service/VideoLiked" -> {

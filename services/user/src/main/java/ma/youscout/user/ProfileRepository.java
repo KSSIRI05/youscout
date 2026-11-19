@@ -14,11 +14,12 @@ class ProfileRepository {
     ProfileRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
     // Deux premières requêtes concurrentes ne doivent créer qu’un seul profil pour le même sujet.
-    void createIfAbsent(String subject, String initialName) {
-        jdbc.update("""
+    /** Vrai seulement pour la requête qui a réellement créé le profil. */
+    boolean createIfAbsent(String subject, String initialName) {
+        return jdbc.update("""
             INSERT INTO user_profiles (subject, display_name) VALUES (?, ?)
             ON CONFLICT (subject) DO NOTHING
-            """, subject, initialName);
+            """, subject, initialName) == 1;
     }
 
     UserProfile find(String subject) {

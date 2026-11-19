@@ -128,6 +128,18 @@ class RatingIntegrationTest {
         assertThat(count()).isEqualTo(1);
     }
 
+    @Test void adminsSeeRatingTotals() throws Exception {
+        UUID video = published("bob");
+        rate(video, DRIBBLE, oidc.token("alice"), 4);
+        rate(video, SHOT, oidc.token("alice"), 2);
+        rate(video, DRIBBLE, oidc.token("carol"), 5);
+        var totals = send("GET", "/v1/ratings/admin/stats", oidc.token("moderator", "admin"), null);
+        assertThat(read(totals, "$.ratings", Integer.class)).isEqualTo(3);
+        assertThat(read(totals, "$.raters", Integer.class)).isEqualTo(2);
+        assertThat(read(totals, "$.ratedVideos", Integer.class)).isEqualTo(1);
+        assertThat(send("GET", "/v1/ratings/admin/stats", oidc.token("alice"), null).statusCode()).isEqualTo(403);
+    }
+
     @Test void accountClosureErasesOnlyTheClosedAccountsRatings() throws Exception {
         UUID video = published("bob");
         rate(video, DRIBBLE, oidc.token("alice"), 4);

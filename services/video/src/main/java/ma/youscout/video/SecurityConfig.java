@@ -22,7 +22,7 @@ class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(access -> access
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/v1/videos/admin/{id:[0-9a-fA-F-]+}", "/v1/videos/admin/{id:[0-9a-fA-F-]+}/playback").hasRole("admin")
+                        .requestMatchers(HttpMethod.GET, "/v1/videos/admin", "/v1/videos/admin/stats", "/v1/videos/admin/{id:[0-9a-fA-F-]+}", "/v1/videos/admin/{id:[0-9a-fA-F-]+}/playback").hasRole("admin")
                         .requestMatchers(HttpMethod.POST, "/v1/videos/admin/{id:[0-9a-fA-F-]+}/takedown", "/v1/videos/admin/{id:[0-9a-fA-F-]+}/restore").hasRole("admin")
                         .requestMatchers(HttpMethod.GET, "/v1/videos/session").hasAnyRole("user", "admin")
                         .requestMatchers(HttpMethod.GET, "/v1/videos", "/v1/videos/{id:[0-9a-fA-F-]+}", "/v1/videos/{id:[0-9a-fA-F-]+}/playback", "/v1/videos/{id:[0-9a-fA-F-]+}/public-playback", "/v1/videos/{id:[0-9a-fA-F-]+}/publication").hasAnyRole("user", "admin")

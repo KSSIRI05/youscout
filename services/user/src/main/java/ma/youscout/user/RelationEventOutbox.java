@@ -11,6 +11,7 @@ import tools.jackson.databind.json.JsonMapper;
 class RelationEventOutbox {
     record RelationData(String action, String actorSubject, String targetSubject) {}
     record AccountData(String subject, String status) {}
+    record ProfileData(String subject) {}
     record Envelope(String eventId, String eventType, int eventVersion, String occurredAt,
                     String producer, Object data) {}
 
@@ -28,6 +29,11 @@ class RelationEventOutbox {
     /** UserAccountChanged v1 : même topic et même clé que les relations, donc ordonné avec elles. */
     void appendAccount(String subject, String status) {
         insert("UserAccountChanged", new AccountData(subject, status));
+    }
+
+    /** UserProfileCreated v1 : sujet seul, sans nom ni e-mail ; la date est celle de l'événement. */
+    void appendProfileCreated(String subject) {
+        insert("UserProfileCreated", new ProfileData(subject));
     }
 
     private void insert(String type, Object data) {

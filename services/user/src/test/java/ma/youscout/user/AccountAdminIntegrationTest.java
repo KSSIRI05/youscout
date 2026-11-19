@@ -93,6 +93,38 @@ class AccountAdminIntegrationTest {
         assertThat(oidc.keycloakCalls).endsWith("PUT /users/alice {\"enabled\":true}");
     }
 
+    @Test void adminsListSearchAndCountEveryAccount() {
+        client.get().uri("/v1/users/me").headers(h -> h.setBearerAuth(oidc.profileToken("carol", "Carole_100%", "carol"))).exchange().expectStatus().isOk();
+        post("/v1/users/admin/accounts/bob/deactivate", admin, null).expectStatus().isOk();
+        client.get().uri("/v1/users/admin/accounts?limit=2").headers(h -> h.setBearerAuth(admin)).exchange().expectStatus().isOk()
+            .expectHeader().valueEquals("Cache-Control", "no-store")
+            .expectBody().jsonPath("$.length()").isEqualTo(2).jsonPath("$[0].subject").isEqualTo("carol").jsonPath("$[1].subject").isEqualTo("bob");
+        client.get().uri("/v1/users/admin/accounts?before=bob").headers(h -> h.setBearerAuth(admin)).exchange().expectStatus().isOk()
+            .expectBody().jsonPath("$[*].subject").isEqualTo(List.of("alice"));
+        // Les jokers SQL saisis sont cherchés tels quels.
+        client.get().uri(u -> u.path("/v1/users/admin/accounts").queryParam("q", "{q}").build("_100%")).headers(h -> h.setBearerAuth(admin)).exchange().expectStatus().isOk()
+            .expectBody().jsonPath("$[*].subject").isEqualTo(List.of("carol"));
+        client.get().uri(u -> u.path("/v1/users/admin/accounts").queryParam("q", "{q}").build("%")).headers(h -> h.setBearerAuth(admin)).exchange().expectStatus().isOk()
+            .expectBody().jsonPath("$[*].subject").isEqualTo(List.of("carol"));
+        client.get().uri("/v1/users/admin/accounts?status=DEACTIVATED").headers(h -> h.setBearerAuth(admin)).exchange().expectStatus().isOk()
+            .expectBody().jsonPath("$[*].subject").isEqualTo(List.of("bob"));
+        for (String bad : List.of("status=BANNED", "limit=0", "before=ghost"))
+            client.get().uri("/v1/users/admin/accounts?" + bad).headers(h -> h.setBearerAuth(admin)).exchange().expectStatus().is4xxClientError();
+        client.get().uri("/v1/users/admin/accounts/names?subject=alice&subject=ghost&subject=bob").headers(h -> h.setBearerAuth(admin))
+            .exchange().expectStatus().isOk().expectBody().jsonPath("$.alice").isEqualTo("Alice").jsonPath("$.bob").isEqualTo("Bob")
+            .jsonPath("$.ghost").doesNotExist();
+        client.get().uri("/v1/users/admin/accounts/stats").headers(h -> h.setBearerAuth(admin)).exchange().expectStatus().isOk()
+            .expectBody().jsonPath("$.accounts.ACTIVE").isEqualTo(2).jsonPath("$.accounts.DEACTIVATED").isEqualTo(1)
+            .jsonPath("$.accounts.CLOSED").isEqualTo(0);
+        client.get().uri("/v1/users/admin/accounts").headers(h -> h.setBearerAuth(alice)).exchange().expectStatus().isForbidden();
+        // Chaque création de profil publie UserProfileCreated (sujet seul), une seule fois.
+        assertThat(jdbc.queryForList("""
+            SELECT payload->'data'->>'subject' FROM user_event_outbox WHERE event_type = 'UserProfileCreated' ORDER BY event_sequence
+            """, String.class)).containsExactly("alice", "bob", "carol");
+        assertThat(jdbc.queryForList("SELECT payload->'data' FROM user_event_outbox WHERE event_type = 'UserProfileCreated'", String.class))
+            .allSatisfy(data -> assertThat(data).doesNotContain("Carole"));
+    }
+
     @Test void anAdminCannotDeactivateTheirOwnAccount() {
         client.get().uri("/v1/users/me").headers(h -> h.setBearerAuth(admin)).exchange().expectStatus().isOk();
         post("/v1/users/admin/accounts/role-test/deactivate", admin, null).expectStatus().isBadRequest();

@@ -14,7 +14,7 @@ L'architecture cible reste celle de [ARCHITECTURE.md](ARCHITECTURE.md). Ce table
 | Interaction, Moderation | Social agrege likes, commentaires avec reponses et signalements ; ecritures verifiees aupres de Video (publication) et User (blocages), suppression par le proprietaire de la video (U13), pagination par curseur ; moderation : signalement des commentaires, file admin, retrait de commentaires et de videos (VideoModerated, masquage dans Feed) avec decisions journalisees | Frontieres separees, migration MongoDB |
 | Rating | Implemente (U15) | Evenement RatingChanged et prise en compte dans le classement du fil |
 | Notification | Implemente : service dedie (PostgreSQL), consommation Kafka de User, Video, Social (outbox VideoLiked/CommentAdded) et Chat (outbox MessageAccepted), boite et badge dans Flutter, appareils chiffres, envoi FCM pret mais desactive sans identifiants | Projet Firebase et jeton FCM dans Flutter, preferences de notification |
-| Admin/Analytics | Absent | Dashboard, projections et mesures definies |
+| Admin/Analytics | Implemente : listes d'administration paginees chez chaque proprietaire (comptes User, videos Video, commentaires Social, noms des auteurs), totaux exacts par service, service Analytics (PostgreSQL) comptant l'activite quotidienne depuis Kafka (UserProfileCreated, VideoPublished, VideoLiked, CommentAdded, MessageAccepted), tableau de bord dans la console | Historique anterieur au premier demarrage non reconstruit (retention Kafka 7 jours), autres mesures a definir |
 | Exploitation | Compose local, CI, S3 Terraform, Kafka local | Kubernetes/staging, OTel/metrics/logs/traces, sauvegardes, restauration et charge |
 
 ## Decisions de persistance

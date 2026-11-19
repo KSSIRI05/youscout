@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: YouScout Video identity API
-  version: 0.7.0
+  version: 0.8.0
   description: Identité Keycloak, préparation et confirmation d'uploads S3 avec métadonnées persistantes.
 servers:
   - url: http://localhost:8080
@@ -330,6 +330,27 @@ paths:
           content:
             application/problem+json:
               schema: {$ref: '#/components/schemas/Problem'}
+  /v1/videos/admin:
+    get:
+      summary: 'A02: every video not deleted, newest first, with its owner'
+      description: Admin role only (Gateway and service).
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: query, name: owner, schema: {type: string, maxLength: 255}}
+        - {in: query, name: publication, schema: {type: string, enum: [PUBLISHED, UNPUBLISHED]}}
+        - {in: query, name: removed, schema: {type: boolean, default: false}, description: Only videos taken down by moderation}
+        - {in: query, name: before, schema: {type: string, format: uuid}}
+        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+      responses:
+        '200': {description: 'Videos: id, title, ownerSubject, processingStatus, publicationStatus, moderationStatus, createdAt, publishedAt'}
+        '400': {description: Invalid filter or limit}
+        '404': {description: Unknown cursor}
+  /v1/videos/admin/stats:
+    get:
+      summary: 'A06: videos not deleted, published, and taken down'
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: '{"videos": n, "published": n, "removed": n}'}
 components:
   securitySchemes:
     bearerAuth:

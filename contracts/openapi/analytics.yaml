@@ -1,0 +1,48 @@
+openapi: 3.0.3
+info:
+  title: YouScout Analytics API
+  version: 0.1.0
+  description: |-
+    Daily activity for the admin dashboard (A06), counted from Kafka events: UserProfileCreated (User), VideoPublished
+    (Video), VideoLiked and CommentAdded (Social), MessageAccepted (Chat). Each event is counted once, in the UTC day it
+    occurred. Only aggregate counts are stored. History starts with the events Kafka still retained when Analytics
+    first started (7 days); older days are not rebuilt. Totals come from each owning service's admin `stats` route.
+servers:
+  - url: http://localhost:8080
+security: [{bearerAuth: []}]
+paths:
+  /v1/analytics/activity:
+    get:
+      summary: Activity per UTC day over the last `days` days, today included (admin only)
+      parameters:
+        - {in: query, name: days, schema: {type: integer, minimum: 1, maximum: 90, default: 30}}
+      responses:
+        '200':
+          description: One entry per day, zero when nothing happened
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [from, to, coverageStart, days]
+                properties:
+                  from: {type: string, format: date}
+                  to: {type: string, format: date}
+                  coverageStart: {type: string, format: date, nullable: true, description: First day with counted activity}
+                  days:
+                    type: array
+                    items:
+                      type: object
+                      required: [day, newAccounts, videosPublished, likes, comments, messages]
+                      properties:
+                        day: {type: string, format: date}
+                        newAccounts: {type: integer}
+                        videosPublished: {type: integer}
+                        likes: {type: integer}
+                        comments: {type: integer}
+                        messages: {type: integer}
+        '400': {description: '`days` outside 1..90'}
+        '401': {description: Missing or invalid token}
+        '403': {description: Token without the admin role}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}

@@ -15,6 +15,7 @@ class UserRelationEventHandler {
 
     void handle(ConsumerRecord<String, String> record) {
         var event = decoder.decode(record.key(), record.value());
+        if (UserRelationEventDecoder.PROFILE_CREATED.equals(event.eventType())) return;
         if (UserRelationEventDecoder.SNAPSHOT_COMPLETE.equals(event.eventType())) {
             projection.markSnapshotComplete();
         } else if (UserRelationEventDecoder.ACCOUNT_CHANGED.equals(event.eventType())) {

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: YouScout User API
-  version: 0.4.0
+  version: 0.5.0
   description: Persistent personal profiles and user/admin role diagnostics using verified Keycloak access tokens.
 servers:
   - url: http://localhost:8080
@@ -284,6 +284,37 @@ paths:
           description: Upstream connection failed
         '504':
           description: Upstream response timed out
+  /v1/users/admin/accounts:
+    get:
+      operationId: listAccounts
+      summary: 'A01: every account, newest first'
+      description: Admin role only (Gateway and service). `q` matches the display name (case-insensitive, SQL wildcards taken literally) or the exact subject.
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: query, name: q, schema: {type: string, maxLength: 80}}
+        - {in: query, name: status, schema: {type: string, enum: [ACTIVE, DEACTIVATED, CLOSING, CLOSED]}}
+        - {in: query, name: before, schema: {type: string}, description: Subject of the last account already received}
+        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+      responses:
+        '200': {description: 'Accounts: subject, displayName, status, statusChangedAt, statusChangedBy, statusNote, createdAt'}
+        '400': {description: Invalid filter or limit}
+        '404': {description: Unknown cursor}
+  /v1/users/admin/accounts/names:
+    get:
+      operationId: accountNames
+      summary: 'A02: display names of up to 100 accounts (authors of admin content lists)'
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: query, name: subject, required: true, schema: {type: array, items: {type: string}, maxItems: 100}, style: form, explode: true}
+      responses:
+        '200': {description: Object mapping each known subject to its display name; unknown subjects are absent}
+  /v1/users/admin/accounts/stats:
+    get:
+      operationId: accountTotals
+      summary: 'A06: number of accounts per status'
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: '{"accounts": {"ACTIVE": n, "DEACTIVATED": n, "CLOSING": n, "CLOSED": n}}'}
 components:
   schemas:
     UserProfile:

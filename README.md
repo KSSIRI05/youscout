@@ -2,7 +2,7 @@
 
 YouScout est une plateforme de découverte des talents du football. Elle permet de partager des vidéos, de mettre en valeur ses compétences et d'échanger avec la communauté.
 
-**État réel :** Flutter connecté utilise les profils, le catalogue, l'upload, la lecture privée, le fil paginé et les interactions Social persistées. Le backend comprend User, Skill/Hashtag, Video, Feed, Social, Rating, Chat, Notification, Kafka et le worker média. User propage les suivis/blocages via outbox Kafka ; Feed les projette dans Redis et met en cache ses pages. Video utilise désormais MongoDB pour ses documents, métadonnées, traitements et outbox ; Social utilise encore PostgreSQL ; ses écritures vérifient auprès de Video que la vidéo est publiée et auprès de User qu'aucun blocage ne s'applique.
+**État réel :** Flutter connecté utilise les profils, le catalogue, l'upload, la lecture privée, le fil paginé et les interactions Social persistées. Le backend comprend User, Skill/Hashtag, Video, Feed, Social, Rating, Chat, Notification, Analytics, Kafka et le worker média. User propage les suivis/blocages via outbox Kafka ; Feed les projette dans Redis et met en cache ses pages. Video utilise désormais MongoDB pour ses documents, métadonnées, traitements et outbox ; Social utilise encore PostgreSQL ; ses écritures vérifient auprès de Video que la vidéo est publiée et auprès de User qu'aucun blocage ne s'applique.
 
 ## Lancer le socle backend
 
@@ -44,6 +44,7 @@ User applique alors ses migrations d'outbox et de verrouillage des relations ; F
 | [Vidéo et S3](services/video/README.md) | Uploads signés, confirmation, persistance et configuration AWS locale |
 | [Feed](services/feed/README.md) | Consommation de `VideoPublished`, inbox dédupliquée et projection PostgreSQL |
 | [Notification](services/notification/README.md) | Boîte de notifications, événements consommés, appareils et push FCM |
+| [Analytics](services/analytics/README.md) | Activité quotidienne du tableau de bord d'administration |
 | [Exigences](docs/REQUIREMENTS.md) | Tous les besoins et leur service responsable |
 | [Caractéristiques](docs/QUALITY_ATTRIBUTES.md) | Exigences explicites, déductions et priorités |
 | [Architecture](docs/ARCHITECTURE.md) | Comparaison des styles et diagramme de la cible |
