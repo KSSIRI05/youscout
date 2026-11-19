@@ -102,8 +102,16 @@ class SecurityIntegrationTest {
     }
 
     @Test void unimplementedRoutesRemainClosedEvenToAdmin() throws Exception {
-        for (String path : new String[]{"/v1/videos/uploads", "/v1/videos/admin", "/actuator/env"}) {
+        for (String path : new String[]{"/v1/videos/uploads", "/v1/videos/admin/unknown-route", "/actuator/env"}) {
             assertThat(get(path, oidc.roleToken("admin")).statusCode()).isEqualTo(403);
+        }
+    }
+
+    @Test void adminListAndTotalsAreReservedToAdmins() throws Exception {
+        for (String path : new String[]{"/v1/videos/admin", "/v1/videos/admin/stats"}) {
+            assertThat(get(path, oidc.roleToken("admin")).statusCode()).isEqualTo(200);
+            assertThat(get(path, oidc.roleToken("user")).statusCode()).isEqualTo(403);
+            assertThat(get(path, null).statusCode()).isEqualTo(401);
         }
     }
 
