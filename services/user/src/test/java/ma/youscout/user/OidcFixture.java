@@ -20,6 +20,12 @@ final class OidcFixture {
     final java.util.List<String> keycloakCalls = new java.util.concurrent.CopyOnWriteArrayList<>();
     final java.util.Set<String> keycloakMissing = java.util.concurrent.ConcurrentHashMap.newKeySet();
     volatile boolean keycloakDown;
+    // Nombre d'appels d'administration à refuser en 401 (jeton mis en cache révoqué) et de jetons délivrés.
+    final java.util.concurrent.atomic.AtomicInteger rejectNextAdminCalls = new java.util.concurrent.atomic.AtomicInteger();
+    final java.util.concurrent.atomic.AtomicInteger tokensIssued = new java.util.concurrent.atomic.AtomicInteger();
+    // Doublures des routes internes d'effacement (U22), une par service : "VIDEO alice Bearer kc-admin-token".
+    final java.util.List<String> purgeCalls = new java.util.concurrent.CopyOnWriteArrayList<>();
+    final java.util.Set<String> purgeFailing = java.util.concurrent.ConcurrentHashMap.newKeySet();
     // La clé privée reste dans le test ; le serveur ne publie que sa partie publique.
     OidcFixture() {
         try {
@@ -41,18 +47,29 @@ final class OidcFixture {
                 String form = new String(e.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                 boolean valid = form.contains("grant_type=client_credentials") && form.contains("client_id=youscout-user-admin")
                     && form.contains("client_secret=test-admin-secret");
-                byte[] body = (valid ? "{\"access_token\":\"kc-admin-token\"}" : "{}").getBytes(StandardCharsets.UTF_8);
+                if (valid && !keycloakDown) tokensIssued.incrementAndGet();
+                byte[] body = (valid ? "{\"access_token\":\"kc-admin-token\",\"expires_in\":300}" : "{}").getBytes(StandardCharsets.UTF_8);
                 e.getResponseHeaders().set("Content-Type", "application/json");
                 e.sendResponseHeaders(valid && !keycloakDown ? 200 : 401, body.length); e.getResponseBody().write(body); e.close();
             });
             server.createContext("/admin/realms/youscout/users/", e -> {
                 String id = e.getRequestURI().getPath().split("/")[5];
                 String body = new String(e.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-                int status = keycloakDown ? 500 : !"Bearer kc-admin-token".equals(e.getRequestHeaders().getFirst("Authorization")) ? 401
+                boolean revoked = rejectNextAdminCalls.getAndUpdate(n -> Math.max(0, n - 1)) > 0;
+                int status = keycloakDown ? 500 : revoked || !"Bearer kc-admin-token".equals(e.getRequestHeaders().getFirst("Authorization")) ? 401
                     : keycloakMissing.contains(id) ? 404 : 204;
                 if (status == 204) keycloakCalls.add(e.getRequestMethod() + " " + e.getRequestURI().getPath().substring("/admin/realms/youscout".length()) + " " + body);
                 e.sendResponseHeaders(status, -1); e.close();
             });
+            for (String service : java.util.List.of("video", "social", "rating", "chat", "skill")) {
+                server.createContext("/" + service + "/internal/accounts/", e -> {
+                    String name = service.toUpperCase(java.util.Locale.ROOT);
+                    String subject = e.getRequestURI().getPath().substring(("/" + service + "/internal/accounts/").length());
+                    boolean ok = e.getRequestMethod().equals("DELETE") && !purgeFailing.contains(name);
+                    if (ok) purgeCalls.add(name + " " + subject + " " + e.getRequestHeaders().getFirst("Authorization"));
+                    e.sendResponseHeaders(ok ? 204 : 503, -1); e.close();
+                });
+            }
             server.start();
         } catch (Exception e) { throw new IllegalStateException(e); }
     }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:youscout_mobile/app.dart';
+import 'package:youscout_mobile/screens/connected_screen.dart';
 import 'package:youscout_mobile/state/scout_store.dart';
 import 'connected_session_test.dart' show FakeAuth, ApiFixture;
 
@@ -40,6 +41,71 @@ void main() {
       await tester.pumpAndSettle();
       expect(session.profile, isNull);
       expect(find.text('Mon nom enregistré'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'closing the account needs the typed confirmation then signs out',
+    (tester) async {
+      final fixture = ApiFixture(), auth = FakeAuth();
+      final session = fixture.session(auth);
+      final demo = ScoutStore();
+      addTearDown(session.dispose);
+      addTearDown(demo.dispose);
+      await tester.pumpWidget(YouScoutApp(store: demo, session: session));
+      await tester.pumpAndSettle();
+      await tester.runAsync(session.login);
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('close-account')),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(ProfileEditor),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(find.byKey(const Key('close-account')));
+      await tester.pumpAndSettle();
+      final confirm = find.byKey(const Key('close-account-confirm'));
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+      await tester.enterText(
+        find.byKey(const Key('close-account-confirmation')),
+        'fermer',
+      );
+      await tester.pump();
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+      await tester.tap(find.text('Annuler'));
+      await tester.pumpAndSettle();
+      expect(fixture.closures, isEmpty);
+
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('close-account')),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(ProfileEditor),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(find.byKey(const Key('close-account')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('close-account-confirmation')),
+        'FERMER',
+      );
+      await tester.pump();
+      await tester.tap(confirm);
+      await tester.pumpAndSettle();
+      expect(fixture.closures, [
+        {'confirmation': 'FERMER'},
+      ]);
+      expect(session.signedIn, isFalse);
+      expect(auth.logouts, 0);
+      expect(find.byKey(const Key('session-notice')), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

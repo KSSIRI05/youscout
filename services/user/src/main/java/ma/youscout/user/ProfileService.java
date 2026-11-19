@@ -20,6 +20,7 @@ class ProfileService {
     @Transactional
     public UserProfile getOrCreate(Jwt jwt) {
         String subject = subject(jwt);
+        requireActive(subject);
         profiles.createIfAbsent(subject, initialName(jwt));
         return profiles.find(subject);
     }
@@ -27,6 +28,7 @@ class ProfileService {
     @Transactional
     public UserProfile patch(Jwt jwt, ProfilePatch patch) {
         String subject = subject(jwt);
+        requireActive(subject);
         profiles.createIfAbsent(subject, initialName(jwt));
         return profiles.patch(subject, patch);
     }
@@ -41,17 +43,19 @@ class ProfileService {
     }
 
     @Transactional(readOnly = true)
-    public java.util.List<String> following(Jwt jwt) { return profiles.following(subject(jwt)); }
+    public java.util.List<String> following(Jwt jwt) { return profiles.following(requireActive(subject(jwt))); }
 
     @Transactional(readOnly = true)
     public FeedRelations feedRelations(Jwt jwt) {
-        String viewer = subject(jwt);
-        return new FeedRelations(profiles.following(viewer), profiles.blocked(viewer), profiles.blockedBy(viewer));
+        var relations = profiles.relations(subject(jwt));
+        if (relations.status() != null && !relations.status().equals("ACTIVE"))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Ce compte n'est plus actif.");
+        return new FeedRelations(relations.following(), relations.blocked(), relations.blockedBy());
     }
 
     @Transactional
     public FollowResult follow(Jwt jwt, String target) {
-        String viewer = subject(jwt); validateSubject(target);
+        String viewer = requireActive(subject(jwt)); validateSubject(target);
         profiles.lockRelationship(viewer, target);
         if (viewer.equals(target)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tu ne peux pas te suivre toi-même.");
         if (profiles.findActiveIfPresent(target) == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Profil introuvable.");
@@ -63,7 +67,7 @@ class ProfileService {
 
     @Transactional
     public FollowResult unfollow(Jwt jwt, String target) {
-        String viewer = subject(jwt); validateSubject(target);
+        String viewer = requireActive(subject(jwt)); validateSubject(target);
         profiles.lockRelationship(viewer, target);
         profiles.unfollow(viewer, target);
         relationEvents.append("UNFOLLOW", viewer, target);
@@ -72,10 +76,12 @@ class ProfileService {
 
     @Transactional
     public BlockResult block(Jwt jwt, String target) {
-        String viewer = subject(jwt); validateSubject(target);
+        String viewer = requireActive(subject(jwt)); validateSubject(target);
         if (viewer.equals(target)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tu ne peux pas te bloquer toi-même.");
         profiles.lockRelationship(viewer, target);
-        if (profiles.findIfPresent(target) == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Profil introuvable.");
+        String status = profiles.accountStatus(target);
+        if (status == null || status.equals("CLOSING") || status.equals("CLOSED"))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Profil introuvable.");
         profiles.block(viewer, target);
         relationEvents.append("BLOCK", viewer, target);
         return new BlockResult(true);
@@ -83,12 +89,21 @@ class ProfileService {
 
     @Transactional
     public BlockResult unblock(Jwt jwt, String target) {
-        String viewer = subject(jwt); validateSubject(target);
+        String viewer = requireActive(subject(jwt)); validateSubject(target);
         if (viewer.equals(target)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tu ne peux pas te débloquer toi-même.");
         profiles.lockRelationship(viewer, target);
         profiles.unblock(viewer, target);
         relationEvents.append("UNBLOCK", viewer, target);
         return new BlockResult(false);
+    }
+
+    // Un compte désactivé ou en cours de fermeture n'agit plus, même avec un jeton d'accès encore valide.
+    // Social, Rating et Chat lisent feed-relations avec le jeton de l'auteur : ils sont refusés eux aussi.
+    private String requireActive(String subject) {
+        String status = profiles.accountStatus(subject);
+        if (status != null && !status.equals("ACTIVE"))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Ce compte n'est plus actif.");
+        return subject;
     }
 
     private void validateSubject(String value) {

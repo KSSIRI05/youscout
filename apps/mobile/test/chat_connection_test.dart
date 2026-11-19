@@ -40,28 +40,31 @@ void main() {
   late List<FakeChannel> channels;
   late List<String> restSends;
   late int tokens;
-  ChatConnection connection({Duration accept = const Duration(seconds: 8)}) =>
-      ChatConnection(
-        socketUri: Uri.parse('ws://localhost:8080/v1/chat/ws'),
-        token: () async {
-          tokens++;
-          return (
-            access: 'token-$tokens',
-            expiresAt: DateTime.now().add(const Duration(minutes: 5)),
-          );
-        },
-        restSend: (peer, clientId, body) async {
-          restSends.add(clientId);
-          return message(7, from: 'alice', id: clientId);
-        },
-        connector: (uri) async {
-          final channel = FakeChannel();
-          channels.add(channel);
-          return channel;
-        },
-        backoff: (_) => Duration.zero,
-        acceptTimeout: accept,
+  ChatConnection connection({
+    Duration accept = const Duration(seconds: 8),
+    Duration ready = const Duration(seconds: 3),
+  }) => ChatConnection(
+    socketUri: Uri.parse('ws://localhost:8080/v1/chat/ws'),
+    token: () async {
+      tokens++;
+      return (
+        access: 'token-$tokens',
+        expiresAt: DateTime.now().add(const Duration(minutes: 5)),
       );
+    },
+    restSend: (peer, clientId, body) async {
+      restSends.add(clientId);
+      return message(7, from: 'alice', id: clientId);
+    },
+    connector: (uri) async {
+      final channel = FakeChannel();
+      channels.add(channel);
+      return channel;
+    },
+    backoff: (_) => Duration.zero,
+    acceptTimeout: accept,
+    readyTimeout: ready,
+  );
 
   setUp(() {
     channels = [];
@@ -101,6 +104,24 @@ void main() {
     chat.markDelivered('bob', 2);
     expect(channel.sent.last, {'type': 'delivered', 'peer': 'bob', 'seq': 2});
     expect(restSends, isEmpty);
+    chat.dispose();
+  });
+
+  test('resends the auth frame when ready does not arrive', () async {
+    final chat = connection(ready: const Duration(milliseconds: 20))..start();
+    await pumpEventQueue();
+    final channel = channels.single;
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    final auths = channel.sent.where((f) => f['type'] == 'auth').length;
+    expect(auths, greaterThanOrEqualTo(2));
+    channel.push({'type': 'ready', 'subject': 'alice'});
+    await pumpEventQueue();
+    expect(chat.link, ChatLink.live);
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    expect(
+      channel.sent.where((f) => f['type'] == 'auth').length,
+      lessThanOrEqualTo(auths + 1),
+    );
     chat.dispose();
   });
 

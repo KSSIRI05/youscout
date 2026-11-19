@@ -143,6 +143,26 @@ class SocialIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM video_reports", Integer.class)).isZero();
     }
 
+    @Test void accountClosureErasesLikesAndCommentTextButKeepsReplies() throws Exception {
+        UUID video = UUID.randomUUID();
+        oidc.publishedVideos.put(video.toString(), "bob");
+        send("PUT", likes(video), oidc.token("alice"), null);
+        send("PUT", likes(video), oidc.token("carol"), null);
+        String root = JsonPath.parse(send("POST", comments(video), oidc.token("alice"), "{\"body\":\"Bravo\"}").body()).read("$.id");
+        send("POST", comments(video), oidc.token("carol"), "{\"body\":\"Merci\",\"parentId\":\"" + root + "\"}");
+        send("POST", comments(video), oidc.token("carol"), "{\"body\":\"Super\"}");
+
+        assertThat(send("DELETE", "/internal/accounts/alice", null, null).statusCode()).isEqualTo(401);
+        assertThat(send("DELETE", "/internal/accounts/alice", oidc.token("svc", "admin"), null).statusCode()).isEqualTo(403);
+        for (int attempt = 0; attempt < 2; attempt++)
+            assertThat(send("DELETE", "/internal/accounts/alice", oidc.token("svc", "account-closure"), null).statusCode()).isEqualTo(204);
+
+        assertThat(jdbc.queryForList("SELECT user_subject FROM video_likes", String.class)).containsExactly("carol");
+        assertThat(jdbc.queryForList("SELECT concat_ws(' ', author_subject, body, deleted_at IS NOT NULL) FROM video_comments ORDER BY created_at",
+            String.class)).containsExactly("alice  t", "carol Merci f", "carol Super f");
+        assertThat(send("GET", comments(video), oidc.token("dave"), null).body()).doesNotContain("Bravo").contains("Super");
+    }
+
     static String likes(UUID video) { return "/v1/social/videos/" + video + "/likes"; }
     static String comments(UUID video) { return "/v1/social/videos/" + video + "/comments"; }
     HttpResponse<String> send(String method, String path, String token, String body) throws Exception {

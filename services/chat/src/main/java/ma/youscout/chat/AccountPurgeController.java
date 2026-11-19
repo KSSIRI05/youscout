@@ -1,0 +1,26 @@
+package ma.youscout.chat;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * U22 : efface le texte des messages envoyés par un compte fermé (voir ChatStore.redactSender).
+ * Appelée par User avec son compte de service (rôle account-closure) ; aucune route Gateway n'y mène. Rejouable.
+ */
+@RestController
+class AccountPurgeController {
+    private final ChatStore store;
+
+    AccountPurgeController(ChatStore store) {
+        this.store = store;
+    }
+
+    @DeleteMapping("/internal/accounts/{subject}")
+    ResponseEntity<Void> purge(@PathVariable String subject) {
+        // redactSender valide l'identifiant comme les autres routes de Chat.
+        store.redactSender(subject);
+        return ResponseEntity.noContent().build();
+    }
+}

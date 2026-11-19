@@ -88,6 +88,25 @@ class ChatIntegrationTest {
         assertThat(read(rest("GET", "/v1/conversations", oidc.token("carol"), null), "$.length()", Integer.class)).isZero();
     }
 
+    @Test void accountClosureBlanksTheClosedAccountsMessagesAndKeepsTheSequence() throws Exception {
+        String alice = oidc.token("alice"), bob = oidc.token("bob");
+        post(alice, "bob", "m-1", "Salut");
+        post(bob, "alice", "m-1", "Bonjour");
+        post(alice, "bob", "m-2", "À plus");
+        assertThat(rest("DELETE", "/internal/accounts/alice", null, null).statusCode()).isEqualTo(401);
+        assertThat(rest("DELETE", "/internal/accounts/alice", oidc.token("svc", "admin"), null).statusCode()).isEqualTo(403);
+        for (int attempt = 0; attempt < 2; attempt++)
+            assertThat(rest("DELETE", "/internal/accounts/alice", oidc.token("svc", "account-closure"), null).statusCode()).isEqualTo(204);
+
+        var history = rest("GET", "/v1/conversations/alice/messages", bob, null);
+        assertThat(read(history, "$.messages[*].seq", List.class)).containsExactly(1, 2, 3);
+        assertThat(read(history, "$.messages[*].body", List.class)).containsExactly("", "Bonjour", "");
+        assertThat(read(history, "$.messages[*].redacted", List.class)).containsExactly(true, false, true);
+        var list = rest("GET", "/v1/conversations", bob, null);
+        assertThat(read(list, "$[0].lastMessage.body", String.class)).isEmpty();
+        assertThat(read(list, "$[0].lastMessage.redacted", Boolean.class)).isTrue();
+    }
+
     @Test void invalidMessagesUnknownRecipientsAndBlocksAreRefused() throws Exception {
         String alice = oidc.token("alice");
         assertThat(post(alice, "alice", "m-1", "Moi").statusCode()).isEqualTo(400);

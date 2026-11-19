@@ -15,6 +15,10 @@
         "name": "admin"
       },
       {
+        "name": "account-closure",
+        "description": "Compte de service User : effacements internes lors d'une fermeture de compte (U22)."
+      },
+      {
         "name": "default-roles-youscout",
         "composite": true,
         "composites": {
@@ -198,7 +202,34 @@
       "defaultClientScopes": [
         "basic"
       ],
-      "optionalClientScopes": []
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "name": "youscout-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "youscout-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "application-realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
     }
   ],
   "verifyEmail": false,

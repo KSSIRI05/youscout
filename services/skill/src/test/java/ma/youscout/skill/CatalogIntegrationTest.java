@@ -179,6 +179,17 @@ class CatalogIntegrationTest {
         call("DELETE","/v1/hashtags/"+id+"/follow",user,null).expectStatus().isNoContent();
         call("GET","/v1/hashtags/following",user,null).expectStatus().isOk().expectBody().jsonPath("$.items.length()").isEqualTo(0);
     }
+    // U22 : seul le compte de service de User efface les abonnements d'un compte fermé ; le hashtag reste au catalogue.
+    @Test void accountClosureRemovesOnlyThatAccountsSubscriptions() {
+        UUID id=tag("football");String bob=oidc.profileToken("bob","Bob",null);
+        call("PUT","/v1/hashtags/"+id+"/follow",user,null).expectStatus().isNoContent();
+        call("PUT","/v1/hashtags/"+id+"/follow",bob,null).expectStatus().isNoContent();
+        client.delete().uri("/internal/accounts/alice").exchange().expectStatus().isUnauthorized();
+        call("DELETE","/internal/accounts/alice",admin,null).expectStatus().isForbidden();
+        for(int attempt=0;attempt<2;attempt++) call("DELETE","/internal/accounts/alice",oidc.roleToken("account-closure"),null).expectStatus().isNoContent();
+        assertThat(jdbc.queryForList("SELECT subject FROM hashtag_follows",String.class)).containsExactly("bob");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM hashtags",Integer.class)).isEqualTo(1);
+    }
     // Un abonnement exige une identité valide et un hashtag existant.
     @Test void followRejectsInvalidSubjectsAndUnknownTags() {
         UUID id=tag("football");String noSubject=oidc.profileToken(null,"Unknown",null);

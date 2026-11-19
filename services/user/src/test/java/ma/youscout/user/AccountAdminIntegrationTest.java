@@ -29,6 +29,7 @@ class AccountAdminIntegrationTest {
         r.add("spring.datasource.url", postgres::getJdbcUrl);
         r.add("spring.datasource.username", postgres::getUsername);
         r.add("spring.datasource.password", postgres::getPassword);
+        r.add("youscout.account-closure.worker-enabled", () -> "false");
         r.add("youscout.keycloak-admin.base-url", oidc::base);
         r.add("youscout.keycloak-admin.client-secret", () -> "test-admin-secret");
     }
@@ -81,6 +82,15 @@ class AccountAdminIntegrationTest {
         assertThat(oidc.keycloakCalls).isEmpty();
         assertThat(jdbc.queryForObject("SELECT account_status FROM user_profiles WHERE subject = 'alice'", String.class)).isEqualTo("ACTIVE");
         assertThat(events()).isEmpty();
+    }
+
+    @Test void aRevokedCachedServiceTokenIsReplacedOnce() {
+        post("/v1/users/admin/accounts/alice/deactivate", admin, null).expectStatus().isOk();
+        int issued = oidc.tokensIssued.get();
+        oidc.rejectNextAdminCalls.set(1);
+        post("/v1/users/admin/accounts/alice/reactivate", admin, null).expectStatus().isOk();
+        assertThat(oidc.tokensIssued.get()).isEqualTo(issued + 1);
+        assertThat(oidc.keycloakCalls).endsWith("PUT /users/alice {\"enabled\":true}");
     }
 
     @Test void anAdminCannotDeactivateTheirOwnAccount() {

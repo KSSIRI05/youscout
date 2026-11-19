@@ -30,6 +30,8 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/v1/videos/*/complete").hasAnyRole("user", "admin")
                         .requestMatchers(HttpMethod.POST, "/v1/videos/{id:[0-9a-fA-F-]+}/publish").hasAnyRole("user", "admin")
                         .requestMatchers(HttpMethod.DELETE, "/v1/videos/{id:[0-9a-fA-F-]+}").hasAnyRole("user", "admin")
+                        // U22 : effacement demandé par User pour un compte fermé.
+                        .requestMatchers(HttpMethod.DELETE, "/internal/accounts/*").hasRole("account-closure")
                         .anyRequest().denyAll())
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint((request, response, error) -> ApiSecurityErrors.unauthorized(response, error))

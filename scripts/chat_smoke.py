@@ -60,6 +60,20 @@ class Socket:
         self.sock.close()
 
 
+def authenticate(ws, token):
+    """Comme l'application : renvoie la trame auth si « ready » n'arrive pas en 3 s (trame perdue à l'ouverture)."""
+    for attempt in range(3):
+        ws.send({"type": "auth", "token": token})
+        ws.sock.settimeout(3)
+        try:
+            return ws.receive()
+        except TimeoutError:
+            continue
+        finally:
+            ws.sock.settimeout(10)
+    raise AssertionError("WebSocket authentication got no answer")
+
+
 def exercise(player_token, player_subject):
     stranger = "missing-" + uuid.uuid4().hex
     # REST : lecture vide, destinataire inconnu refusé par User, message à soi-même refusé avant tout appel.
@@ -72,19 +86,21 @@ def exercise(player_token, player_subject):
     status, _ = request("POST", f"/v1/conversations/{player_subject}/messages", player_token, {"clientMessageId": "smoke-2", "body": "Smoke"})
     assert status == 400, f"Self-message accepted (HTTP {status})"
 
-    # WebSocket : sans authentification la connexion est fermée en 4401.
+    # WebSocket : sans authentification la connexion est fermée en 4401, dès la trame ou au plus tard après 10 s.
+    # La Gateway peut perdre une trame envoyée juste après l'ouverture : seule la fermeture de Chat compte ici.
     ws = Socket()
     try:
+        ws.sock.settimeout(25)
         ws.send({"type": "ping"})
         kind, value = ws.receive()
+        ws.sock.settimeout(10)
         assert (kind, value) == ("close", 4401), f"Unauthenticated WebSocket was not closed with 4401 ({kind} {value})"
     finally:
         ws.close()
     # Authentifiée : ping, puis envoi refusé par User, renvoyé comme erreur sur la même connexion.
     ws = Socket()
     try:
-        ws.send({"type": "auth", "token": player_token})
-        kind, ready = ws.receive()
+        kind, ready = authenticate(ws, player_token)
         assert kind == "text" and ready["type"] == "ready" and ready["subject"] == player_subject, "WebSocket authentication failed"
         ws.send({"type": "ping"})
         assert ws.receive() == ("text", {"type": "pong"}), "WebSocket ping failed"

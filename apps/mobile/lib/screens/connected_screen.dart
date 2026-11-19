@@ -228,6 +228,93 @@ class _ProfileEditorState extends State<ProfileEditor> {
           ],
         ),
       ),
+      const SizedBox(height: 40),
+      const Divider(),
+      const SizedBox(height: 16),
+      Text('Fermer mon compte', style: Theme.of(context).textTheme.titleMedium),
+      const SizedBox(height: 8),
+      const Text(
+        'La fermeture est définitive : tu es déconnecté partout et tes données '
+        'sont effacées de chaque service.',
+        style: TextStyle(color: ScoutColors.muted),
+      ),
+      const SizedBox(height: 12),
+      OutlinedButton(
+        key: const Key('close-account'),
+        style: OutlinedButton.styleFrom(foregroundColor: Colors.redAccent),
+        onPressed: widget.session.busy
+            ? null
+            : () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (_) => const CloseAccountDialog(),
+                );
+                if (confirmed == true) {
+                  await widget.session.closeAccount(
+                    CloseAccountDialog.confirmation,
+                  );
+                }
+              },
+        child: const Text('Fermer mon compte'),
+      ),
+    ],
+  );
+}
+
+/// U22 : explique les conséquences puis exige la saisie de FERMER avant d'activer la confirmation.
+class CloseAccountDialog extends StatefulWidget {
+  const CloseAccountDialog({super.key});
+  static const confirmation = 'FERMER';
+  @override
+  State<CloseAccountDialog> createState() => _CloseAccountDialogState();
+}
+
+class _CloseAccountDialogState extends State<CloseAccountDialog> {
+  final typed = TextEditingController();
+  @override
+  void dispose() {
+    typed.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Fermer ton compte ?'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Tes vidéos, likes, commentaires, notes et abonnements seront '
+          'supprimés. Le texte de tes messages sera effacé chez tes '
+          'interlocuteurs. Ton profil disparaîtra et ton adresse e-mail sera '
+          'libérée. Cette action est irréversible.',
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          key: const Key('close-account-confirmation'),
+          controller: typed,
+          autofocus: true,
+          onChanged: (_) => setState(() {}),
+          decoration: const InputDecoration(
+            labelText: 'Saisis FERMER pour confirmer',
+          ),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context, false),
+        child: const Text('Annuler'),
+      ),
+      FilledButton(
+        key: const Key('close-account-confirm'),
+        style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+        onPressed: typed.text == CloseAccountDialog.confirmation
+            ? () => Navigator.pop(context, true)
+            : null,
+        child: const Text('Fermer définitivement'),
+      ),
     ],
   );
 }

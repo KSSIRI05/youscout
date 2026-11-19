@@ -16,6 +16,8 @@ class ConnectedSession extends ChangeNotifier {
   bool busy = false;
   bool get signedIn => _tokens != null;
   String? error;
+  // Information affichée sur l'accueil après une action réussie qui ferme la session.
+  String? notice;
   AccountProfile? profile;
   List<CatalogueItem> skills = [], hashtags = [];
   final Set<String> following = {};
@@ -58,6 +60,7 @@ class ConnectedSession extends ChangeNotifier {
   });
 
   Future<void> login({bool register = false}) => _run(() async {
+    notice = null;
     final tokens = await auth.login(register: register);
     if (tokens != null) {
       _tokens = tokens;
@@ -403,6 +406,21 @@ class ConnectedSession extends ChangeNotifier {
     moreHashtags = false;
     _notify();
   }
+
+  /// U22 : User vérifie la saisie FERMER et révoque aussitôt les sessions Keycloak ;
+  /// les jetons locaux sont oubliés sans appel de déconnexion, devenu inutile.
+  Future<void> closeAccount(String confirmation) => _run(() async {
+    await _request(
+      'POST',
+      '/v1/users/me/closure',
+      body: {'confirmation': confirmation},
+    );
+    _clear();
+    notice =
+        'Ton compte est en cours de fermeture. Tes vidéos, likes, commentaires, '
+        'notes, abonnements et le texte de tes messages seront effacés dans les '
+        'prochaines minutes.';
+  });
 
   Future<void> logout() => _run(() async {
     final tokens = _tokens;

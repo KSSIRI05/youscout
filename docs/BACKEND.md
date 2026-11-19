@@ -50,6 +50,10 @@ L’insertion `ON CONFLICT DO NOTHING` évite les doublons à la première utili
 
 La migration V1 existante contient déjà les colonnes nécessaires : elle est conservée telle quelle, sans réécriture d’une migration appliquée. Les événements de profil et l’outbox restent à implémenter avant d’alimenter d’autres services.
 
+### Fermeture du compte (U22)
+
+`POST /v1/users/me/closure` avec `{"confirmation": "FERMER"}` répond 202 et renvoie le journal (`GET /v1/users/me/closure` tant que le jeton est valide, `GET /v1/users/admin/accounts/{subject}/closure` pour un administrateur). Un compte `DEACTIVATED`, `CLOSING` ou `CLOSED` ne peut plus lire ni modifier son profil, ses suivis et blocages (403). Les effacements commencent après `ACCOUNT_CLOSURE_PURGE_DELAY` (6 min par défaut) et passent par `DELETE /internal/accounts/{subject}` de Video, Social, Rating, Chat et Skill, appelé avec le compte de service `youscout-user-admin` (rôle `account-closure`, appliqué par `scripts/apply-keycloak.py`). Sans le profil Compose `video`, l'étape VIDEO reste en attente et la fermeture ne se termine pas. Voir [la politique](SECURITE_ET_MODERATION.md#fermeture-de-compte) ; `python scripts/smoke-closure.py` vérifie le parcours sur la pile complète (lancer Compose avec `ACCOUNT_CLOSURE_PURGE_DELAY=PT10S` pour ne pas attendre 6 minutes).
+
 ## Lancer avec Docker Compose
 
 Depuis la racine, avec Docker Engine/Docker Desktop démarré, Compose v2 et Python 3 :

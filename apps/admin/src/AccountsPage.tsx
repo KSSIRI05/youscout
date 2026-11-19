@@ -1,15 +1,29 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Account, AdminApi, ApiError } from "./api";
+import { Account, AccountClosure, AdminApi, ApiError } from "./api";
+
+const STEP_LABELS: Record<string, string> = {
+  SESSIONS: "Connexion bloquée et sessions fermées",
+  VIDEO: "Vidéos supprimées",
+  SOCIAL: "Likes et commentaires effacés",
+  RATING: "Notes effacées",
+  CHAT: "Texte des messages effacé",
+  SKILL: "Abonnements aux hashtags retirés",
+  IDENTITY: "Compte Keycloak supprimé",
+};
+const STATUS_LABELS: Record<Account["status"], string> = {
+  ACTIVE: "Actif", DEACTIVATED: "Désactivé", CLOSING: "Fermeture en cours", CLOSED: "Fermé",
+};
 
 const message = (error: unknown) => (error instanceof ApiError ? error.message : "Une erreur inattendue est survenue.");
 
 /**
  * A04 : désactiver un compte bloque sa connexion dans Keycloak, ferme ses sessions, masque son profil et ses vidéos
- * dans le fil. La réactivation rétablit le tout.
+ * dans le fil. La réactivation rétablit le tout. Un compte fermé par son titulaire (U22) affiche son journal de fermeture.
  */
 export function AccountsPage({ api, initialSubject = "" }: { api: AdminApi; initialSubject?: string }) {
   const [subject, setSubject] = useState(initialSubject);
   const [account, setAccount] = useState<Account | null>(null);
+  const [closure, setClosure] = useState<AccountClosure | null>(null);
   const [note, setNote] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -22,9 +36,17 @@ export function AccountsPage({ api, initialSubject = "" }: { api: AdminApi; init
     setError(null);
     setNotice(null);
     setConfirming(false);
-    try { setAccount(await api.getAccount(value.trim())); }
-    catch (failure) { setAccount(null); setError(message(failure)); }
-    finally { setBusy(false); }
+    setClosure(null);
+    let found: Account;
+    try { found = await api.getAccount(value.trim()); setAccount(found); }
+    catch (failure) { setAccount(null); setError(message(failure)); setBusy(false); return; }
+    // U22 : un compte fermé par son titulaire montre son journal ; il ne se désactive ni ne se réactive plus.
+    // Un journal illisible n'efface pas le compte affiché : seule l'erreur s'ajoute.
+    if (found.status === "CLOSING" || found.status === "CLOSED") {
+      try { setClosure(await api.getAccountClosure(found.subject)); }
+      catch (failure) { setError(`Journal de fermeture indisponible : ${message(failure)}`); }
+    }
+    setBusy(false);
   }, [api]);
 
   useEffect(() => { if (initialSubject) void lookup(initialSubject); }, [initialSubject, lookup]);
@@ -54,6 +76,7 @@ export function AccountsPage({ api, initialSubject = "" }: { api: AdminApi; init
   }
 
   const active = account?.status === "ACTIVE";
+  const closing = account?.status === "CLOSING" || account?.status === "CLOSED";
   return (
     <main className="page">
       <section className="panel">
@@ -72,7 +95,7 @@ export function AccountsPage({ api, initialSubject = "" }: { api: AdminApi; init
           <article className="report">
             <header>
               <strong>{account.displayName}</strong>
-              <span className={`badge ${active ? "on" : "off"}`}>{active ? "Actif" : "Désactivé"}</span>
+              <span className={`badge ${active ? "on" : "off"}`}>{STATUS_LABELS[account.status]}</span>
             </header>
             <p className="muted">{account.subject} · inscrit le {new Date(account.createdAt).toLocaleDateString("fr-FR")}</p>
             {account.statusChangedAt && (
@@ -81,7 +104,23 @@ export function AccountsPage({ api, initialSubject = "" }: { api: AdminApi; init
                 {account.statusNote ? ` — « ${account.statusNote} »` : ""}
               </p>
             )}
-            <div className="actions">
+            {closure && (
+              <section aria-label="Fermeture du compte">
+                <p className="muted">
+                  Fermeture demandée par le joueur le {new Date(closure.requestedAt).toLocaleString("fr-FR")}
+                  {closure.completedAt ? `, terminée le ${new Date(closure.completedAt).toLocaleString("fr-FR")}` : ""}
+                </p>
+                <ul>
+                  {closure.steps.map(step => (
+                    <li key={step.name}>
+                      {STEP_LABELS[step.name] ?? step.name} : {step.status === "DONE" ? "fait"
+                        : `en attente${step.attempts ? ` (${step.attempts} essai${step.attempts > 1 ? "s" : ""}${step.lastError ? `, ${step.lastError}` : ""})` : ""}`}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+            {!closing && <div className="actions">
               <input aria-label="Note" placeholder="Note (facultative)" maxLength={500} value={note} onChange={event => setNote(event.target.value)} />
               {active && !confirming && <button className="danger" disabled={busy} onClick={() => setConfirming(true)}>Désactiver le compte</button>}
               {active && confirming && (
@@ -91,7 +130,7 @@ export function AccountsPage({ api, initialSubject = "" }: { api: AdminApi; init
                 </>
               )}
               {!active && <button disabled={busy} onClick={() => change(false)}>Réactiver le compte</button>}
-            </div>
+            </div>}
           </article>
         )}
       </section>

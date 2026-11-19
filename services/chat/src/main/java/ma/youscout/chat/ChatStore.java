@@ -38,10 +38,10 @@ class ChatStore {
     private static final int MAX_ATTEMPTS = 10;
 
     record Message(String id, String conversationId, long seq, String senderSubject, String recipientSubject,
-                   String clientMessageId, String body, Instant acceptedAt) {}
+                   String clientMessageId, String body, Instant acceptedAt, boolean redacted) {}
     record Accepted(Message message, boolean created) {}
     record History(String conversationId, String peerSubject, long lastSeq, long peerDeliveredSeq, List<Message> messages) {}
-    record LastMessage(String senderSubject, String body, long seq, Instant acceptedAt) {}
+    record LastMessage(String senderSubject, String body, long seq, Instant acceptedAt, boolean redacted) {}
     record Conversation(String conversationId, String peerSubject, long lastSeq, long myDeliveredSeq,
                         long peerDeliveredSeq, LastMessage lastMessage) {}
     record Delivered(String conversationId, long deliveredSeq, boolean changed) {}
@@ -112,8 +112,21 @@ class ChatStore {
                 .filter(subject -> !subject.equals(me)).findFirst().orElseThrow();
             Document last = c.get("lastMessage", Document.class);
             return new Conversation(c.getString("_id"), peer, number(c, "lastSeq"), deliveredSeq(c, me), deliveredSeq(c, peer),
-                new LastMessage(last.getString("senderSubject"), last.getString("body"), number(last, "seq"), instant(last, "acceptedAt")));
+                new LastMessage(last.getString("senderSubject"), last.getString("body"), number(last, "seq"), instant(last, "acceptedAt"),
+                    Boolean.TRUE.equals(last.getBoolean("redacted"))));
         }).toList();
+    }
+
+    /**
+     * U22 : le texte des messages envoyés par un compte fermé est effacé chez l'interlocuteur. Le message reste
+     * à sa place, marqué redacted, pour que la séquence de la conversation reste continue. Rejouer ne change rien.
+     */
+    void redactSender(String subject) {
+        validateSubject(subject);
+        mongo.updateMulti(query(where("senderSubject").is(subject).and("redacted").ne(true)),
+            new Update().set("body", "").set("redacted", true), MESSAGES);
+        mongo.updateMulti(query(where("members.subject").is(subject).and("lastMessage.senderSubject").is(subject)),
+            new Update().set("lastMessage.body", "").set("lastMessage.redacted", true), CONVERSATIONS);
     }
 
     /** Le destinataire confirme avoir reçu la conversation jusqu'à {@code seq} ; la valeur ne fait que croître. */
@@ -178,7 +191,8 @@ class ChatStore {
 
     private static Message message(Document d) {
         return new Message(d.getString("_id"), d.getString("conversationId"), number(d, "seq"), d.getString("senderSubject"),
-            d.getString("recipientSubject"), d.getString("clientMessageId"), d.getString("body"), instant(d, "acceptedAt"));
+            d.getString("recipientSubject"), d.getString("clientMessageId"), d.getString("body"), instant(d, "acceptedAt"),
+            Boolean.TRUE.equals(d.getBoolean("redacted")));
     }
 
     private static long deliveredSeq(Document conversation, String subject) {

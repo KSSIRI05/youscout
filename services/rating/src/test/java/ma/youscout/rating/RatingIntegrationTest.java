@@ -128,6 +128,20 @@ class RatingIntegrationTest {
         assertThat(count()).isEqualTo(1);
     }
 
+    @Test void accountClosureErasesOnlyTheClosedAccountsRatings() throws Exception {
+        UUID video = published("bob");
+        rate(video, DRIBBLE, oidc.token("alice"), 4);
+        rate(video, SHOT, oidc.token("alice"), 2);
+        rate(video, DRIBBLE, oidc.token("carol"), 5);
+        assertThat(send("DELETE", "/internal/accounts/alice", null, null).statusCode()).isEqualTo(401);
+        for (String role : List.of("user", "admin"))
+            assertThat(send("DELETE", "/internal/accounts/alice", oidc.token("svc", role), null).statusCode()).isEqualTo(403);
+        assertThat(count()).isEqualTo(3);
+        for (int attempt = 0; attempt < 2; attempt++)
+            assertThat(send("DELETE", "/internal/accounts/alice", oidc.token("svc", "account-closure"), null).statusCode()).isEqualTo(204);
+        assertThat(jdbc.queryForList("SELECT rater_subject FROM skill_ratings", String.class)).containsExactly("carol");
+    }
+
     private UUID published(String owner) {
         UUID video = UUID.randomUUID();
         oidc.publishedVideos.put(video.toString(), new OidcFixture.Published(owner, List.of(DRIBBLE, SHOT)));

@@ -34,6 +34,29 @@ class ProfileRepository {
         var rows = jdbc.query("SELECT * FROM user_profiles WHERE subject = ? AND account_status = 'ACTIVE'", this::map, subject);
         return rows.isEmpty() ? null : rows.getFirst();
     }
+    /** État du compte (ACTIVE, DEACTIVATED, CLOSING, CLOSED), ou null sans profil. */
+    String accountStatus(String subject) {
+        var rows = jdbc.queryForList("SELECT account_status FROM user_profiles WHERE subject = ?", String.class, subject);
+        return rows.isEmpty() ? null : rows.getFirst();
+    }
+    /** Statut du compte (null sans profil) et ses relations, lus en un seul aller-retour. */
+    record Relations(String status, List<String> following, List<String> blocked, List<String> blockedBy) {}
+
+    // feed-relations est appelé par Social, Rating et Chat à chaque écriture : une requête au lieu de quatre.
+    Relations relations(String subject) {
+        return jdbc.queryForObject("""
+            SELECT (SELECT account_status FROM user_profiles WHERE subject = ?),
+                   ARRAY(SELECT followed_subject FROM user_follows WHERE follower_subject = ? ORDER BY created_at DESC),
+                   ARRAY(SELECT blocked_subject FROM user_blocks WHERE blocker_subject = ? ORDER BY created_at DESC),
+                   ARRAY(SELECT blocker_subject FROM user_blocks WHERE blocked_subject = ? ORDER BY created_at DESC)
+            """, (r, n) -> new Relations(r.getString(1), strings(r.getArray(2)), strings(r.getArray(3)), strings(r.getArray(4))),
+            subject, subject, subject, subject);
+    }
+
+    private static List<String> strings(java.sql.Array array) throws SQLException {
+        return List.of((String[]) array.getArray());
+    }
+
     List<String> following(String subject) {
         return jdbc.queryForList("SELECT followed_subject FROM user_follows WHERE follower_subject = ? ORDER BY created_at DESC", String.class, subject);
     }
@@ -64,12 +87,6 @@ class ProfileRepository {
     }
     void follow(String from, String to) { jdbc.update("INSERT INTO user_follows(follower_subject, followed_subject) VALUES (?, ?) ON CONFLICT DO NOTHING", from, to); }
     void unfollow(String from, String to) { jdbc.update("DELETE FROM user_follows WHERE follower_subject = ? AND followed_subject = ?", from, to); }
-    List<String> blocked(String subject) {
-        return jdbc.queryForList("SELECT blocked_subject FROM user_blocks WHERE blocker_subject = ? ORDER BY created_at DESC", String.class, subject);
-    }
-    List<String> blockedBy(String subject) {
-        return jdbc.queryForList("SELECT blocker_subject FROM user_blocks WHERE blocked_subject = ? ORDER BY created_at DESC", String.class, subject);
-    }
     void block(String from, String to) {
         jdbc.update("INSERT INTO user_blocks(blocker_subject, blocked_subject) VALUES (?, ?) ON CONFLICT DO NOTHING", from, to);
         unfollow(from, to);

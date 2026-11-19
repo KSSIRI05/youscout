@@ -23,7 +23,15 @@ User persiste le blocage ; les projections sont mises à jour par événements v
 
 ## Fermeture de compte
 
-User orchestre un workflow suivi : bloquer les nouvelles actions, révoquer sessions/accès auprès d'Auth, demander les suppressions ou anonymisations aux propriétaires, suivre les confirmations, purger les objets et projections selon la politique définie, puis clôturer. Échecs et retries sont visibles dans un journal de traitement. Les sauvegardes et journaux ont une rétention définie ; les messages déjà reçus par autrui demandent une décision produit explicite. Ne pas promettre une suppression immédiate et totale sans politique ni mécanisme.
+Implémentée (U22). Le joueur saisit `FERMER` après l'explication des conséquences ; User orchestre ensuite un workflow suivi :
+
+1. **Immédiatement** : le compte passe `CLOSING` (événement `UserAccountChanged`, Feed masque ses vidéos), User refuse ses actions même avec un jeton encore valide (403, donc aussi Social, Rating et Chat via `feed-relations`), son profil devient introuvable, Keycloak désactive le compte et ferme ses sessions.
+2. **Après expiration des jetons déjà émis** (6 min ; 5 min de durée de vie plus une marge), User appelle `DELETE /internal/accounts/{subject}` de chaque service avec son compte de service (rôle realm `account-closure`, route absente de la Gateway) : Video supprime toutes ses vidéos (`VideoDeleted`, retrait du fil et nettoyage S3 par le worker), Social supprime ses likes et vide puis masque ses commentaires, Rating supprime ses notes, Chat efface le texte de ses messages, Skill retire ses abonnements aux hashtags.
+3. **Ensuite** : le compte Keycloak est supprimé (l'e-mail redevient libre), suivis et blocages sont retirés avec leurs événements, le profil devient « Compte fermé » `CLOSED`.
+
+Chaque étape est idempotente, journalisée (essais, dernière erreur sans détail distant) et rejouée avec un délai croissant ; un service indisponible n'empêche pas les autres d'avancer. Les administrateurs lisent le journal dans la console ; un compte en fermeture ne peut être ni désactivé ni réactivé.
+
+Décisions retenues, à confirmer par le produit : les messages déjà reçus restent à leur place chez l'interlocuteur mais leur texte est effacé (« Message supprimé ») ; les signalements déposés par le compte restent dans la file de modération, rattachés à son seul identifiant ; la ligne `CLOSED`, l'audit et le journal de fermeture sont conservés sans nom ni biographie pour qu'un rejeu ne ressuscite pas le compte ; les événements Kafka déjà publiés suivent la rétention de leur topic. Les sauvegardes ne sont pas encore traitées : leur rétention reste à définir avant lancement. Pas de réauthentification récente exigée pour l'instant.
 
 ## Mesures transversales
 

@@ -1,0 +1,34 @@
+package ma.youscout.skill;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+
+/**
+ * U22 : retire les abonnements aux hashtags d'un compte fermé ; les hashtags eux-mêmes appartiennent au catalogue.
+ * Appelée par User avec son compte de service (rôle account-closure) ; aucune route Gateway n'y mène. Rejouable.
+ */
+@RestController
+class AccountPurgeController {
+    private final JdbcTemplate jdbc;
+
+    AccountPurgeController(JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
+    }
+
+    @DeleteMapping("/internal/accounts/{subject}")
+    ResponseEntity<Void> purge(@PathVariable String subject) {
+        jdbc.update("DELETE FROM hashtag_follows WHERE subject = ?", validate(subject));
+        return ResponseEntity.noContent().build();
+    }
+
+    private static String validate(String subject) {
+        if (subject.isBlank() || subject.length() > 255 || subject.indexOf('\0') >= 0)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Identifiant de compte invalide.");
+        return subject;
+    }
+}

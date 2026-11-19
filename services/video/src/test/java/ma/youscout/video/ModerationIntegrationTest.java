@@ -99,6 +99,24 @@ class ModerationIntegrationTest {
         assertThat(send("GET", "/v1/videos/admin/" + id, admin, null).statusCode()).isEqualTo(404);
     }
 
+    // U22 : la fermeture d'un compte supprime toutes ses vidéos, retirées ou non, avec un VideoDeleted chacune.
+    @Test void accountClosureDeletesEveryVideoOfTheAccountOnce() throws Exception {
+        UUID published = create("alice", "PUBLISHED"), draft = create("alice", "UNPUBLISHED"), other = create("bob", "PUBLISHED");
+        send("POST", "/v1/videos/admin/" + draft + "/takedown", admin, null);
+        assertThat(send("DELETE", "/internal/accounts/alice", null, null).statusCode()).isEqualTo(401);
+        for (String token : List.of(alice, admin))
+            assertThat(send("DELETE", "/internal/accounts/alice", token, null).statusCode()).isEqualTo(403);
+        for (int attempt = 0; attempt < 2; attempt++)
+            assertThat(send("DELETE", "/internal/accounts/alice", oidc.roleToken("account-closure"), null).statusCode()).isEqualTo(204);
+
+        assertThat(video(published).get("deletedAt")).isNotNull();
+        assertThat(video(draft).get("deletedAt")).isNotNull();
+        assertThat(video(other).get("deletedAt")).isNull();
+        var deleted = mongo.find(Query.query(Criteria.where("eventType").is("VideoDeleted")), Document.class, "video_outbox");
+        assertThat(deleted).extracting(e -> e.getString("aggregateId"))
+            .containsExactlyInAnyOrder(published.toString(), draft.toString());
+    }
+
     UUID create(String owner, String publication) {
         UUID id = UUID.randomUUID();
         mongo.insert(new Document("_id", id.toString()).append("id", id.toString()).append("ownerSubject", owner)

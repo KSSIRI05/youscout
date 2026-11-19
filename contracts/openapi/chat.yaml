@@ -1,11 +1,13 @@
 openapi: 3.0.3
 info:
   title: YouScout Chat API
-  version: 0.1.0
+  version: 0.2.0
   description: |-
     Direct messages between two accounts (U21). A message is stored before it is acknowledged. Each
     conversation numbers its messages with `seq` (1, 2, 3… without gaps). The sender picks a
     `clientMessageId`, so a resend after a reconnect returns the original message instead of a duplicate.
+    When the sender closes their account (U22), their messages keep their place and `seq` but their
+    `body` becomes empty and `redacted` true.
     Sending checks with User that the recipient has an active profile and that no block exists in either
     direction (fail-closed 503 if User is unavailable). Errors use application/problem+json.
 
@@ -123,6 +125,16 @@ paths:
                   changed: {type: boolean}
         '400': {description: '`seq` is not a positive integer, or beyond the last message'}
         '404': {description: No conversation with `peer`}
+  /internal/accounts/{subject}:
+    delete:
+      summary: 'U22, internal: erase the text of every message sent by a closed account'
+      description: Called by User with its service account (realm role `account-closure`). Not routed by the Gateway. Repeatable.
+      parameters:
+        - {in: path, name: subject, required: true, schema: {type: string, maxLength: 255}}
+      responses:
+        '204': {description: Messages redacted (or nothing left to redact)}
+        '401': {description: Missing or invalid token}
+        '403': {description: Token without the `account-closure` role}
 components:
   securitySchemes:
     bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
@@ -131,7 +143,7 @@ components:
   schemas:
     Message:
       type: object
-      required: [id, conversationId, seq, senderSubject, recipientSubject, clientMessageId, body, acceptedAt]
+      required: [id, conversationId, seq, senderSubject, recipientSubject, clientMessageId, body, acceptedAt, redacted]
       properties:
         id: {type: string, format: uuid}
         conversationId: {type: string, format: uuid}
@@ -139,8 +151,9 @@ components:
         senderSubject: {type: string}
         recipientSubject: {type: string}
         clientMessageId: {type: string}
-        body: {type: string}
+        body: {type: string, description: Empty when `redacted`}
         acceptedAt: {type: string, format: date-time}
+        redacted: {type: boolean, description: The sender closed their account; the text was erased}
     History:
       type: object
       required: [conversationId, peerSubject, lastSeq, peerDeliveredSeq, messages]
@@ -161,9 +174,10 @@ components:
         peerDeliveredSeq: {type: integer, minimum: 0}
         lastMessage:
           type: object
-          required: [senderSubject, body, seq, acceptedAt]
+          required: [senderSubject, body, seq, acceptedAt, redacted]
           properties:
             senderSubject: {type: string}
             body: {type: string}
             seq: {type: integer}
             acceptedAt: {type: string, format: date-time}
+            redacted: {type: boolean}

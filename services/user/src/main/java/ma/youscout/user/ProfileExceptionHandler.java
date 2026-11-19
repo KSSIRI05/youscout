@@ -12,7 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.context.request.WebRequest;
 
 /** Traduit les erreurs de profil et de lecture JSON en réponses application/problem+json. */
-@RestControllerAdvice(assignableTypes = {ProfileController.class, AccountAdminController.class})
+@RestControllerAdvice(assignableTypes = {ProfileController.class, AccountAdminController.class, AccountClosureController.class})
 class ProfileExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(InvalidProfileException.class)
     ProblemDetail invalidProfile(InvalidProfileException error) {

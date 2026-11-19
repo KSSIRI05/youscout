@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: YouScout User API
-  version: 0.3.0
+  version: 0.4.0
   description: Persistent personal profiles and user/admin role diagnostics using verified Keycloak access tokens.
 servers:
   - url: http://localhost:8080
@@ -177,6 +177,63 @@ paths:
           schema: {type: string, maxLength: 255}
       responses:
         '200': {description: Block state}
+  /v1/users/me/closure:
+    post:
+      operationId: closeMyAccount
+      summary: Close the caller's account (U22)
+      description: |-
+        The account becomes CLOSING at once: User refuses its actions (403), hides its profile and asks Keycloak to
+        disable it and end its sessions. Once access tokens issued before the request have expired (6 minutes),
+        User asks Video, Social, Rating, Chat and Skill to erase the account's data, deletes the Keycloak account,
+        removes follows and blocks, and keeps an anonymised CLOSED row. Failed steps are retried and logged.
+        A repeated request returns the existing closure.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [confirmation]
+              properties:
+                confirmation: {type: string, enum: [FERMER], description: Typed by the player after the consequences are shown}
+      responses:
+        '202':
+          description: Closure recorded
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AccountClosure'}
+        '400': {description: Missing or wrong confirmation, or extra field}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {description: Account deactivated by an administrator}
+        '404': {description: No profile for this account}
+    get:
+      operationId: getMyAccountClosure
+      summary: Progress of the caller's closure, while their token is still valid
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: Closure log
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AccountClosure'}
+        '404': {description: No closure for this account}
+  /v1/users/admin/accounts/{subject}/closure:
+    get:
+      operationId: getAccountClosure
+      summary: Closure log of an account, step by step (admin)
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: path, name: subject, required: true, schema: {type: string, maxLength: 255}}
+      responses:
+        '200':
+          description: Closure log
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AccountClosure'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: No closure for this account}
   /v1/users/admin/session:
     get:
       operationId: getAdminSessionDiagnostic
@@ -238,6 +295,26 @@ components:
         biography: {type: string, maxLength: 500}
         createdAt: {type: string, format: date-time, readOnly: true}
         updatedAt: {type: string, format: date-time, readOnly: true}
+    AccountClosure:
+      type: object
+      required: [subject, status, requestedAt, completedAt, steps]
+      properties:
+        subject: {type: string}
+        status: {type: string, enum: [IN_PROGRESS, COMPLETED]}
+        requestedAt: {type: string, format: date-time}
+        completedAt: {type: string, format: date-time, nullable: true}
+        steps:
+          type: array
+          description: In order SESSIONS, VIDEO, SOCIAL, RATING, CHAT, SKILL, IDENTITY
+          items:
+            type: object
+            required: [name, status, attempts, lastError, completedAt]
+            properties:
+              name: {type: string, enum: [SESSIONS, VIDEO, SOCIAL, RATING, CHAT, SKILL, IDENTITY]}
+              status: {type: string, enum: [PENDING, DONE]}
+              attempts: {type: integer, minimum: 0}
+              lastError: {type: string, nullable: true, description: HTTP status or "Service injoignable"; no remote detail}
+              completedAt: {type: string, format: date-time, nullable: true}
     ProfileProblem:
       type: object
       required: [title, status, detail]
