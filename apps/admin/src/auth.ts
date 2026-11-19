@@ -11,6 +11,8 @@ export const config = {
 export class AuthError extends Error {}
 
 type Fetch = typeof fetch;
+/** `fetch` du navigateur appelé sans receveur : stocké puis appelé comme méthode, il lève « Illegal invocation ». */
+const browserFetch: Fetch = (input, init) => fetch(input, init);
 type Attempt = { verifier: string; state: string; createdAt: number };
 type TokenResponse = { access_token: string; refresh_token: string; expires_in: number };
 
@@ -53,7 +55,7 @@ export async function loginUrl(origin: string, storage: Storage = sessionStorage
 }
 
 /** Valide le retour de Keycloak puis échange le code ; la tentative est consommée dans tous les cas. */
-export async function completeLogin(callback: URL, storage: Storage = sessionStorage, fetchImpl: Fetch = fetch,
+export async function completeLogin(callback: URL, storage: Storage = sessionStorage, fetchImpl: Fetch = browserFetch,
                                     now = Date.now()): Promise<Session> {
   const raw = storage.getItem(ATTEMPT_KEY);
   storage.removeItem(ATTEMPT_KEY);
@@ -110,7 +112,7 @@ export class Session {
   private expiresAt: number;
   private refreshing: Promise<void> | null = null;
 
-  constructor(tokens: TokenResponse, private readonly fetchImpl: Fetch = fetch, now = Date.now()) {
+  constructor(tokens: TokenResponse, private readonly fetchImpl: Fetch = browserFetch, now = Date.now()) {
     this.access = tokens.access_token;
     this.refresh = tokens.refresh_token;
     this.expiresAt = now + tokens.expires_in * 1000;

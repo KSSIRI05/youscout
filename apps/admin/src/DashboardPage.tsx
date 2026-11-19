@@ -75,12 +75,13 @@ function Tile<T>({ title, source, main, detail }: { title: string; source: Loade
 
 function ActivityView({ activity }: { activity: Activity }) {
   const day = (iso: string) => new Date(iso + "T00:00:00Z").toLocaleDateString("fr-FR", { day: "numeric", month: "short", timeZone: "UTC" });
+  const longDay = (iso: string) => new Date(iso + "T00:00:00Z").toLocaleDateString("fr-FR", { day: "numeric", month: "long", timeZone: "UTC" });
   return (
     <>
       <p className="muted">
-        Jours UTC du {day(activity.from)} au {day(activity.to)}.{" "}
+        Jours UTC du {longDay(activity.from)} au {longDay(activity.to)}.{" "}
         {activity.coverageStart
-          ? `Comptage depuis le ${day(activity.coverageStart)} : les jours précédents ne sont pas reconstruits.`
+          ? `Comptage depuis le ${longDay(activity.coverageStart)} : les jours précédents ne sont pas reconstruits.`
           : "Aucune activité comptée pour l'instant."}
       </p>
       <div className="sparks">

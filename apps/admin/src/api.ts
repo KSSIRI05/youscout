@@ -90,10 +90,12 @@ export class ApiError extends Error {
 }
 
 type Fetch = typeof fetch;
+/** `fetch` du navigateur appelé sans receveur : stocké puis appelé comme méthode, il lève « Illegal invocation ». */
+const browserFetch: Fetch = (input, init) => fetch(input, init);
 
 /** Appels au catalogue Skill via la Gateway ; seuls les endpoints réservés au rôle admin sont utilisés. */
 export class AdminApi {
-  constructor(private readonly token: () => Promise<string>, private readonly fetchImpl: Fetch = fetch,
+  constructor(private readonly token: () => Promise<string>, private readonly fetchImpl: Fetch = browserFetch,
               private readonly base: string = config.api) {}
 
   async listSkills(q: string, offset: number): Promise<SkillPage> {

@@ -18,7 +18,7 @@ Auth (Keycloak), User, Video, Feed, Interaction, Skill/Hashtag ; Gateway, Kafka,
 
 - [ ] U01-U14 : comptes, profils, vidéo galerie/caméra, description/tags/skills, suppression, feed, commentaires/réponses et likes.
 - [ ] U19-U20 : suivre/ne plus suivre utilisateurs et hashtags.
-- [ ] A05 : interface admin minimale pour le catalogue de skills, avec rôle admin. Console React livrée dans `apps/admin` ; reste la validation sur la pile intégrée.
+- [ ] A05 : interface admin minimale pour le catalogue de skills, avec rôle admin. Console React livrée dans `apps/admin` ; le catalogue s'affiche dans le navigateur sur la pile intégrée et le cycle ajout/modification/désactivation est vérifié par API (`smoke-identity.py`). Reste : ce cycle depuis le navigateur.
 - [ ] Feed chronologique avec découverte simple ; fan-out hybride non requis dans cette première livraison.
 - [x] Démontrer connexion -> upload -> transcodage -> publication -> interaction -> suppression. Scénario automatisé : [`scripts/demo-e2e.py`](DEMO.md), réussi sur la pile locale avec S3 réel le 18 novembre 2026.
 - [x] Arrêter un worker et rejouer un événement ; vérifier absence de doublon et état utilisateur cohérent. Étape 6 de la démonstration, réussie le 18 novembre 2026.
@@ -35,7 +35,7 @@ Ce MVP sert à valider le socle ; il ne couvre pas encore tout le périmètre pr
 
 ## Phase 3 : administration complète puis évolutions
 
-- [ ] Admin/Analytics : A01/A02/A06 avec pagination, auteurs et métriques définies. Livré et vérifié sur la pile intégrée (`scripts/smoke-admin.py`) : listes paginées des comptes, vidéos et commentaires avec auteurs (User, Video, Social), totaux exacts par service propriétaire, service Analytics alimenté par Kafka pour l'activité quotidienne, pages de la console React. Reste : validation de la console dans un navigateur sur la pile intégrée ; l'historique d'activité commence à la rétention Kafka (7 jours).
+- [x] Admin/Analytics : A01/A02/A06 avec pagination, auteurs et métriques définies. Vérifié sur la pile intégrée : `scripts/smoke-admin.py` (API) et parcours navigateur de la console (2026-11-19 : connexion PKCE, tableau de bord, recherche et liste des comptes, vidéos et commentaires avec auteurs, affichage mobile, déconnexion Keycloak). Limite : l'historique d'activité commence à la rétention Kafka (7 jours).
 - [ ] Vérifier tous les U01-U22 et A01-A06 lors de la validation fonctionnelle.
 - [ ] OpenSearch, feed hybride et métriques d'exposition si besoin confirmé.
 - [ ] Multi-région seulement après décision sur réplication, résidence des données, écritures et conflits.

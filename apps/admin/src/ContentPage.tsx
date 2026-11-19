@@ -3,6 +3,7 @@ import { AdminApi, AdminComment, AdminVideoRow, ApiError, LIST_SIZE } from "./ap
 
 const message = (error: unknown) => (error instanceof ApiError ? error.message : "Une erreur inattendue est survenue.");
 const date = (iso: string | null) => (iso ? new Date(iso).toLocaleString("fr-FR") : "—");
+const PROCESSING: Record<string, string> = { PENDING_UPLOAD: "Envoi en cours", UPLOADED: "En traitement", READY: "Prête, non publiée", FAILED: "Échec du traitement" };
 
 /** A02 : toutes les vidéos et tous les commentaires avec leurs auteurs ; les noms viennent de User. */
 export function ContentPage({ api, onOpenAccount }: { api: AdminApi; onOpenAccount: (subject: string) => void }) {
@@ -83,7 +84,7 @@ function Videos({ api, onOpenAccount }: { api: AdminApi; onOpenAccount: (s: stri
               <td>{video.title}<div className="muted">{video.id}</div></td>
               <td><Author subject={video.ownerSubject} names={list.names} onOpenAccount={onOpenAccount} /></td>
               <td>
-                <span className={`badge ${video.publicationStatus === "PUBLISHED" ? "on" : "off"}`}>{video.publicationStatus === "PUBLISHED" ? "Publiée" : video.processingStatus ?? "Envoi"}</span>
+                <span className={`badge ${video.publicationStatus === "PUBLISHED" ? "on" : "off"}`}>{video.publicationStatus === "PUBLISHED" ? "Publiée" : PROCESSING[video.processingStatus ?? "PENDING_UPLOAD"] ?? video.processingStatus}</span>
                 {video.moderationStatus === "REMOVED" && <span className="badge off"> Retirée</span>}
               </td>
               <td>{date(video.createdAt)}</td>
