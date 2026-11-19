@@ -123,6 +123,14 @@ void main() {
       'seq': 3,
     });
 
+    // Le texte d'un expéditeur dont le compte est fermé est remplacé (U22).
+    channel.push({
+      'type': 'message',
+      'message': {...message(4), 'body': '', 'redacted': true},
+    });
+    await tester.pumpAndSettle();
+    expect(find.text(deletedText), findsOneWidget);
+
     await tester.pumpWidget(const SizedBox.shrink());
     session.dispose();
   });

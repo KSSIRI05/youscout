@@ -71,6 +71,14 @@ class FeedRelationsProjectionTest {
         assertThat(projection.videoVersion()).isEqualTo("3");
     }
 
+    @Test void aClosingOrClosedAccountStaysHidden() {
+        var handler = new UserRelationEventHandler(new UserRelationEventDecoder(), projection);
+        handler.handle(account("alice", "CLOSING"));
+        assertThat(projection.deactivated()).containsExactly("alice");
+        handler.handle(account("alice", "CLOSED"));
+        assertThat(projection.deactivated()).containsExactly("alice");
+    }
+
     @Test void malformedAccountEventsAreRejected() {
         var decoder = new UserRelationEventDecoder();
         for (String data : new String[] {"{\"subject\":\"alice\",\"status\":\"BANNED\"}", "{\"subject\":\"\",\"status\":\"ACTIVE\"}",

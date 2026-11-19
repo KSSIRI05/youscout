@@ -2,6 +2,7 @@ package ma.youscout.skill;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
@@ -21,6 +22,8 @@ class SecurityConfig {
                 // Les règles spécifiques admin passent avant les routes générales du catalogue.
                 .requestMatchers("/v1/skills/admin", "/v1/skills/admin/**", "/v1/hashtags/admin", "/v1/hashtags/admin/**").hasRole("admin")
                 .requestMatchers("/v1/skills", "/v1/skills/**", "/v1/hashtags", "/v1/hashtags/**").hasAnyRole("user", "admin")
+                // U22 : effacement demandé par User pour un compte fermé.
+                .requestMatchers(HttpMethod.DELETE, "/internal/accounts/*").hasRole("account-closure")
                 .anyRequest().denyAll())
             .exceptionHandling(e -> e.authenticationEntryPoint((request, response, error) -> ApiSecurityErrors.unauthorized(response, error))
                 .accessDeniedHandler((request, response, error) -> ApiSecurityErrors.forbidden(response)))

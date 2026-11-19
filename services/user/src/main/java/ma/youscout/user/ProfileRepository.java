@@ -34,6 +34,11 @@ class ProfileRepository {
         var rows = jdbc.query("SELECT * FROM user_profiles WHERE subject = ? AND account_status = 'ACTIVE'", this::map, subject);
         return rows.isEmpty() ? null : rows.getFirst();
     }
+    /** État du compte (ACTIVE, DEACTIVATED, CLOSING, CLOSED), ou null sans profil. */
+    String accountStatus(String subject) {
+        var rows = jdbc.queryForList("SELECT account_status FROM user_profiles WHERE subject = ?", String.class, subject);
+        return rows.isEmpty() ? null : rows.getFirst();
+    }
     List<String> following(String subject) {
         return jdbc.queryForList("SELECT followed_subject FROM user_follows WHERE follower_subject = ? ORDER BY created_at DESC", String.class, subject);
     }

@@ -12,7 +12,7 @@ def main():
     base = "realms/youscout"
     current = admin.request("GET", base)
     roles = {r["name"]: r for r in admin.request("GET", base + "/roles")}
-    for name in ("user", "admin"):
+    for name in ("user", "admin", "account-closure"):
         if name not in roles:
             admin.request("POST", base + "/roles", {"name": name})
         roles[name] = admin.request("GET", base + "/roles/" + name)
@@ -39,6 +39,12 @@ def main():
         # Le client existe déjà : son secret courant ne doit pas être remplacé par celui de l’import.
         client.pop("secret", None)  # Existing client credentials are preserved.
         admin.request("PUT", base + "/clients/" + client_id, client)
+        # La mise à jour du client ne crée pas les mappers ajoutés après l'import : ils sont ajoutés par nom.
+        mappers_path = base + "/clients/" + client_id + "/protocol-mappers/models"
+        present = {mapper["name"] for mapper in admin.request("GET", mappers_path)}
+        for mapper in client.get("protocolMappers", []):
+            if mapper["name"] not in present:
+                admin.request("POST", mappers_path, mapper)
         # Updating ClientRepresentation does not attach client-scope relationships.
         # Explicitly link defaults to repair existing realms as well as new imports.
         # Le scope basic fournit notamment sub, nécessaire aux profils et abonnements.
@@ -61,6 +67,13 @@ def main():
             management = admin.request("GET", base + "/clients?clientId=realm-management")[0]["id"]
             roles_needed = [admin.request("GET", base + "/clients/" + management + "/roles/" + name) for name in ("manage-users", "view-users")]
             admin.request("POST", base + "/users/" + account["id"] + "/role-mappings/clients/" + management, roles_needed)
+            # U22 : son jeton (audience youscout-api) autorise les effacements internes des services, et rien d'autre :
+            # le rôle par défaut, qui donnerait user, lui est retiré.
+            realm_path = base + "/users/" + account["id"] + "/role-mappings/realm"
+            defaults = [role for role in admin.request("GET", realm_path) if role["name"] in (default_name, "user")]
+            if defaults:
+                admin.request("DELETE", realm_path, defaults)
+            admin.request("POST", realm_path, [roles["account-closure"]])
         if client["clientId"] == "youscout-smoke":
             account = admin.request("GET", base + "/clients/" + client_id + "/service-account-user")
             admin.request("POST", base + "/users/" + account["id"] + "/role-mappings/realm", [roles["user"]])

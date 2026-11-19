@@ -17,11 +17,21 @@ export type HashtagPage = { items: Hashtag[]; hasMore: boolean };
 export type Account = {
   subject: string;
   displayName: string;
-  status: "ACTIVE" | "DEACTIVATED";
+  status: "ACTIVE" | "DEACTIVATED" | "CLOSING" | "CLOSED";
   statusChangedAt: string | null;
   statusChangedBy: string | null;
   statusNote: string | null;
   createdAt: string;
+};
+
+/** U22 : journal de fermeture demandée par le joueur, une étape par service. */
+export type ClosureStep = { name: string; status: "PENDING" | "DONE"; attempts: number; lastError: string | null; completedAt: string | null };
+export type AccountClosure = {
+  subject: string;
+  status: "IN_PROGRESS" | "COMPLETED";
+  requestedAt: string;
+  completedAt: string | null;
+  steps: ClosureStep[];
 };
 
 export type ReportType = "VIDEO" | "COMMENT";
@@ -93,6 +103,10 @@ export class AdminApi {
 
   getAccount(subject: string): Promise<Account> {
     return this.request("GET", `/v1/users/admin/accounts/${encodeURIComponent(subject)}`);
+  }
+
+  getAccountClosure(subject: string): Promise<AccountClosure> {
+    return this.request("GET", `/v1/users/admin/accounts/${encodeURIComponent(subject)}/closure`);
   }
 
   deactivateAccount(subject: string, note: string): Promise<Account> {

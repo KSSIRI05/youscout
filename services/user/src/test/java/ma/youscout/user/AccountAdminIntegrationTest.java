@@ -29,6 +29,7 @@ class AccountAdminIntegrationTest {
         r.add("spring.datasource.url", postgres::getJdbcUrl);
         r.add("spring.datasource.username", postgres::getUsername);
         r.add("spring.datasource.password", postgres::getPassword);
+        r.add("youscout.account-closure.worker-enabled", () -> "false");
         r.add("youscout.keycloak-admin.base-url", oidc::base);
         r.add("youscout.keycloak-admin.client-secret", () -> "test-admin-secret");
     }

@@ -24,15 +24,23 @@ class AccountAdminController {
 
     private final AccountStore accounts;
     private final KeycloakAccounts keycloak;
+    private final AccountClosures closures;
 
-    AccountAdminController(AccountStore accounts, KeycloakAccounts keycloak) {
+    AccountAdminController(AccountStore accounts, KeycloakAccounts keycloak, AccountClosures closures) {
         this.accounts = accounts;
         this.keycloak = keycloak;
+        this.closures = closures;
     }
 
     @GetMapping("/{subject}")
     ResponseEntity<AdminAccount> get(@PathVariable String subject) {
         return noStore(accounts.find(validate(subject)));
+    }
+
+    /** U22 : journal de fermeture d'un compte, étape par étape. */
+    @GetMapping("/{subject}/closure")
+    ResponseEntity<AccountClosures.Closure> closure(@PathVariable String subject) {
+        return noStore(closures.find(validate(subject)));
     }
 
     /**
@@ -45,7 +53,7 @@ class AccountAdminController {
         // Toute l'entrée est validée avant d'appeler Keycloak : une requête refusée ne modifie aucun compte.
         String target = validate(subject), admin = jwt.getSubject(), note = note(body);
         if (target.equals(admin)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tu ne peux pas désactiver ton propre compte.");
-        accounts.find(target);
+        requireNotClosing(accounts.find(target));
         keycloak.setEnabled(target, false);
         return noStore(accounts.change(target, "DEACTIVATED", admin, note));
     }
@@ -54,9 +62,15 @@ class AccountAdminController {
     ResponseEntity<AdminAccount> reactivate(@AuthenticationPrincipal Jwt jwt, @PathVariable String subject,
                                             @RequestBody(required = false) Map<String, Object> body) {
         String target = validate(subject), note = note(body);
-        accounts.find(target);
+        // Réactiver dans Keycloak un compte en cours de fermeture rouvrirait ses sessions : refusé avant tout appel.
+        requireNotClosing(accounts.find(target));
         keycloak.setEnabled(target, true);
         return noStore(accounts.change(target, "ACTIVE", jwt.getSubject(), note));
+    }
+
+    private static void requireNotClosing(AdminAccount account) {
+        if (account.status().equals("CLOSING") || account.status().equals("CLOSED"))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ce compte est fermé ou en cours de fermeture.");
     }
 
     private static String validate(String subject) {
@@ -111,7 +125,7 @@ class AccountStore {
         int changed = jdbc.update("""
             UPDATE user_profiles SET account_status = ?, status_changed_at = clock_timestamp(), status_changed_by = ?,
                    status_note = ?, updated_at = clock_timestamp()
-             WHERE subject = ? AND account_status <> ?
+             WHERE subject = ? AND account_status <> ? AND account_status IN ('ACTIVE', 'DEACTIVATED')
             """, status, admin, note, subject, status);
         if (changed == 1) {
             jdbc.update("INSERT INTO account_audit(id, subject, actor_subject, action, note) VALUES (?, ?, ?, ?, ?)",

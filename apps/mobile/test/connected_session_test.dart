@@ -48,6 +48,7 @@ class ApiFixture {
   int? reject;
   bool unauthorizedUntilRefresh = false;
   int skillCount = 1, followingCount = 0;
+  final closures = <Object?>[];
   http.Response respond(http.Request request) {
     requests.add(request);
     expect(request.headers['Authorization'], startsWith('Bearer access-'));
@@ -70,6 +71,9 @@ class ApiFixture {
         'displayName': name,
         'biography': biography,
       };
+    } else if (path == '/v1/users/me/closure') {
+      closures.add(jsonDecode(request.body));
+      return http.Response('{"status":"IN_PROGRESS","steps":[]}', 202);
     } else if (path.endsWith('/follow')) {
       final id = request.url.pathSegments[2];
       request.method == 'DELETE' ? following.remove(id) : following.add(id);

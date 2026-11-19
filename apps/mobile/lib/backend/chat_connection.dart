@@ -15,9 +15,13 @@ class DirectMessage {
       recipientSubject = json['recipientSubject'] as String,
       clientMessageId = json['clientMessageId'] as String,
       body = json['body'] as String,
+      redacted = json['redacted'] == true,
       acceptedAt = DateTime.parse(json['acceptedAt'] as String);
   final String id, conversationId, senderSubject, recipientSubject;
   final String clientMessageId, body;
+
+  /// U22 : texte effacé après la fermeture du compte de l'expéditeur.
+  final bool redacted;
   final int seq;
   final DateTime acceptedAt;
 }

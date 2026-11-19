@@ -20,6 +20,9 @@ final class OidcFixture {
     final java.util.List<String> keycloakCalls = new java.util.concurrent.CopyOnWriteArrayList<>();
     final java.util.Set<String> keycloakMissing = java.util.concurrent.ConcurrentHashMap.newKeySet();
     volatile boolean keycloakDown;
+    // Doublures des routes internes d'effacement (U22), une par service : "VIDEO alice Bearer kc-admin-token".
+    final java.util.List<String> purgeCalls = new java.util.concurrent.CopyOnWriteArrayList<>();
+    final java.util.Set<String> purgeFailing = java.util.concurrent.ConcurrentHashMap.newKeySet();
     // La clé privée reste dans le test ; le serveur ne publie que sa partie publique.
     OidcFixture() {
         try {
@@ -53,6 +56,15 @@ final class OidcFixture {
                 if (status == 204) keycloakCalls.add(e.getRequestMethod() + " " + e.getRequestURI().getPath().substring("/admin/realms/youscout".length()) + " " + body);
                 e.sendResponseHeaders(status, -1); e.close();
             });
+            for (String service : java.util.List.of("video", "social", "rating", "chat", "skill")) {
+                server.createContext("/" + service + "/internal/accounts/", e -> {
+                    String name = service.toUpperCase(java.util.Locale.ROOT);
+                    String subject = e.getRequestURI().getPath().substring(("/" + service + "/internal/accounts/").length());
+                    boolean ok = e.getRequestMethod().equals("DELETE") && !purgeFailing.contains(name);
+                    if (ok) purgeCalls.add(name + " " + subject + " " + e.getRequestHeaders().getFirst("Authorization"));
+                    e.sendResponseHeaders(ok ? 204 : 503, -1); e.close();
+                });
+            }
             server.start();
         } catch (Exception e) { throw new IllegalStateException(e); }
     }

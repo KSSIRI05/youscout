@@ -29,6 +29,7 @@ class RelationIntegrationTest {
         r.add("spring.datasource.url", postgres::getJdbcUrl);
         r.add("spring.datasource.username", postgres::getUsername);
         r.add("spring.datasource.password", postgres::getPassword);
+        r.add("youscout.account-closure.worker-enabled", () -> "false");
     }
     // Conserve le marqueur de rattrapage de la migration ; seuls les événements du test sont effacés.
     @BeforeEach void setup() {

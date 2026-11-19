@@ -7,7 +7,13 @@ function backend() {
   const accounts: Record<string, Account> = {
     "player-1": { subject: "player-1", displayName: "Yassine", status: "ACTIVE", statusChangedAt: null, statusChangedBy: null,
                   statusNote: null, createdAt: "2026-10-20T10:00:00Z" },
+    "player-2": { subject: "player-2", displayName: "Compte fermé", status: "CLOSING", statusChangedAt: "2026-11-18T12:00:00Z",
+                  statusChangedBy: "player-2", statusNote: null, createdAt: "2026-10-20T10:00:00Z" },
   };
+  const closure = { subject: "player-2", status: "IN_PROGRESS", requestedAt: "2026-11-18T12:00:00Z", completedAt: null, steps: [
+    { name: "SESSIONS", status: "DONE", attempts: 1, lastError: null, completedAt: "2026-11-18T12:00:00Z" },
+    { name: "CHAT", status: "PENDING", attempts: 3, lastError: "HTTP 503", completedAt: null },
+  ] };
   const calls: { method: string; path: string; body?: unknown }[] = [];
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
@@ -16,6 +22,7 @@ function backend() {
     const [, , , , , subject, action] = url.pathname.split("/");
     const account = accounts[decodeURIComponent(subject)];
     if (!account) return new Response(JSON.stringify({ detail: "Profil introuvable." }), { status: 404 });
+    if (action === "closure") return new Response(JSON.stringify(closure));
     if (action) Object.assign(account, { status: action === "deactivate" ? "DEACTIVATED" : "ACTIVE",
       statusChangedAt: "2026-11-18T12:00:00Z", statusChangedBy: "moderator", statusNote: body?.note ?? null });
     return new Response(JSON.stringify(account));
@@ -56,4 +63,14 @@ it("opens directly on a subject passed from the report queue and shows lookup er
   await user.click(screen.getByRole("button", { name: "Afficher" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Profil introuvable.");
   expect(screen.queryByText("Yassine")).not.toBeInTheDocument();
+});
+
+it("shows the closure log of an account closed by its owner, without deactivation actions", async () => {
+  const { api, calls } = backend();
+  render(<AccountsPage api={api} initialSubject="player-2" />);
+  expect(await screen.findByText("Fermeture en cours")).toBeInTheDocument();
+  expect(await screen.findByText(/Connexion bloquée et sessions fermées : fait/)).toBeInTheDocument();
+  expect(screen.getByText(/Texte des messages effacé : en attente \(3 essais, HTTP 503\)/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /activer le compte/ })).not.toBeInTheDocument();
+  expect(calls.map(call => call.path)).toContain("/v1/users/admin/accounts/player-2/closure");
 });

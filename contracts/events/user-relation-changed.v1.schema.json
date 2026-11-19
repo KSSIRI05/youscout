@@ -143,7 +143,9 @@
             "status": {
               "enum": [
                 "ACTIVE",
-                "DEACTIVATED"
+                "DEACTIVATED",
+                "CLOSING",
+                "CLOSED"
               ]
             }
           }
@@ -151,5 +153,5 @@
       }
     }
   ],
-  "description": "UserAccountChanged (A04) shares the topic and key, so it is ordered with relationship events; consumers hide a DEACTIVATED account's content."
+  "description": "UserAccountChanged (A04) shares the topic and key, so it is ordered with relationship events; consumers hide a DEACTIVATED account's content. U22 adds CLOSING (closure requested, content hidden at once) and CLOSED (closure finished, the account never returns); Feed accepts both since this release, and a consumer must be updated before User emits them."
 }

@@ -171,6 +171,19 @@ class SecurityIntegrationTest {
         client.post().uri("/v1/chat/ws").exchange().expectStatus().isUnauthorized();
         client.post().uri("/v1/chat/ws").headers(h -> h.setBearerAuth(user)).exchange().expectStatus().isForbidden();
     }
+    // U22 : les effacements internes ne passent jamais par la Gateway, même avec le rôle du compte de service.
+    @Test void accountClosureIsForwardedForPlayers() {
+        client.post().uri("/v1/users/me/closure").exchange().expectStatus().isUnauthorized();
+        String user = oidc.roleToken("user");
+        client.post().uri("/v1/users/me/closure").headers(h -> h.setBearerAuth(user)).exchange().expectStatus().isOk();
+        assertThat(oidc.authorization.get()).isEqualTo("Bearer " + user);
+    }
+    @Test void internalAccountPurgeRoutesAreNotExposed() {
+        oidc.authorization.set(null);
+        client.delete().uri("/internal/accounts/alice").headers(h -> h.setBearerAuth(oidc.roleToken("account-closure", "admin")))
+            .exchange().expectStatus().isForbidden();
+        assertThat(oidc.authorization.get()).isNull();
+    }
     // La console d'administration a sa propre origine et modifie le catalogue par PATCH.
     @Test void corsPreflightAllowsTheAdminConsole() {
         client.options().uri("/v1/skills/admin/00000000-0000-0000-0000-000000000001").header("Origin", "http://localhost:7358")

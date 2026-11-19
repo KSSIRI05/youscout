@@ -83,6 +83,15 @@ class WelcomeScreen extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
+          if (session?.notice != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                session!.notice!,
+                key: const Key('session-notice'),
+                style: const TextStyle(color: ScoutColors.brand),
+              ),
+            ),
           if (session?.error != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),

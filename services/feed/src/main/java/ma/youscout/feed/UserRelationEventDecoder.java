@@ -33,10 +33,11 @@ class UserRelationEventDecoder {
                 return new UserRelationEvent(id, type, 1, occurredAt, "user-service", null);
             }
             // UserAccountChanged v1 : { subject, status } ; représenté comme une action sur le compte lui-même.
+            // Un compte en cours de fermeture (CLOSING) ou fermé (CLOSED) est masqué comme un compte désactivé.
             if (ACCOUNT_CHANGED.equals(type)) {
                 if (!data.isObject() || data.size() != 2 || !data.has("subject") || !data.has("status")) invalid();
                 String status = data.path("status").asText();
-                if (!Set.of("ACTIVE", "DEACTIVATED").contains(status)) invalid();
+                if (!Set.of("ACTIVE", "DEACTIVATED", "CLOSING", "CLOSED").contains(status)) invalid();
                 String account = subject(data.path("subject").asText());
                 return new UserRelationEvent(id, type, 1, occurredAt, "user-service",
                         new UserRelationEvent.Data(status.equals("ACTIVE") ? "REACTIVATE" : "DEACTIVATE", account, account));

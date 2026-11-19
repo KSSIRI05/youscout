@@ -28,7 +28,7 @@ class SecurityConfig {
                 .pathMatchers("/v1/users/session").authenticated()
                 .pathMatchers(org.springframework.http.HttpMethod.GET, "/v1/feed").hasAnyRole("user", "admin")
                 .pathMatchers("/v1/users/*", "/v1/users/*/follow", "/v1/users/*/block",
-                    "/v1/users/me/following", "/v1/users/me/feed-relations").hasAnyRole("user", "admin")
+                    "/v1/users/me/following", "/v1/users/me/feed-relations", "/v1/users/me/closure").hasAnyRole("user", "admin")
                 .pathMatchers("/v1/social/admin/**").hasRole("admin")
                 .pathMatchers("/v1/social/**").hasAnyRole("user", "admin")
                 .pathMatchers("/v1/ratings/videos/**").hasAnyRole("user", "admin")

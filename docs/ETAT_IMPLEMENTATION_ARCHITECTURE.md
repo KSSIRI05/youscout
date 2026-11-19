@@ -6,7 +6,7 @@ L'architecture cible reste celle de [ARCHITECTURE.md](ARCHITECTURE.md). Ce table
 
 | Domaine cible | Implementation actuelle | Reste pour la cible |
 | --- | --- | --- |
-| Auth, Gateway, User | Keycloak, JWT, Gateway, profils, suivis, blocages persistants et outbox Kafka de relations ; blocage applique par Feed et Social | Durcissement multi-replicas de l'ordre de relais et fermeture de compte |
+| Auth, Gateway, User | Keycloak, JWT, Gateway, profils, suivis, blocages persistants et outbox Kafka de relations ; blocage applique par Feed et Social | Durcissement multi-replicas de l'ordre de relais ; fermeture de compte (U22) livrée : journal par étape, effacement par chaque service propriétaire, suppression Keycloak |
 | Skill/Hashtag | Catalogue, recherche, suivi de hashtags | Outbox/evenements catalogue et interface admin |
 | Video et media-worker | MongoDB en replica set pour metadonnees, etats et outbox (tests d'integration sur replica set Testcontainers) ; upload S3 prive, traitement FFmpeg, publication, suppression par le proprietaire avec `VideoDeleted`, retrait du fil par Feed, nettoyage S3 par le worker et bouton de suppression dans Flutter | HLS, CDN prive, reconciliation |
 | Feed | Projection VideoPublished, projection Redis des suivis/blocages, cache de pages versionne | Fan-out des publications par utilisateur, retrait de contenus, reconstruction automatisee de Redis |

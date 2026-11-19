@@ -29,6 +29,9 @@ class ConnectedMessagesScreen extends StatefulWidget {
 }
 
 /// Message tapé par l'appelant, pas encore accusé par Chat ; le même identifiant sert au renvoi.
+/// Remplace le texte d'un message dont l'expéditeur a fermé son compte (U22).
+const deletedText = 'Message supprimé (compte fermé)';
+
 class _Outgoing {
   _Outgoing(this.clientMessageId, this.body);
   final String clientMessageId, body;
@@ -333,7 +336,10 @@ class _ConnectedMessagesScreenState extends State<ConnectedMessagesScreen> {
                             ListTile(
                               title: Text(c['peerSubject'] as String),
                               subtitle: Text(
-                                (c['lastMessage'] as Map)['body'] as String,
+                                (c['lastMessage'] as Map)['redacted'] == true
+                                    ? deletedText
+                                    : (c['lastMessage'] as Map)['body']
+                                          as String,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -355,7 +361,7 @@ class _ConnectedMessagesScreenState extends State<ConnectedMessagesScreen> {
                     for (final m in messages)
                       _bubble(
                         mine: m.senderSubject == me,
-                        body: m.body,
+                        body: m.redacted ? deletedText : m.body,
                         status: m.senderSubject != me
                             ? null
                             : m.seq <= peerDeliveredSeq

@@ -84,6 +84,13 @@ services:
       # Désactivation de comptes (A04) via l'API d'administration Keycloak.
       KEYCLOAK_ADMIN_URL: http://keycloak:8080
       USER_ADMIN_CLIENT_SECRET: ${USER_ADMIN_CLIENT_SECRET:?Run init-env.py --upgrade first}
+      # Fermeture de compte (U22) : chaque service efface ses données ; sans le profil video, l'étape VIDEO reste en attente.
+      VIDEO_SERVICE_URL: http://video:8080
+      SOCIAL_SERVICE_URL: http://social:8080
+      RATING_SERVICE_URL: http://rating:8080
+      CHAT_SERVICE_URL: http://chat:8080
+      SKILL_SERVICE_URL: http://skill:8080
+      ACCOUNT_CLOSURE_PURGE_DELAY: ${ACCOUNT_CLOSURE_PURGE_DELAY:-PT6M}
     depends_on:
       user-db: {condition: service_healthy}
       keycloak: {condition: service_healthy}

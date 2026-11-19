@@ -32,6 +32,7 @@ class SecurityIntegrationTest {
         r.add("spring.datasource.url", postgres::getJdbcUrl);
         r.add("spring.datasource.username", postgres::getUsername);
         r.add("spring.datasource.password", postgres::getPassword);
+        r.add("youscout.account-closure.worker-enabled", () -> "false");
     }
     // Les sondes restent accessibles sans jeton pour permettre la supervision.
     @Test void healthIsPublic() { client.get().uri("/actuator/health").exchange().expectStatus().isOk(); }
