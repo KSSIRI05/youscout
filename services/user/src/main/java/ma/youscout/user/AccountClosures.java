@@ -18,7 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 class AccountClosures {
     /** SESSIONS bloque la connexion ; les services effacent ensuite leurs données ; IDENTITY supprime le compte Keycloak. */
-    static final List<String> STEPS = List.of("SESSIONS", "VIDEO", "SOCIAL", "RATING", "CHAT", "SKILL", "IDENTITY");
+    static final List<String> STEPS = List.of("SESSIONS", "VIDEO", "SOCIAL", "RATING", "CHAT", "SKILL", "NOTIFICATION", "IDENTITY");
     static final List<String> SERVICE_STEPS = STEPS.subList(1, STEPS.size() - 1);
     static final String CLOSED_NAME = "Compte fermé";
 

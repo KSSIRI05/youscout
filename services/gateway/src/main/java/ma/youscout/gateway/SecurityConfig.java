@@ -33,6 +33,7 @@ class SecurityConfig {
                 .pathMatchers("/v1/social/**").hasAnyRole("user", "admin")
                 .pathMatchers("/v1/ratings/videos/**").hasAnyRole("user", "admin")
                 .pathMatchers("/v1/conversations", "/v1/conversations/**").hasAnyRole("user", "admin")
+                .pathMatchers("/v1/notifications", "/v1/notifications/**").hasAnyRole("user", "admin")
                 // Un navigateur ne peut pas joindre de Bearer à une poignée de main WebSocket : Chat valide le jeton
                 // reçu dans la première trame et ferme la connexion sans lui.
                 .pathMatchers(org.springframework.http.HttpMethod.GET, "/v1/chat/ws").permitAll()

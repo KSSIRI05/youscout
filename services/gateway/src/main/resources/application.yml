@@ -72,6 +72,13 @@ spring:
               filters:
                 - RemoveRequestHeader=X-User-Id
                 - RemoveRequestHeader=X-User-Roles
+            - id: notification-service
+              uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8089}
+              predicates:
+                - Path=/v1/notifications,/v1/notifications/**
+              filters:
+                - RemoveRequestHeader=X-User-Id
+                - RemoveRequestHeader=X-User-Roles
 server:
   port: 8080
 # N’expose que les sondes de santé, sans détails internes dans les réponses.

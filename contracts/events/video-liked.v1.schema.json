@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://youscout.example/contracts/events/video-liked.v1.schema.json",
+  "title": "VideoLiked v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "eventType",
+    "eventVersion",
+    "occurredAt",
+    "producer",
+    "data"
+  ],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "eventType": {
+      "const": "VideoLiked"
+    },
+    "eventVersion": {
+      "const": 1
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "producer": {
+      "const": "social-service"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "videoId",
+        "videoOwnerSubject",
+        "actorSubject",
+        "likedAt"
+      ],
+      "properties": {
+        "videoId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "videoOwnerSubject": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "actorSubject": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "likedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  },
+  "description": "Topic interaction.events.v1, key videoId. Emitted once per new like (a repeated like emits nothing), in the like's transaction."
+}

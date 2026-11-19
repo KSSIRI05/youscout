@@ -42,6 +42,7 @@ class AccountClosureWorker {
                          @Value("${youscout.account-closure.rating-url}") String rating,
                          @Value("${youscout.account-closure.chat-url}") String chat,
                          @Value("${youscout.account-closure.skill-url}") String skill,
+                         @Value("${youscout.account-closure.notification-url}") String notification,
                          @Value("${youscout.account-closure.purge-delay:PT6M}") Duration purgeDelay,
                          @Value("${youscout.account-closure.retry-base:PT5S}") Duration retryBase) {
         var requests = new SimpleClientHttpRequestFactory();
@@ -51,7 +52,7 @@ class AccountClosureWorker {
         this.closures = closures;
         this.keycloak = keycloak;
         this.services = Map.of("VIDEO", client(video, requests), "SOCIAL", client(social, requests), "RATING", client(rating, requests),
-            "CHAT", client(chat, requests), "SKILL", client(skill, requests));
+            "CHAT", client(chat, requests), "SKILL", client(skill, requests), "NOTIFICATION", client(notification, requests));
         this.purgeDelay = purgeDelay;
         this.retryBase = retryBase;
     }

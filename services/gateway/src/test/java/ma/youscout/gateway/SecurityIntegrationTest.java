@@ -30,6 +30,7 @@ class SecurityIntegrationTest {
         r.add("SOCIAL_SERVICE_URL", oidc::base);
         r.add("RATING_SERVICE_URL", oidc::base);
         r.add("CHAT_SERVICE_URL", oidc::base);
+        r.add("NOTIFICATION_SERVICE_URL", oidc::base);
     }
     @Test void uploadPostRequiresRoleAndAllowsIdempotencyCorsHeader() {
         client.post().uri("/v1/videos/uploads").exchange().expectStatus().isUnauthorized();
@@ -170,6 +171,13 @@ class SecurityIntegrationTest {
         // Seule la poignée de main GET est ouverte sans jeton.
         client.post().uri("/v1/chat/ws").exchange().expectStatus().isUnauthorized();
         client.post().uri("/v1/chat/ws").headers(h -> h.setBearerAuth(user)).exchange().expectStatus().isForbidden();
+    }
+    @Test void notificationRoutesRequireAnApplicationRoleAndForwardTheToken() {
+        client.get().uri("/v1/notifications").exchange().expectStatus().isUnauthorized();
+        client.get().uri("/v1/notifications/unread-count").headers(h -> h.setBearerAuth(oidc.roleToken())).exchange().expectStatus().isForbidden();
+        String user = oidc.roleToken("user");
+        client.get().uri("/v1/notifications/unread-count").headers(h -> h.setBearerAuth(user)).exchange().expectStatus().isOk();
+        assertThat(oidc.authorization.get()).isEqualTo("Bearer " + user);
     }
     // U22 : les effacements internes ne passent jamais par la Gateway, même avec le rôle du compte de service.
     @Test void accountClosureIsForwardedForPlayers() {

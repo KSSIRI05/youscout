@@ -41,7 +41,7 @@ class AccountClosureIntegrationTest {
         r.add("spring.datasource.password", postgres::getPassword);
         r.add("youscout.keycloak-admin.base-url", oidc::base);
         r.add("youscout.keycloak-admin.client-secret", () -> "test-admin-secret");
-        for (String service : List.of("video", "social", "rating", "chat", "skill"))
+        for (String service : List.of("video", "social", "rating", "chat", "skill", "notification"))
             r.add("youscout.account-closure." + service + "-url", () -> oidc.base() + "/" + service);
         r.add("youscout.account-closure.purge-delay", () -> "PT3S");
         r.add("youscout.account-closure.retry-base", () -> "PT0.1S");
@@ -69,7 +69,7 @@ class AccountClosureIntegrationTest {
             .expectBody().jsonPath("$.status").isEqualTo("IN_PROGRESS")
             .jsonPath("$.steps[0].name").isEqualTo("SESSIONS").jsonPath("$.steps[0].status").isEqualTo("DONE")
             .jsonPath("$.steps[1].name").isEqualTo("VIDEO").jsonPath("$.steps[1].status").isEqualTo("PENDING")
-            .jsonPath("$.steps[6].name").isEqualTo("IDENTITY");
+            .jsonPath("$.steps[6].name").isEqualTo("NOTIFICATION").jsonPath("$.steps[7].name").isEqualTo("IDENTITY");
         assertThat(oidc.keycloakCalls).containsExactly("PUT /users/alice {\"enabled\":false}", "POST /users/alice/logout ");
         assertThat(status("alice")).isEqualTo("CLOSING");
         // Le jeton encore valide n'ouvre plus rien chez User ni, via feed-relations, chez Social, Rating et Chat.
@@ -98,7 +98,8 @@ class AccountClosureIntegrationTest {
         awaitCompleted("alice");
 
         assertThat(oidc.purgeCalls).containsExactlyInAnyOrder("VIDEO alice Bearer kc-admin-token", "SOCIAL alice Bearer kc-admin-token",
-            "RATING alice Bearer kc-admin-token", "CHAT alice Bearer kc-admin-token", "SKILL alice Bearer kc-admin-token");
+            "RATING alice Bearer kc-admin-token", "CHAT alice Bearer kc-admin-token", "SKILL alice Bearer kc-admin-token",
+            "NOTIFICATION alice Bearer kc-admin-token");
         assertThat(oidc.keycloakCalls).containsExactly("PUT /users/alice {\"enabled\":false}", "POST /users/alice/logout ",
             "DELETE /users/alice ");
         assertThat(jdbc.queryForList("SELECT concat_ws(' ', display_name, account_status, length(biography)) FROM user_profiles WHERE subject = 'alice'",
@@ -116,11 +117,11 @@ class AccountClosureIntegrationTest {
 
         get("/v1/users/admin/accounts/alice/closure", admin).expectStatus().isOk().expectBody()
             .jsonPath("$.status").isEqualTo("COMPLETED").jsonPath("$.completedAt").exists()
-            .jsonPath("$.steps.length()").isEqualTo(7).jsonPath("$.steps[?(@.status != 'DONE')]").isEmpty();
+            .jsonPath("$.steps.length()").isEqualTo(8).jsonPath("$.steps[?(@.status != 'DONE')]").isEmpty();
         get("/v1/users/alice", bob).expectStatus().isNotFound();
         get("/v1/users/me", alice).expectStatus().isForbidden();
         close(alice, CONFIRM).expectStatus().isEqualTo(202).expectBody().jsonPath("$.status").isEqualTo("COMPLETED");
-        assertThat(oidc.purgeCalls).hasSize(5);
+        assertThat(oidc.purgeCalls).hasSize(6);
     }
 
     @Test void aFailingServiceIsRetriedAndLoggedWithoutBlockingTheOthers() {

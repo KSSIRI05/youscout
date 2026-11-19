@@ -1,0 +1,115 @@
+openapi: 3.0.3
+info:
+  title: YouScout Notification API
+  version: 0.1.0
+  description: |-
+    The caller's notification inbox and push devices. Notification consumes events from User (follows, blocks,
+    account status), Video (publication, deletion), Social (likes, comments, replies) and Chat (accepted messages).
+    Nobody is notified of their own action, by or for an inactive account, or across a block in either direction.
+    Events older than 24 hours update projections but notify nobody (User's replayed snapshot, topic history
+    read on first start). Unread messages of one conversation share a single
+    notification whose `occurrences` grows. Push goes through Firebase Cloud Messaging with a generic title and
+    no names or content; without FCM credentials it stays disabled and only the inbox is used.
+servers:
+  - url: http://localhost:8080
+security: [{bearerAuth: []}]
+paths:
+  /v1/notifications:
+    get:
+      summary: The caller's notifications, most recent activity first
+      parameters:
+        - {in: query, name: before, schema: {type: string, format: uuid}, description: Id of the last notification already received}
+        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 50, default: 20}}
+      responses:
+        '200':
+          description: One page, with `Cache-Control: no-store`
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/Notification'}}
+        '400': {description: Invalid limit, or a cursor that is not one of the caller's notifications}
+        '401': {description: Missing or invalid token}
+        '403': {description: Token without the user or admin role}
+  /v1/notifications/unread-count:
+    get:
+      summary: Number of unread notifications (the app's badge)
+      responses:
+        '200':
+          description: Unread count
+          content:
+            application/json:
+              schema: {type: object, required: [count], properties: {count: {type: integer, minimum: 0}}}
+  /v1/notifications/{id}/read:
+    post:
+      summary: Mark one of the caller's notifications read (repeatable)
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '204': {description: Read}
+        '404': {description: Not one of the caller's notifications}
+  /v1/notifications/read-all:
+    post:
+      summary: Mark all the caller's notifications read
+      responses:
+        '204': {description: All read}
+  /v1/notifications/devices:
+    put:
+      summary: Register this device's push token for the caller
+      description: The token is stored encrypted. A token already registered by another account moves to the caller.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [platform, token]
+              properties:
+                platform: {type: string, enum: [ANDROID, IOS, WEB]}
+                token: {type: string, minLength: 1, maxLength: 4096}
+      responses:
+        '204': {description: Registered}
+        '400': {description: Unknown platform, missing token or extra field}
+        '503': {description: Device registration is not configured on this server}
+  /v1/notifications/devices/unregister:
+    post:
+      summary: Stop pushing to this device for the caller (on logout)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token]
+              properties:
+                token: {type: string, minLength: 1, maxLength: 4096}
+      responses:
+        '204': {description: Unregistered, or was not registered}
+  /internal/accounts/{subject}:
+    delete:
+      summary: 'U22, internal: erase a closed account''s notifications, devices and projected relations'
+      description: Called by User with its service account (realm role `account-closure`). Not routed by the Gateway. Repeatable.
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: path, name: subject, required: true, schema: {type: string, maxLength: 255}}
+      responses:
+        '204': {description: Erased}
+        '403': {description: Token without the `account-closure` role}
+components:
+  schemas:
+    Notification:
+      type: object
+      required: [id, type, actorSubject, videoId, commentId, conversationId, occurrences, createdAt, updatedAt, read]
+      properties:
+        id: {type: string, format: uuid}
+        type: {type: string, enum: [FOLLOWED, VIDEO_PUBLISHED, VIDEO_LIKED, COMMENTED, REPLIED, MESSAGE]}
+        actorSubject: {type: string, description: The account whose action caused it; its name is read from User}
+        videoId: {type: string, format: uuid, nullable: true}
+        commentId: {type: string, format: uuid, nullable: true}
+        conversationId: {type: string, format: uuid, nullable: true}
+        occurrences: {type: integer, minimum: 1, description: Messages grouped in this unread MESSAGE notification}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        read: {type: boolean}
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}

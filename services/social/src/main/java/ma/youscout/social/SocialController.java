@@ -11,12 +11,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
  * API persistante des likes, commentaires et signalements ; les messages directs appartiennent à Chat.
+ * Un nouveau like ou commentaire écrit aussi son événement (VideoLiked, CommentAdded) dans l'outbox, même transaction.
  * Les écritures vérifient auprès de Video que la vidéo est publiée et auprès de User qu'aucun blocage ne s'applique.
  */
 @RestController
@@ -31,10 +34,14 @@ class SocialController {
         r.getObject(2, UUID.class), r.getObject(3, UUID.class), r.getString(4), r.getString(5), r.getTimestamp(6).toInstant());
     private final JdbcTemplate jdbc;
     private final SocialReferences references;
+    private final InteractionEvents events;
+    private final TransactionTemplate transactions;
 
-    SocialController(JdbcTemplate jdbc, SocialReferences references) {
+    SocialController(JdbcTemplate jdbc, SocialReferences references, InteractionEvents events, PlatformTransactionManager manager) {
         this.jdbc = jdbc;
         this.references = references;
+        this.events = events;
+        this.transactions = new TransactionTemplate(manager);
     }
 
     @GetMapping("/videos/{videoId}/likes")
@@ -48,8 +55,13 @@ class SocialController {
     @PutMapping("/videos/{videoId}/likes")
     ResponseEntity<LikeState> like(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID videoId) {
         String subject = subject(jwt);
-        requireNotBlocked(references.videoOwner(videoId, jwt.getTokenValue()), jwt);
-        jdbc.update("INSERT INTO video_likes(video_id, user_subject) VALUES (?, ?) ON CONFLICT DO NOTHING", videoId, subject);
+        String owner = references.videoOwner(videoId, jwt.getTokenValue());
+        requireNotBlocked(owner, jwt);
+        // Le like et son événement sont validés ensemble ; un like répété n'émet rien.
+        transactions.executeWithoutResult(status -> {
+            if (jdbc.update("INSERT INTO video_likes(video_id, user_subject) VALUES (?, ?) ON CONFLICT DO NOTHING", videoId, subject) == 1)
+                events.liked(videoId, owner, subject);
+        });
         return likes(jwt, videoId);
     }
 
@@ -88,6 +100,7 @@ class SocialController {
         String owner = references.videoOwner(videoId, jwt.getTokenValue());
         Set<String> blocked = references.blockedEitherWay(jwt.getTokenValue());
         if (blocked.contains(owner)) throw blockedInteraction();
+        String parentAuthor = null;
         if (parentId != null) {
             List<Parent> parents = jdbc.query("SELECT video_id, parent_id, author_subject, deleted_at IS NOT NULL FROM video_comments WHERE id = ?",
                 (r, n) -> new Parent(r.getObject(1, UUID.class), r.getObject(2, UUID.class), r.getString(3), r.getBoolean(4)), parentId);
@@ -95,9 +108,15 @@ class SocialController {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Commentaire parent introuvable.");
             if (parents.getFirst().parentId() != null) throw bad("On ne peut répondre qu'à un commentaire principal.");
             if (blocked.contains(parents.getFirst().authorSubject())) throw blockedInteraction();
+            parentAuthor = parents.getFirst().authorSubject();
         }
-        return noStore(jdbc.queryForObject("INSERT INTO video_comments(id, video_id, parent_id, author_subject, body, video_owner_subject)"
-            + " VALUES (?, ?, ?, ?, ?, ?) RETURNING " + COMMENT_COLUMNS, COMMENT, UUID.randomUUID(), videoId, parentId, author, text, owner));
+        String repliedTo = parentAuthor;
+        return noStore(transactions.execute(status -> {
+            Comment created = jdbc.queryForObject("INSERT INTO video_comments(id, video_id, parent_id, author_subject, body, video_owner_subject)"
+                + " VALUES (?, ?, ?, ?, ?, ?) RETURNING " + COMMENT_COLUMNS, COMMENT, UUID.randomUUID(), videoId, parentId, author, text, owner);
+            events.commented(created, owner, repliedTo);
+            return created;
+        }));
     }
 
     /** L'auteur ou le propriétaire de la vidéo (U13) peut retirer un commentaire. */

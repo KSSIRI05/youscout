@@ -2,7 +2,7 @@
 
 A temporary player follows a peer and sends them a message, then closes their account through the Gateway. The
 script checks the immediate effects (Keycloak disabled, refresh and login refused, actions refused, profile hidden,
-Feed hides the account), then waits for every closure step: Video, Social, Rating, Chat and Skill erase the data
+Feed hides the account), then waits for every closure step: Video, Social, Rating, Chat, Skill and Notification erase the data
 with User's service account, the Keycloak account is deleted and the profile is anonymised. The wait follows the
 stack's ACCOUNT_CLOSURE_PURGE_DELAY (6 minutes by default; CI sets a few seconds). No password or token is printed.
 Temporary accounts, profiles and messages are removed at the end.
@@ -77,7 +77,8 @@ def main():
                  "Closure did not complete; read GET /v1/users/admin/accounts/{subject}/closure for the failing step",
                  timeout=delay + 120)
         status, closure = call("GET", f"/v1/users/admin/accounts/{target}/closure", moderator)
-        assert [step["status"] for step in closure["steps"]] == ["DONE"] * 7, "A closure step is not done"
+        assert [step["status"] for step in closure["steps"]] == ["DONE"] * len(closure["steps"]) and len(closure["steps"]) == 8, \
+            "A closure step is not done"
         try:
             admin.request("GET", f"{REALM}/users/{target}")
             raise AssertionError("Keycloak account still exists")

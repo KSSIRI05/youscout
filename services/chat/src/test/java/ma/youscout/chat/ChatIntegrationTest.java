@@ -48,6 +48,7 @@ class ChatIntegrationTest {
         oidc.reset();
         mongo.remove(new org.springframework.data.mongodb.core.query.Query(), ChatStore.MESSAGES);
         mongo.remove(new org.springframework.data.mongodb.core.query.Query(), ChatStore.CONVERSATIONS);
+        mongo.remove(new org.springframework.data.mongodb.core.query.Query(), ChatStore.OUTBOX);
     }
     @AfterAll static void cleanup() { client.close(); oidc.server.stop(0); }
 
@@ -86,6 +87,24 @@ class ChatIntegrationTest {
         assertThat(read(list, "$[0].peerDeliveredSeq", Integer.class)).isEqualTo(3);
         assertThat(read(list, "$[0].lastMessage.body", String.class)).isEqualTo("Ça va ?");
         assertThat(read(rest("GET", "/v1/conversations", oidc.token("carol"), null), "$.length()", Integer.class)).isZero();
+    }
+
+    @Test void eachNewMessageRecordsOneMessageAcceptedEventWithoutItsText() throws Exception {
+        String alice = oidc.token("alice"), bob = oidc.token("bob");
+        post(alice, "bob", "m-1", "Secret");
+        post(alice, "bob", "m-1", "Secret");
+        post(bob, "alice", "m-1", "Réponse");
+        var events = mongo.find(new org.springframework.data.mongodb.core.query.Query()
+            .with(org.springframework.data.domain.Sort.by("createdAt")), org.bson.Document.class, ChatStore.OUTBOX);
+        assertThat(events).hasSize(2);
+        var first = events.getFirst().get("payload", org.bson.Document.class);
+        assertThat(first.getString("eventType")).isEqualTo("MessageAccepted");
+        assertThat(first.getString("producer")).isEqualTo("chat-service");
+        var data = first.get("data", org.bson.Document.class);
+        assertThat(data.keySet()).containsExactlyInAnyOrder("messageId", "conversationId", "seq", "senderSubject", "recipientSubject", "acceptedAt");
+        assertThat(data.getString("recipientSubject")).isEqualTo("bob");
+        assertThat(events.getFirst().getString("key")).isEqualTo(data.getString("conversationId"));
+        assertThat(events).noneSatisfy(e -> assertThat(e.toJson()).contains("Secret"));
     }
 
     @Test void accountClosureBlanksTheClosedAccountsMessagesAndKeepsTheSequence() throws Exception {

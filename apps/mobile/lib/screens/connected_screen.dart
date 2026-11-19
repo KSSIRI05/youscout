@@ -5,6 +5,8 @@ import '../core/theme.dart';
 import 'connected_upload_screen.dart';
 import 'connected_feed_screen.dart';
 import 'connected_messages_screen.dart';
+import 'connected_notifications_screen.dart';
+import 'dart:async';
 
 class ConnectedScreen extends StatefulWidget {
   const ConnectedScreen({required this.session, super.key});
@@ -16,6 +18,53 @@ class ConnectedScreen extends StatefulWidget {
 class _ConnectedScreenState extends State<ConnectedScreen> {
   int tab = 0;
   String? messageRecipient;
+  int unread = 0;
+  Timer? _unreadPoll;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshUnread();
+    // Le badge se met à jour sans push : un relevé toutes les 30 s tant que l'écran est ouvert.
+    _unreadPoll = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _refreshUnread(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _unreadPoll?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshUnread() async {
+    if (!widget.session.signedIn) return;
+    try {
+      final count = await widget.session.unreadNotifications();
+      if (mounted) setState(() => unread = count);
+    } catch (_) {
+      // Notification indisponible (profil feed absent) : le badge reste tel quel.
+    }
+  }
+
+  Future<void> _openNotifications() async {
+    final peer = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ConnectedNotificationsScreen(session: widget.session),
+      ),
+    );
+    if (!mounted) return;
+    if (peer != null) {
+      setState(() {
+        messageRecipient = peer;
+        tab = 4;
+      });
+    }
+    await _refreshUnread();
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = widget.session;
@@ -23,6 +72,16 @@ class _ConnectedScreenState extends State<ConnectedScreen> {
       appBar: AppBar(
         title: const Text('YouScout'),
         actions: [
+          IconButton(
+            key: const Key('notifications'),
+            tooltip: 'Notifications',
+            onPressed: _openNotifications,
+            icon: Badge(
+              isLabelVisible: unread > 0,
+              label: Text(unread > 99 ? '99+' : '$unread'),
+              child: const Icon(Icons.notifications_outlined),
+            ),
+          ),
           IconButton(
             tooltip: 'Actualiser',
             onPressed: session.busy ? null : session.reload,

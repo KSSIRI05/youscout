@@ -13,7 +13,7 @@ Ces services constituent la cible. La Gateway et les profils personnels persista
 | Chat | `/v1/conversations`, historique et envoi de secours ; WebSocket `/v1/chat/ws` via la Gateway ([détails](../services/chat/README.md)) | MongoDB `chat`, Redis Pub/Sub entre instances | MessageAccepted, MessageDelivered (à venir) |
 | Skill/Hashtag | `/v1/skills`, `/v1/hashtags`, catalogue et abonnements hashtags | PostgreSQL `skill` | SkillChanged, HashtagFollowed, HashtagDisabled |
 | Moderation | `/v1/reports`, décisions admin, suivi d'application | PostgreSQL `moderation`, journal de décisions | ModerationActionRequested, ModerationActionApplied |
-| Notification | Envoi push et gestion des appareils | PostgreSQL `notification`, jetons chiffrés/accès restreint | Consomme événements autorisés ; conserve statut de livraison |
+| Notification | `/v1/notifications`, boîte, non lus, appareils, envoi push ([service](../services/notification/README.md)) | PostgreSQL `notification`, jetons chiffrés/accès restreint | Consomme UserRelationChanged, UserAccountChanged, VideoPublished, VideoDeleted, VideoLiked, CommentAdded, MessageAccepted ; conserve statut de livraison |
 | Admin/Analytics | `/v1/admin/dashboard`, vues de gestion en lecture | PostgreSQL `analytics`, projections | Consomme les événements nécessaires au dashboard |
 
 Le tableau décrit la cible. Les contrats des profils et du catalogue sont dans `contracts/openapi` ; les autres API et événements restent à formaliser. Les rôles ne suffisent pas : contrôler aussi propriétaire de la ressource, conversation et blocages.

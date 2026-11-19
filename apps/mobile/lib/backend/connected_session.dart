@@ -219,6 +219,26 @@ class ConnectedSession extends ChangeNotifier {
     return uri.replace(scheme: uri.scheme == 'https' ? 'wss' : 'ws');
   }
 
+  /// Notifications de l'appelant, plus récentes d'abord ; `before` reprend après la dernière reçue.
+  Future<List<Map<String, dynamic>>> notifications({String? before}) async =>
+      (await _request(
+                'GET',
+                '/v1/notifications',
+                query: {'limit': '20', 'before': ?before},
+              )
+              as List)
+          .cast<Map<String, dynamic>>();
+
+  Future<int> unreadNotifications() async =>
+      ((await _object('GET', '/v1/notifications/unread-count'))['count'] as num)
+          .toInt();
+
+  Future<void> markNotificationRead(String id) async =>
+      _request('POST', '/v1/notifications/${Uri.encodeComponent(id)}/read');
+
+  Future<void> markAllNotificationsRead() async =>
+      _request('POST', '/v1/notifications/read-all');
+
   /// U21 : conversations récentes de l'appelant.
   Future<List<Map<String, dynamic>>> chatConversations() async =>
       (await _request('GET', '/v1/conversations') as List)

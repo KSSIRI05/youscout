@@ -20,6 +20,12 @@ server:
 social:
   user-service-url: ${USER_SERVICE_URL:http://localhost:8081}
   video-service-url: ${VIDEO_SERVICE_URL:http://localhost:8083}
+  # Événements VideoLiked et CommentAdded (interaction.events.v1), écrits dans la transaction de l'interaction.
+  outbox:
+    enabled: ${SOCIAL_OUTBOX_ENABLED:false}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    topic: ${INTERACTION_EVENTS_TOPIC:interaction.events.v1}
+    poll-ms: 1000
 management:
   endpoints.web.exposure.include: health
   endpoint.health.show-details: never
